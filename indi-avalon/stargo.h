@@ -130,9 +130,17 @@ protected:
     ISwitchVectorProperty ST4StatusSP;
     ISwitch ST4StatusS[2];
 
+    // Keypad
+    ISwitchVectorProperty KeypadStatusSP;
+    ISwitch KeypadStatusS[2];
+
     // meridian flip
     ISwitchVectorProperty MeridianFlipModeSP;
     ISwitch MeridianFlipModeS[3];
+
+    // configurable delay between two commands to avoid flooding StarGO
+    INumberVectorProperty MountRequestDelayNP;
+    INumber MountRequestDelayN[1];
 
  /* Use pulse-guide commands */
 //    ISwitchVectorProperty UsePulseCmdSP;
@@ -146,6 +154,9 @@ protected:
     double currentRA, currentDEC;
     
     bool ParkOptionBusy { false };
+
+    struct timespec mount_request_delay = {0, 50000000L};
+
 
     virtual bool ReadScopeStatus() override;
     virtual bool Goto(double ra, double dec) override;
@@ -187,6 +198,9 @@ protected:
     bool setObjectCoords(double ra, double dec);
     bool getEqCoordinates(double *ra, double *dec);
 
+    bool getKeypadStatus (bool *isEnabled);
+    bool setKeyPadEnabled(bool enabled);
+
     // autoguiding
     bool setGuidingSpeeds(int raSpeed, int decSpeed);
     bool getGuidingSpeeds(int *raSpeed, int *decSpeed);
@@ -224,6 +238,8 @@ protected:
     bool getFirmwareInfo(char *version, char *mount, char *tcb );
     bool getMotorStatus(int *xSpeed, int *ySpeed);
     bool getSideOfPier();
+
+    void setMountRequestDelay(int secs, long nanosecs) {mount_request_delay.tv_sec = secs; mount_request_delay.tv_nsec = nanosecs; };
 
 // Simulate Mount in simulation mode
     void mountSim();

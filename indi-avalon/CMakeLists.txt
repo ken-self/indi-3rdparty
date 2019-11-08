@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.0)
 PROJECT(indi-avalon C CXX)
 
 LIST(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake_modules/")
-LIST(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../../cmake_modules/")
+LIST(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../cmake_modules/")
 include(GNUInstallDirs)
 
 find_package(INDI REQUIRED)
@@ -21,6 +21,7 @@ set(AVALON_VERSION_MINOR 0)
 set(INDI_DATA_DIR "${CMAKE_INSTALL_PREFIX}/share/indi")
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/config.h.cmake ${CMAKE_CURRENT_BINARY_DIR}/config.h )
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/indi_avalon.xml.cmake ${CMAKE_CURRENT_BINARY_DIR}/indi_avalon.xml )
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/indi_stargo.xml.cmake ${CMAKE_CURRENT_BINARY_DIR}/indi_stargo.xml )
 
 IF ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 6.3.9)
     SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wformat-overflow=2")
@@ -46,3 +47,4 @@ target_link_libraries(indi_stargo ${INDI_LIBRARIES} ${NOVA_LIBRARIES})
 install(TARGETS indi_stargo RUNTIME DESTINATION bin )
 
 install( FILES ${CMAKE_CURRENT_BINARY_DIR}/indi_avalon.xml DESTINATION ${INDI_DATA_DIR})
+install( FILES ${CMAKE_CURRENT_BINARY_DIR}/indi_stargo.xml DESTINATION ${INDI_DATA_DIR})

@@ -161,6 +161,17 @@ bool StarGoTelescope::ISNewNumber(const char *dev, const char *name, double valu
             IDSetNumber(&GuidingSpeedNP, nullptr);
             return result;
         }
+        else if (!strcmp(name, MountRequestDelayNP.name))
+        {
+            int secs   = static_cast<int>(floor(values[0] / 1000.0));
+            long nsecs = static_cast<long>(round((values[0] - 1000.0 * secs) * 1000000.0));
+            setMountRequestDelay(secs, nsecs);
+
+            MountRequestDelayN[0].value = secs*1000 + nsecs/1000000;
+            MountRequestDelayNP.s = IPS_OK;
+            IDSetNumber(&MountRequestDelayNP, nullptr);
+            return true;
+        }
     }
 
     //  Nobody has claimed this, so pass it to the parent
@@ -239,6 +250,24 @@ bool StarGoTelescope::ISNewSwitch(const char *dev, const char *name, ISState *st
                 ST4StatusSP.s = IPS_ALERT;
             }
             IDSetSwitch(&ST4StatusSP, nullptr);
+            return result;
+        }
+        else if (!strcmp(name, KeypadStatusSP.name))
+        {
+            bool enabled = (states[0] == ISS_OFF);
+            bool result = setKeyPadEnabled(enabled);
+
+            if(result)
+            {
+                KeypadStatusS[0].s = enabled ? ISS_OFF : ISS_ON;
+                KeypadStatusS[1].s = enabled ? ISS_ON : ISS_OFF;
+                KeypadStatusSP.s = IPS_OK;
+            }
+            else
+            {
+                KeypadStatusSP.s = IPS_ALERT;
+            }
+            IDSetSwitch(&KeypadStatusSP, nullptr);
             return result;
         }
         else if (!strcmp(name, MeridianFlipModeSP.name))
@@ -358,11 +387,20 @@ bool StarGoTelescope::initProperties()
     IUFillSwitch(&ST4StatusS[1], "ST4_ENABLED", "enabled", ISS_OFF);
     IUFillSwitchVector(&ST4StatusSP, ST4StatusS, 2, getDeviceName(), "ST4", "ST4", RA_DEC_TAB, IP_RW, ISR_ATMOST1, 60, IPS_IDLE);
 
+    // keypad enabled / disabled
+    IUFillSwitch(&KeypadStatusS[0], "KEYPAD_DISABLED", "disabled", ISS_OFF);
+    IUFillSwitch(&KeypadStatusS[1], "KEYPAD_ENABLED", "enabled", ISS_ON);
+    IUFillSwitchVector(&KeypadStatusSP, KeypadStatusS, 2, getDeviceName(), "Keypad", "Keypad", RA_DEC_TAB, IP_RW, ISR_1OFMANY, 60, IPS_IDLE);
+
     // meridian flip
     IUFillSwitch(&MeridianFlipModeS[0], "MERIDIAN_FLIP_AUTO", "auto", ISS_OFF);
     IUFillSwitch(&MeridianFlipModeS[1], "MERIDIAN_FLIP_DISABLED", "disabled", ISS_OFF);
     IUFillSwitch(&MeridianFlipModeS[2], "MERIDIAN_FLIP_FORCED", "forced", ISS_OFF);
     IUFillSwitchVector(&MeridianFlipModeSP, MeridianFlipModeS, 3, getDeviceName(), "MERIDIAN_FLIP_MODE", "Meridian Flip", RA_DEC_TAB, IP_RW, ISR_ATMOST1, 60, IPS_IDLE);
+
+    // mount command delay
+    IUFillNumber(&MountRequestDelayN[0], "MOUNT_REQUEST_DELAY", "Request Delay (ms)", "%.0f", 0.0, 1000, 1.0, 50.0);
+    IUFillNumberVector(&MountRequestDelayNP, MountRequestDelayN, 1, getDeviceName(), "REQUEST_DELAY", "StarGO", RA_DEC_TAB, IP_RW, 60, IPS_OK);
 
 /*
  EXTRA COMMANDS
@@ -423,7 +461,9 @@ bool StarGoTelescope::updateProperties()
 //        defineSwitch(&MountSetParkSP);
         defineNumber(&GuidingSpeedNP);
         defineSwitch(&ST4StatusSP);
+        defineSwitch(&KeypadStatusSP);
         defineSwitch(&MeridianFlipModeSP);
+        defineNumber(&MountRequestDelayNP);
         defineText(&MountFirmwareInfoTP);
         defineNumber(&TrackAdjustNP);
         defineNumber(&GearRatioNP);
@@ -442,7 +482,9 @@ bool StarGoTelescope::updateProperties()
 //        deleteProperty(MountSetParkSP.name);
         deleteProperty(GuidingSpeedNP.name);
         deleteProperty(ST4StatusSP.name);
+        deleteProperty(KeypadStatusSP.name);
         deleteProperty(MeridianFlipModeSP.name);
+        deleteProperty(MountRequestDelayNP.name);
         deleteProperty(MountFirmwareInfoTP.name);
         deleteProperty(TrackAdjustNP.name);
         deleteProperty(GearRatioNP.name);
@@ -1597,6 +1639,58 @@ bool StarGoTelescope::getST4Status (bool *isEnabled)
     *isEnabled = (answer == 1);
     return true;
 }
+/*******************************************************************************
+ * @brief Enable or disable the Keypad port
+ * @param enabled flag whether enable or disable
+ * @return
+*******************************************************************************/
+bool StarGoTelescope::setKeyPadEnabled(bool enabled)
+{
+
+    const char *cmd = enabled ? ":TTRFr#" : ":TTSFr#";
+    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
+    if (sendQuery(cmd, response))
+    {
+        LOG_INFO(enabled ? "Keypad port enabled." : "Keypad port disabled.");
+        return true;
+    }
+    else
+    {
+        LOG_ERROR("Setting Keypad port FAILED");
+        return false;
+    }
+
+}
+
+/*******************************************************************************
+** @brief Check if the Keypad port is enabled
+** @param isEnabled - true iff the Keypad port is enabled
+** @return
+*******************************************************************************/
+bool StarGoTelescope::getKeypadStatus (bool *isEnabled)
+{
+    LOG_DEBUG(__FUNCTION__);
+    // Command query Keypad status  - :TTGFr#
+    //            response enabled  - vr1
+    //                     disabled - vr0
+
+    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
+
+    if (!sendQuery(":TTGFr#", response))
+    {
+        LOG_ERROR("Failed to send query Keypad status request.");
+        return false;
+    }
+    int answer = 0;
+    if (! sscanf(response, "vr%01d", &answer))
+    {
+        LOGF_ERROR("Unexpected Keypad status response '%s'.", response);
+        return false;
+    }
+
+    *isEnabled = (answer == 0);
+    return true;
+}
 
 /*******************************************************************************
 **
@@ -2196,6 +2290,19 @@ void StarGoTelescope::getBasicData()
             ST4StatusSP.s = IPS_ALERT;
         }
         IDSetSwitch(&ST4StatusSP, nullptr);
+
+        if (getKeypadStatus(&isEnabled))
+        {
+            KeypadStatusS[0].s = isEnabled ? ISS_OFF : ISS_ON;
+            KeypadStatusS[1].s = isEnabled ? ISS_ON : ISS_OFF;
+            KeypadStatusSP.s = IPS_OK;
+        }
+        else
+        {
+            KeypadStatusSP.s = IPS_ALERT;
+        }
+//        IDSetSwitch(&ST4StatusSP, nullptr);
+        IDSetSwitch(&KeypadStatusSP, nullptr);
 
         int index;
         if (GetMeridianFlipMode(&index))
