@@ -56,7 +56,6 @@ enum TDirection
 extern const char *RA_DEC_TAB;
 
 class StarGoTelescope : public INDI::Telescope, public INDI::GuiderInterface
-//class StarGoTelescope : public INDI::Telescope
 {
 public:
     enum TrackMode
@@ -127,6 +126,7 @@ protected:
     INumberVectorProperty GuidingSpeedNP;
     INumber GuidingSpeedN[2];
 
+    // ST4 status
     ISwitchVectorProperty ST4StatusSP;
     ISwitch ST4StatusS[2];
 
@@ -206,11 +206,14 @@ protected:
     bool getGuidingSpeeds(int *raSpeed, int *decSpeed);
     bool getGearRatios(int *raRatio, int *decRatio);
     bool getMaxSlews(int *raSlew, int *decSlew);
+    bool setMaxSlews(int raSlew, int decSlew);
     bool getMotorSteps(double *raSteps, double *decSteps);
 
     bool setST4Enabled(bool enabled);
     bool getST4Status(bool *isEnabled);
     int SendPulseCmd(int8_t direction, uint32_t duration_msec) ;
+    bool getFindCenterSlews(int *findSlew, int *centerSlew);
+    bool setFindCenterSlews(int findSlew, int centerSlew);
 
     // location
     bool sendScopeLocation();
@@ -249,7 +252,6 @@ protected:
     // Wait for default "#' character
     bool sendQuery(const char* cmd, char* response, int wait=AVALON_TIMEOUT);
     bool ParseMotionState(char* state);
-
 
     // helper functions
 protected:

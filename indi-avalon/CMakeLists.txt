@@ -15,7 +15,7 @@ include_directories(${NOVA_INCLUDE_DIR})
 
 include(CMakeCommon)
 
-set(AVALON_VERSION_MAJOR 1)
+set(AVALON_VERSION_MAJOR 2)
 set(AVALON_VERSION_MINOR 0)
 
 set(INDI_DATA_DIR "${CMAKE_INSTALL_PREFIX}/share/indi")
@@ -34,6 +34,7 @@ ENDIF ()
 #    )
 SET(stargo_SRCS
     ${CMAKE_CURRENT_SOURCE_DIR}/stargo.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/stargosystem.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/stargofocuser.cpp
     )
 

@@ -1,7 +1,8 @@
 /*
-    Avalon Star GO Focuser
-    Copyright (C) 2018 Christopher Contaxis (chrconta@gmail.com) and
-    Wolfgang Reissenberger (sterne-jaeger@t-online.de)
+    Avalon StarGo System
+    Copyright (C) 2019 Christopher Contaxis (chrconta@gmail.com) and
+    Wolfgang Reissenberger (sterne-jaeger@t-online.de) and
+    Ken Self (ken.kgself@gmail.com)
 
     This library is free software; you can redistribute it and/or
     modify it under the terms of the GNU Lesser General Public
@@ -20,30 +21,26 @@
 */
 
 #include "stargofocuser.h"
-
 #include <cstring>
 
 #define AVALON_FOCUSER_POSITION_OFFSET                  500000
 
-/**
+/***************************************************************************
  * @brief Constructor
  * @param defaultDevice the telescope
  * @param name device name
- */
-StarGoFocuser::StarGoFocuser() : FI(this)
+ ***************************************************************************/
+StarGoFocuser::StarGoFocuser(StarGoSystem *dev) : FI(dev), m_device(dev)
 {
-//    baseDevice = defaultDevice;
-//    deviceName = name;
 }
 
-/**
+/***************************************************************************
  * @brief Initialize the focuser UI controls
  * @param groupName tab where the UI controls are grouped
- */
+ ***************************************************************************/
 bool StarGoFocuser::initProperties()
 {
-    StarGoTelescope::initProperties();
-
+    m_device->initProperties();
     FI::initProperties(FOCUS_TAB);
 
 //    IUFillNumber(&FocusSyncPosN[0], "FOCUS_SYNC_POSITION_VALUE", "Ticks", "%4.0f", 0.0, 100000.0, 1000.0, 0);
@@ -65,35 +62,20 @@ bool StarGoFocuser::initProperties()
     return true;
 }
 
-/**
+/***************************************************************************
  * @brief Fill the UI controls with current values
  * @return true iff everything went fine
- */
-
+ ***************************************************************************/
 bool StarGoFocuser::updateProperties()
 {
-    if (isConnected())
-    {
-        StarGoTelescope::updateProperties();
-        FI::updateProperties();
-    }
-    else
-    {
-        StarGoTelescope::updateProperties();
-        FI::updateProperties();
-    }
+    m_device->updateProperties();
+    FI::updateProperties();
     return true;
-}
-
-bool StarGoFocuser::ReadScopeStatus()
-{
-    return StarGoTelescope::ReadScopeStatus();
 }
 
 /***************************************************************************
  * Reaction to UI commands
  ***************************************************************************/
-
 bool StarGoFocuser::ISNewSwitch(const char *dev, const char *name, ISState *states, char *names[], int n)
 {
     INDI_UNUSED(states);
@@ -101,17 +83,20 @@ bool StarGoFocuser::ISNewSwitch(const char *dev, const char *name, ISState *stat
     INDI_UNUSED(n);
 
     //  first check if it's for our device
-    if (dev != nullptr && strcmp(dev, getDeviceName()) == 0)
+    if (dev != nullptr && strcmp(dev, m_device->getDeviceName()) == 0)
     {
         if (strstr(name, "FOCUS"))
         {
             return FI::processSwitch(dev, name, states, names, n);
         }
+        return m_device->ISNewSwitch(dev, name, states, names, n);
     }
-    return StarGoTelescope::ISNewSwitch(dev, name, states, names, n);
+    return true;
 }
 
-
+/***************************************************************************
+ *
+ ***************************************************************************/
 bool StarGoFocuser::ISNewNumber(const char *dev, const char *name, double values[], char *names[], int n)
 {
     INDI_UNUSED(values);
@@ -119,20 +104,20 @@ bool StarGoFocuser::ISNewNumber(const char *dev, const char *name, double values
     INDI_UNUSED(n);
 
     //  first check if it's for our device
-    if (dev != nullptr && strcmp(dev, getDeviceName()) == 0)
+    if (dev != nullptr && strcmp(dev, m_device->getDeviceName()) == 0)
     {
         if (strstr(name, "FOCUS"))
         {
             return FI::processNumber(dev, name, values, names, n);
         }
+        return m_device->ISNewNumber(dev, name, values, names, n);
     }
-    return StarGoTelescope::ISNewNumber(dev, name, values, names, n);
+    return true;
 }
 
 /***************************************************************************
  *
  ***************************************************************************/
-
 bool StarGoFocuser::SetFocuserSpeed(int speed)
 {
     // Command  - :X1Caaaa*bb#
@@ -171,12 +156,15 @@ bool StarGoFocuser::SetFocuserSpeed(int speed)
 //    }
     if (!sendQuery(cmd, response))
     {
-        DEBUGF(INDI::Logger::DBG_ERROR, "%s: Failed to send new focuser speed command.", getDeviceName());
+        LOGF_ERROR("Failed to send new focuser speed command %s", cmd);
         return false;
     }
     return valid;
 }
 
+/***************************************************************************
+ *
+ ***************************************************************************/
 IPState StarGoFocuser::MoveFocuser(FocusDirection dir, int speed, uint16_t duration)
 {
     INDI_UNUSED(speed);
@@ -193,6 +181,9 @@ IPState StarGoFocuser::MoveFocuser(FocusDirection dir, int speed, uint16_t durat
     return MoveAbsFocuser(position);
 }
 
+/***************************************************************************
+ *
+ ***************************************************************************/
 IPState StarGoFocuser::MoveAbsFocuser(uint32_t position)
 {
     // Command  - :X16pppppp#
@@ -204,11 +195,14 @@ IPState StarGoFocuser::MoveAbsFocuser(uint32_t position)
     sprintf(command, ":X16%06d#", AVALON_FOCUSER_POSITION_OFFSET + targetFocuserPosition);
     if ((result = sendQuery(command, response,0)) )
     {
-        LOGF_ERROR("%s: Failed to send AUX1 goto command.", getDeviceName());
+        LOGF_ERROR("Failed to send AUX1 goto command $s", command);
     }
     return result? IPS_BUSY: IPS_ALERT;
 }
 
+/***************************************************************************
+ *
+ ***************************************************************************/
 IPState StarGoFocuser::MoveRelFocuser(FocusDirection dir, uint32_t relativePosition)
 //IPState StarGoFocuser::moveFocuserRelative(int relativePosition)
 {
@@ -217,6 +211,9 @@ IPState StarGoFocuser::MoveRelFocuser(FocusDirection dir, uint32_t relativePosit
 }
 
 
+/***************************************************************************
+ *
+ ***************************************************************************/
 bool StarGoFocuser::AbortFocuser()
 {
     // Command  - :X0AAUX1ST#
@@ -224,12 +221,15 @@ bool StarGoFocuser::AbortFocuser()
     char response[AVALON_RESPONSE_BUFFER_LENGTH];
     if (!sendQuery(":X0AAUX1ST#", response, 0)) 
     {
-        DEBUGF(INDI::Logger::DBG_ERROR, "%s: Failed to send AUX1 stop command.", getDeviceName());
+        LOG_ERROR("Failed to send AUX1 stop command." );
         return false;
     }
     return true;
 }
 
+/***************************************************************************
+ *
+ ***************************************************************************/
 bool StarGoFocuser::SyncFocuser(uint32_t  position)
 {
     // Command  - :X0Cpppppp#
@@ -239,7 +239,7 @@ bool StarGoFocuser::SyncFocuser(uint32_t  position)
     sprintf(command, ":X0C%06d#", AVALON_FOCUSER_POSITION_OFFSET + position);
     if (!sendQuery(command, response,0)) 
     {
-        DEBUGF(INDI::Logger::DBG_ERROR, "%s: Failed to send AUX1 sync command.", getDeviceName());
+        LOG_ERROR("Failed to send AUX1 sync command.");
         return false;
     }
     return true;
@@ -248,14 +248,14 @@ bool StarGoFocuser::SyncFocuser(uint32_t  position)
 /***************************************************************************
  * LX200 queries, sent to baseDevice
  ***************************************************************************/
-
-bool StarGoFocuser::getFocuserPosition(int* position) {
+bool StarGoFocuser::getFocuserPosition(int* position) 
+{
     // Command  - :X0BAUX1AS#
     // Response - AX1=ppppppp #
     char response[AVALON_RESPONSE_BUFFER_LENGTH];
     if(!sendQuery(":X0BAUX1AS#", response)) 
     {
-        DEBUGF(INDI::Logger::DBG_ERROR, "%s: Failed to get AUX1 position request.", getDeviceName());
+        LOG_ERROR("Failed to get AUX1 position request.");
         return false;
     }
 //    if (!receive(response, &bytesReceived)) 
@@ -267,9 +267,17 @@ bool StarGoFocuser::getFocuserPosition(int* position) {
     int returnCode = sscanf(response, "%*c%*c%*c%*c%07d", &tempPosition);
     if (returnCode <= 0) 
     {
-        DEBUGF(INDI::Logger::DBG_ERROR, "%s: Failed to parse AUX1 position response '%s'.", getDeviceName(), response);
+        LOGF_ERROR("Failed to parse AUX1 position response '%s'.", response);
         return false;
     }
     (*position) = (tempPosition - AVALON_FOCUSER_POSITION_OFFSET);
     return true;
+}
+bool StarGoFocuser::sendQuery(const char* cmd, char* response, char end, int wait)
+{
+    return m_device->sendQuery(cmd, response, end, wait);
+}
+const char* StarGoFocuser::getDeviceName()
+{
+    return m_device->getDeviceName();
 }

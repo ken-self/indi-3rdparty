@@ -21,8 +21,6 @@
 
 #include "stargo.h"
 
-//#include "stargofocuser.h"
-
 #include <cmath>
 #include <memory>
 #include <cstring>
@@ -35,11 +33,9 @@
 
 #include "config.h"
 
+/*
 // Unique pointers
-static std::unique_ptr<StarGoTelescope> telescope;
-//static std::unique_ptr<StarGoFocuser> focuser;
-
-const char *RA_DEC_TAB = "RA / DEC";
+static std::unique_ptr<StarGoTelescope> device;
 
 void ISInit()
 {
@@ -49,40 +45,35 @@ void ISInit()
         return;
 
     isInit = 1;
-    if (telescope.get() == nullptr)
+    if (device.get() == nullptr)
     {
-        StarGoTelescope* myScope = new StarGoTelescope();
-        telescope.reset(myScope);
-//        focuser.reset(new StarGoFocuser(myScope, "AUX1 Focuser"));
+        StarGoTelescope* myDevice = new StarGoTelescope();
+        device.reset(myDevice);
     }
 }
 
 void ISGetProperties(const char *dev)
 {
     ISInit();
-    telescope->ISGetProperties(dev);
-//    focuser->ISGetProperties(dev);
+    device->ISGetProperties(dev);
 }
 
 void ISNewSwitch(const char *dev, const char *name, ISState *states, char *names[], int n)
 {
     ISInit();
-    telescope->ISNewSwitch(dev, name, states, names, n);
-//    focuser->ISNewSwitch(dev, name, states, names, n);
+    device->ISNewSwitch(dev, name, states, names, n);
 }
 
 void ISNewText(const char *dev, const char *name, char *texts[], char *names[], int n)
 {
     ISInit();
-    telescope->ISNewText(dev, name, texts, names, n);
-//    focuser->ISNewText(dev, name, texts, names, n);
+    device->ISNewText(dev, name, texts, names, n);
 }
 
 void ISNewNumber(const char *dev, const char *name, double values[], char *names[], int n)
 {
-   ISInit();
-    telescope->ISNewNumber(dev, name, values, names, n);
-//    focuser->ISNewNumber(dev, name, values, names, n);
+    ISInit();
+    device->ISNewNumber(dev, name, values, names, n);
 }
 
 void ISNewBLOB(const char *dev, const char *name, int sizes[], int blobsizes[], char *blobs[], char *formats[],
@@ -100,13 +91,14 @@ void ISNewBLOB(const char *dev, const char *name, int sizes[], int blobsizes[], 
 void ISSnoopDevice(XMLEle *root)
 {
     ISInit();
-    telescope->ISSnoopDevice(root);
-//    focuser->ISSnoopDevice(root);
+    device->ISSnoopDevice(root);
 }
-
+*/
 /*******************************************************************************
 *** StarGo Implementation
 *******************************************************************************/
+const char *RA_DEC_TAB = "RA / DEC";
+
 StarGoTelescope::StarGoTelescope()
 {
     LOG_DEBUG(__FUNCTION__);
@@ -171,6 +163,25 @@ bool StarGoTelescope::ISNewNumber(const char *dev, const char *name, double valu
             MountRequestDelayNP.s = IPS_OK;
             IDSetNumber(&MountRequestDelayNP, nullptr);
             return true;
+        }
+        else if (!strcmp(name, MaxSlewNP.name))
+        {
+            int raSlew  = values[0];
+            int decSlew = values[1];
+            bool result  = setMaxSlews(raSlew, decSlew);
+
+            if(result)
+            {
+                MaxSlewN[0].value = static_cast<double>(raSlew);
+                MaxSlewN[1].value = static_cast<double>(decSlew);
+                MaxSlewNP.s = IPS_OK;
+            }
+            else
+            {
+                MaxSlewNP.s = IPS_ALERT;
+            }
+            IDSetNumber(&MaxSlewNP, nullptr);
+            return result;
         }
     }
 
@@ -370,8 +381,8 @@ bool StarGoTelescope::initProperties()
 
     // Max Slew Speeds
     IUFillNumber(&MaxSlewN[0], "MAX_SLEW_RA", "RA Max Slew", "%.2f", 0.0, 100.0, 1, 0);
-    IUFillNumber(&MaxSlewN[1], "MAX_SLEW__DEC", "DEC Max Slew", "%.2f", 0.0, 100.0, 1, 0);
-    IUFillNumberVector(&MaxSlewNP, MaxSlewN, 2, getDeviceName(), "Max Slew","Slewing", INFO_TAB, IP_RO, 60, IPS_IDLE);
+    IUFillNumber(&MaxSlewN[1], "MAX_SLEW_DEC", "DEC Max Slew", "%.2f", 0.0, 100.0, 1, 0);
+    IUFillNumberVector(&MaxSlewNP, MaxSlewN, 2, getDeviceName(), "Max Slew","Slewing", INFO_TAB, IP_RW, 60, IPS_IDLE);
 
     // Motor Step Position
     IUFillNumber(&MotorStepN[0], "MOTOR_STEP_RA", "RA Step Pos", "%.2f", -100000.0, 100000.0, 1, 0);
@@ -1516,6 +1527,35 @@ bool StarGoTelescope::getMaxSlews(int *raSlew, int *decSlew)
         return false;
     }
 
+    return true;
+}
+
+/*******************************************************************************
+ * @brief Set the max slew rates for RA and DEC axis
+ * @param raSlew max slew for RA axis
+ * @param decSlew max slew for DEC axis
+ * @return
+*******************************************************************************/
+bool StarGoTelescope::setMaxSlews(int raSlew, int decSlew)
+{
+    LOG_DEBUG(__FUNCTION__);
+    // Command query max slew rates  - :TTGMX#
+    //         response              - xxayy#
+    //         xx RA; yy DEC
+
+    char cmd[AVALON_COMMAND_BUFFER_LENGTH] = {0};
+    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
+
+    sprintf(cmd, ":TTMX%2d%2d", raSlew, decSlew);
+    if (sendQuery(cmd, response))
+    {
+        LOGF_INFO("Setting Max Slews to %2d %2d.", raSlew, decSlew);
+    }
+    else
+    {
+        LOGF_ERROR("Setting Max Slews to %2d %2d FAILED", raSlew, decSlew);
+        return false;
+    }
     return true;
 }
 
