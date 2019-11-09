@@ -30,16 +30,16 @@ class StarGoSystem : public StarGoTelescope
 public:
     StarGoSystem();
     virtual ~StarGoSystem() = default;
-
+//protected:
     bool initProperties() override;
     bool updateProperties() override;
-//    bool ReadScopeStatus() override;
+    bool ReadScopeStatus() override;
 
     bool ISNewSwitch(const char *dev, const char *name, ISState *states, char *names[], int n) override;
     bool ISNewNumber(const char *dev, const char *name, double values[], char *names[], int n) override;
     bool sendQuery(const char* cmd, char* response, char end, int wait=AVALON_TIMEOUT);
     bool sendQuery(const char* cmd, char* response, int wait=AVALON_TIMEOUT);
-
+    
     StarGoFocuser* m_focuser;
 };
 inline bool StarGoSystem::sendQuery(const char* cmd, char* response, int wait)

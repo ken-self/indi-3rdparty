@@ -163,5 +163,12 @@ bool StarGoSystem::sendQuery(const char* cmd, char* response, char end, int wait
 {
     return StarGoTelescope::sendQuery(cmd, response, end, wait);
 }
-
+bool StarGoSystem::ReadScopeStatus()
+{
+    if(! StarGoTelescope::ReadScopeStatus())
+    {
+            return false;
+    }
+    return m_focuser->ReadStatus();
+}
 

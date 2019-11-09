@@ -40,7 +40,7 @@ StarGoFocuser::StarGoFocuser(StarGoSystem *dev) : FI(dev), m_device(dev)
  ***************************************************************************/
 bool StarGoFocuser::initProperties()
 {
-    m_device->initProperties();
+//    m_device->initProperties();
     FI::initProperties(FOCUS_TAB);
 
 //    IUFillNumber(&FocusSyncPosN[0], "FOCUS_SYNC_POSITION_VALUE", "Ticks", "%4.0f", 0.0, 100000.0, 1000.0, 0);
@@ -68,7 +68,7 @@ bool StarGoFocuser::initProperties()
  ***************************************************************************/
 bool StarGoFocuser::updateProperties()
 {
-    m_device->updateProperties();
+//    m_device->updateProperties();
     FI::updateProperties();
     return true;
 }
@@ -76,44 +76,44 @@ bool StarGoFocuser::updateProperties()
 /***************************************************************************
  * Reaction to UI commands
  ***************************************************************************/
-bool StarGoFocuser::ISNewSwitch(const char *dev, const char *name, ISState *states, char *names[], int n)
-{
-    INDI_UNUSED(states);
-    INDI_UNUSED(names);
-    INDI_UNUSED(n);
-
-    //  first check if it's for our device
-    if (dev != nullptr && strcmp(dev, m_device->getDeviceName()) == 0)
-    {
-        if (strstr(name, "FOCUS"))
-        {
-            return FI::processSwitch(dev, name, states, names, n);
-        }
-        return m_device->ISNewSwitch(dev, name, states, names, n);
-    }
-    return true;
-}
+//bool StarGoFocuser::ISNewSwitch(const char *dev, const char *name, ISState *states, char *names[], int n)
+//{
+//    INDI_UNUSED(states);
+//    INDI_UNUSED(names);
+//    INDI_UNUSED(n);
+//
+//    //  first check if it's for our device
+//    if (dev != nullptr && strcmp(dev, m_device->getDeviceName()) == 0)
+//    {
+//        if (strstr(name, "FOCUS"))
+//        {
+//            return FI::processSwitch(dev, name, states, names, n);
+//        }
+////        return m_device->ISNewSwitch(dev, name, states, names, n);
+//    }
+//    return true;
+//}
 
 /***************************************************************************
  *
  ***************************************************************************/
-bool StarGoFocuser::ISNewNumber(const char *dev, const char *name, double values[], char *names[], int n)
-{
-    INDI_UNUSED(values);
-    INDI_UNUSED(names);
-    INDI_UNUSED(n);
-
-    //  first check if it's for our device
-    if (dev != nullptr && strcmp(dev, m_device->getDeviceName()) == 0)
-    {
-        if (strstr(name, "FOCUS"))
-        {
-            return FI::processNumber(dev, name, values, names, n);
-        }
-        return m_device->ISNewNumber(dev, name, values, names, n);
-    }
-    return true;
-}
+//bool StarGoFocuser::ISNewNumber(const char *dev, const char *name, double values[], char *names[], int n)
+//{
+//    INDI_UNUSED(values);
+//    INDI_UNUSED(names);
+//    INDI_UNUSED(n);
+//
+//    //  first check if it's for our device
+//    if (dev != nullptr && strcmp(dev, m_device->getDeviceName()) == 0)
+//    {
+//        if (strstr(name, "FOCUS"))
+//        {
+//            return FI::processNumber(dev, name, values, names, n);
+//        }
+////        return m_device->ISNewNumber(dev, name, values, names, n);
+//    }
+//    return true;
+//}
 
 /***************************************************************************
  *
@@ -280,4 +280,15 @@ bool StarGoFocuser::sendQuery(const char* cmd, char* response, char end, int wai
 const char* StarGoFocuser::getDeviceName()
 {
     return m_device->getDeviceName();
+}
+bool StarGoFocuser::ReadStatus()
+{
+    int position;
+    if(! getFocuserPosition(&position) )
+    {
+        return false;
+    }
+    FocusAbsPosN[0].value = position;
+    IDSetNumber(&FocusSpeedNP, nullptr);
+    return true;
 }

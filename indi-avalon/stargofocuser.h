@@ -40,8 +40,8 @@ public:
     bool updateProperties();
 //    bool ReadScopeStatus() override;
 
-    bool ISNewSwitch(const char *dev, const char *name, ISState *states, char *names[], int n);
-    bool ISNewNumber(const char *dev, const char *name, double values[], char *names[], int n);
+//    bool ISNewSwitch(const char *dev, const char *name, ISState *states, char *names[], int n);
+//    bool ISNewNumber(const char *dev, const char *name, double values[], char *names[], int n);
 
 protected:
     StarGoSystem* m_device;
@@ -65,6 +65,7 @@ protected:
     bool sendQuery(const char* cmd, char* response, char end, int wait=AVALON_TIMEOUT);
     bool sendQuery(const char* cmd, char* response, int wait=AVALON_TIMEOUT);
     const char* getDeviceName(); 
+    bool ReadStatus();
 };
 inline bool StarGoFocuser::sendQuery(const char* cmd, char* response, int wait)
 {
