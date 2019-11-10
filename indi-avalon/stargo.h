@@ -33,6 +33,7 @@
 
 #include <cstring>
 #include <string>
+#include <cmath>
 #include <unistd.h>
 
 #define STARGO_TIMEOUT 5 /* FD timeout in seconds */
@@ -109,6 +110,10 @@ protected:
     // Max slew speed
     INumberVectorProperty MaxSlewNP;
     INumber MaxSlewN[2];
+
+    // Center and FInd speeds
+    INumberVectorProperty MoveSpeedNP;
+    INumber MoveSpeedN[2];
 
     // Motor Step Position
     INumberVectorProperty MotorStepNP;
@@ -208,6 +213,8 @@ protected:
     bool getMaxSlews(int *raSlew, int *decSlew);
     bool setMaxSlews(int raSlew, int decSlew);
     bool getMotorSteps(double *raSteps, double *decSteps);
+    bool getMoveSpeed(int *raSpeed, int * decSpeed );
+    bool setMoveSpeed(int raSpeed, int decSpeed );
 
     bool setST4Enabled(bool enabled);
     bool getST4Status(bool *isEnabled);
@@ -260,6 +267,7 @@ protected:
     void flush();
     bool transmit(const char* buffer);
     double ahex2int(char* ahex);
+    void int2ahex(char * ahex, double val);
 
 };
 inline bool StarGoTelescope::isGuiding(){
@@ -273,6 +281,7 @@ inline bool StarGoTelescope::receive(char* buffer, int* bytes, int wait)
 {
     return receive(buffer, bytes, '#', wait);
 }
+//Convert to Hex using ASCII-48 (ASCII-x30)
 inline double StarGoTelescope::ahex2int(char* ahex)
 {
     double val=0;
@@ -281,6 +290,18 @@ inline double StarGoTelescope::ahex2int(char* ahex)
         val = val*16 + ahex[i] - 48;
     }
     return val;
+}
+//Convert to ASCII using Hex+48
+inline void StarGoTelescope::int2ahex(char * ahex, double val)
+{
+    int ival = static_cast<int>(round(val));
+//    char ahex[9];
+    for(unsigned int i=7; i<=0; i--)
+    {
+        ahex[i] = (ival & 0x0000000F);
+        ival = ival >> 4;
+    }
+    return;
 }
 
 #endif // STARGO_TELESCOPE_H

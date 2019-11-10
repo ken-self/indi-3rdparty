@@ -18,7 +18,20 @@
     License along with this library; if not, write to the Free Software
     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 */
+/*
+Unimplemented commands
 
+   SET/GET Reverse RA/DEC
+ * Reverse RA X1A0; DEC X1A1
+ * Get X1B => wrd where r=RA; d=DEC
+ *
+ GET Center find speed
+ SET/GET Torque
+ Get: TTGT
+ Set: 
+ GET Tracking rate adjust
+    //    focuser->initProperties("AUX1 Focuser");
+*/
 #include "stargo.h"
 
 #include <cmath>
@@ -34,8 +47,9 @@
 #include "config.h"
 
 /*
+#ifndef NO_FOCUSER
 // Unique pointers
-static std::unique_ptr<StarGoTelescope> device;
+static std::unique_ptr<StarGoTelescope> telescope;
 
 void ISInit()
 {
@@ -45,35 +59,35 @@ void ISInit()
         return;
 
     isInit = 1;
-    if (device.get() == nullptr)
+    if (telescope.get() == nullptr)
     {
-        StarGoTelescope* myDevice = new StarGoTelescope();
-        device.reset(myDevice);
+        StarGoTelescope* myScope = new StarGoTelescope();
+        telescope.reset(myScope);
     }
 }
 
 void ISGetProperties(const char *dev)
 {
     ISInit();
-    device->ISGetProperties(dev);
+    telescope->ISGetProperties(dev);
 }
 
 void ISNewSwitch(const char *dev, const char *name, ISState *states, char *names[], int n)
 {
     ISInit();
-    device->ISNewSwitch(dev, name, states, names, n);
+    telescope->ISNewSwitch(dev, name, states, names, n);
 }
 
 void ISNewText(const char *dev, const char *name, char *texts[], char *names[], int n)
 {
     ISInit();
-    device->ISNewText(dev, name, texts, names, n);
+    telescope->ISNewText(dev, name, texts, names, n);
 }
 
 void ISNewNumber(const char *dev, const char *name, double values[], char *names[], int n)
 {
     ISInit();
-    device->ISNewNumber(dev, name, values, names, n);
+    telescope->ISNewNumber(dev, name, values, names, n);
 }
 
 void ISNewBLOB(const char *dev, const char *name, int sizes[], int blobsizes[], char *blobs[], char *formats[],
@@ -91,8 +105,9 @@ void ISNewBLOB(const char *dev, const char *name, int sizes[], int blobsizes[], 
 void ISSnoopDevice(XMLEle *root)
 {
     ISInit();
-    device->ISSnoopDevice(root);
+    telescope->ISSnoopDevice(root);
 }
+#endif // NO_FOCUSER
 */
 /*******************************************************************************
 *** StarGo Implementation
@@ -136,8 +151,8 @@ bool StarGoTelescope::ISNewNumber(const char *dev, const char *name, double valu
         // sync home position
         if (!strcmp(name, GuidingSpeedNP.name))
         {
-            int raSpeed  = round(values[0] * 100);
-            int decSpeed = round(values[1] * 100);
+            int raSpeed  = static_cast<int>(round(values[0] * 100.0));
+            int decSpeed = static_cast<int>(round(values[1] * 100.0));
             bool result  = setGuidingSpeeds(raSpeed, decSpeed);
 
             if(result)
@@ -181,6 +196,25 @@ bool StarGoTelescope::ISNewNumber(const char *dev, const char *name, double valu
                 MaxSlewNP.s = IPS_ALERT;
             }
             IDSetNumber(&MaxSlewNP, nullptr);
+            return result;
+        }
+        else if (!strcmp(name, MoveSpeedNP.name))
+        {
+            int center  = values[0];
+            int find = values[1];
+            bool result  = setMoveSpeed(center, find);
+
+            if(result)
+            {
+                MoveSpeedN[0].value = static_cast<double>(center);
+                MoveSpeedN[1].value = static_cast<double>(find);
+                MoveSpeedNP.s = IPS_OK;
+            }
+            else
+            {
+                MoveSpeedNP.s = IPS_ALERT;
+            }
+            IDSetNumber(&MoveSpeedNP, nullptr);
             return result;
         }
     }
@@ -228,11 +262,10 @@ bool StarGoTelescope::ISNewSwitch(const char *dev, const char *name, ISState *st
                 return false;
             int trackMode = IUFindOnSwitchIndex(&TrackModeSP);
 
-            bool result = true;
-            if (trackMode == TRACK_NONE) return false;
-//            if (trackMode != TRACK_NONE) result = SetTrackMode(trackMode);
+            bool result = SetTrackMode(trackMode);
 
-            switch (trackMode) {
+            switch (trackMode)
+            {
             case TRACK_SIDEREAL:
                 LOG_INFO("Sidereal tracking rate selected.");
                 break;
@@ -253,11 +286,14 @@ bool StarGoTelescope::ISNewSwitch(const char *dev, const char *name, ISState *st
             bool enabled = (states[0] == ISS_OFF);
             bool result = setST4Enabled(enabled);
 
-            if(result) {
+            if(result)
+            {
                 ST4StatusS[0].s = enabled ? ISS_OFF : ISS_ON;
                 ST4StatusS[1].s = enabled ? ISS_ON : ISS_OFF;
                 ST4StatusSP.s = IPS_OK;
-            } else {
+            }
+            else
+            {
                 ST4StatusSP.s = IPS_ALERT;
             }
             IDSetSwitch(&ST4StatusSP, nullptr);
@@ -333,10 +369,6 @@ bool StarGoTelescope::initProperties()
     AddTrackMode("TRACK_SOLAR", "Solar");
     AddTrackMode("TRACK_LUNAR", "Lunar");
 
-//    IUFillSwitch(&UsePulseCmdS[0], "Off", "", ISS_OFF);
-//    IUFillSwitch(&UsePulseCmdS[1], "On", "", ISS_ON);
-//    IUFillSwitchVector(&UsePulseCmdSP, UsePulseCmdS, 2, getDeviceName(), "Use Pulse Cmd", "", MAIN_CONTROL_TAB, IP_RW,
-//                       ISR_1OFMANY, 0, IPS_IDLE);
     TrackState = SCOPE_IDLE;
 
     initGuiderProperties(getDeviceName(), GUIDE_TAB);
@@ -346,12 +378,12 @@ bool StarGoTelescope::initProperties()
 
     setDriverInterface(getDriverInterface() | GUIDER_INTERFACE);
 
-    double longitude=0, latitude=90;
+    double longitude=0.0, latitude=90.0;
     // Get value from config file if it exists.
     IUGetConfigNumber(getDeviceName(), "GEOGRAPHIC_COORD", "LONG", &longitude);
     currentRA  = get_local_sidereal_time(longitude);
     IUGetConfigNumber(getDeviceName(), "GEOGRAPHIC_COORD", "LAT", &latitude);
-    currentDEC = latitude > 0 ? 90 : -90;
+    currentDEC = latitude > 0.0 ? 90.0 : -90.0;
 
     IUFillSwitch(&MountGotoHomeS[0], "MOUNT_GOTO_HOME_VALUE", "Goto Home", ISS_OFF);
     IUFillSwitchVector(&MountGotoHomeSP, MountGotoHomeS, 1, getDeviceName(), "MOUNT_GOTO_HOME", "Goto Home", MAIN_CONTROL_TAB, IP_RW, ISR_ATMOST1, 60, IPS_OK);
@@ -369,20 +401,24 @@ bool StarGoTelescope::initProperties()
     IUFillText(&MountFirmwareInfoT[2], "MOUNT_TCB", "TCB", "");
     IUFillTextVector(&MountFirmwareInfoTP, MountFirmwareInfoT, 3, getDeviceName(), "MOUNT_INFO", "Mount Info", INFO_TAB, IP_RO, 60, IPS_OK);
 
-    
-    // Tracking Adjustment
-    IUFillNumber(&TrackAdjustN[0], "GEAR_RATIO_RA", "RA Gearing", "%.2f", 0.0, 1000.0, 1, 0);
-    IUFillNumber(&TrackAdjustN[1], "GEAR_RATIO_DEC", "DEC Gearing", "%.2f", 0.0, 1000.0, 1, 0);
+    // Gear Ratios
+    IUFillNumber(&GearRatioN[0], "GEAR_RATIO_RA", "RA Gearing", "%.2f", 0.0, 1000.0, 1, 0);
+    IUFillNumber(&GearRatioN[1], "GEAR_RATIO_DEC", "DEC Gearing", "%.2f", 0.0, 1000.0, 1, 0);
     IUFillNumberVector(&GearRatioNP, GearRatioN, 2, getDeviceName(), "Gear Ratio","Gearing", INFO_TAB, IP_RO, 60, IPS_IDLE);
 
-    // Gear Ratios
-    IUFillNumber(&GearRatioN[0], "RA_TRACK_ADJ", "RA Tracking Adjust", "%.2f", -500.0, 500.0, 1, 0);
+    // Tracking Adjustment
+    IUFillNumber(&TrackAdjustN[0], "RA_TRACK_ADJ", "RA Tracking Adjust", "%.2f", -500.0, 500.0, 1, 0);
     IUFillNumberVector(&TrackAdjustNP, TrackAdjustN, 1, getDeviceName(), "Track Adjust","Tracking", INFO_TAB, IP_RO, 60, IPS_IDLE);
 
     // Max Slew Speeds
     IUFillNumber(&MaxSlewN[0], "MAX_SLEW_RA", "RA Max Slew", "%.2f", 0.0, 100.0, 1, 0);
     IUFillNumber(&MaxSlewN[1], "MAX_SLEW_DEC", "DEC Max Slew", "%.2f", 0.0, 100.0, 1, 0);
-    IUFillNumberVector(&MaxSlewNP, MaxSlewN, 2, getDeviceName(), "Max Slew","Slewing", INFO_TAB, IP_RW, 60, IPS_IDLE);
+    IUFillNumberVector(&MaxSlewNP, MaxSlewN, 2, getDeviceName(), "Max Slew","Slewing", RA_DEC_TAB, IP_RW, 60, IPS_IDLE);
+
+    // Move Speeds
+    IUFillNumber(&MoveSpeedN[0], "MOVE_SPEED_CENTER", "Center Speed", "%.2f", 1.0, 10.0, 1, 0);
+    IUFillNumber(&MoveSpeedN[1], "MOVE_SPEED_FIND", "Find Speed", "%.2f", 1.0, 150.0, 1, 0);
+    IUFillNumberVector(&MoveSpeedNP, MoveSpeedN, 2, getDeviceName(), "Goto Speed","Slewing", RA_DEC_TAB, IP_RW, 60, IPS_IDLE);
 
     // Motor Step Position
     IUFillNumber(&MotorStepN[0], "MOTOR_STEP_RA", "RA Step Pos", "%.2f", -100000.0, 100000.0, 1, 0);
@@ -413,41 +449,6 @@ bool StarGoTelescope::initProperties()
     IUFillNumber(&MountRequestDelayN[0], "MOUNT_REQUEST_DELAY", "Request Delay (ms)", "%.0f", 0.0, 1000, 1.0, 50.0);
     IUFillNumberVector(&MountRequestDelayNP, MountRequestDelayN, 1, getDeviceName(), "REQUEST_DELAY", "StarGO", RA_DEC_TAB, IP_RW, 60, IPS_OK);
 
-/*
- EXTRA COMMANDS
- *
- * Set centre and find speeds
- * X03aaaabbbb aaaa=center speed; bbbb=findspeed
- * valid center speeds:
-2  = 007:  = 0x7a = 122
-3  = 0051  = 0x51 = 81
-4  = 003=  = 0x3d = 61
-6  = 0028  = 0x28 = 40
-8  = 001>  = 0x1e = 40
-10 = 0018  = 0x18 = 24
-
-valid find speeds:
-10  = 0031  = x31 = 49
-15  = 0020  = x20 = 32
-20  = 0018  = x18 = 24
-30  = 0010  = x10 = 16
-50  = 000:  = x0a = 10
-75  = 0006  = x06 = 6
-100 = 0005  = x05 = 5
-150 = 0003  = x03 = 3
-
-Convert to Hex using ASCII-48 (ASCII-x30)
-
- * Reverse RA/DEC
- * Reverse RA X1A0; DEC X1A1
- * Get X1B => wrd where r=RA; d=DEC
- *
- * Set tracking rate
- * X1Ennnn where nnnn=0500 to 1500; 1000 is base rate
- *
- */
-    //    focuser->initProperties("AUX1 Focuser");
-
     return true;
 }
 
@@ -464,7 +465,6 @@ bool StarGoTelescope::updateProperties()
 
     if (isConnected())
     {
-//        defineSwitch(&UsePulseCmdSP);
         defineNumber(&GuideNSNP);
         defineNumber(&GuideWENP);
         defineSwitch(&SyncHomeSP);
@@ -485,7 +485,6 @@ bool StarGoTelescope::updateProperties()
     }
     else
     {
-//        deleteProperty(UsePulseCmdSP.name);
         deleteProperty(GuideNSNP.name);
         deleteProperty(GuideWENP.name);
         deleteProperty(SyncHomeSP.name);
@@ -502,8 +501,6 @@ bool StarGoTelescope::updateProperties()
         deleteProperty(MaxSlewNP.name);
         deleteProperty(MotorStepNP.name);
     }
-
-//    focuser->updateProperties();
 
     return true;
 }
@@ -585,8 +582,13 @@ bool StarGoTelescope::ReadScopeStatus()
     int x, y;
     if (! getMotorStatus(&x, &y))
     {
-       LOG_ERROR("Cannot determine scope status, failed to parse motor state.");
-       return false;
+        LOG_INFO("Failed to parse motor state. Retrying...");
+        // retry once
+        if (! getMotorStatus(&x, &y))
+        {
+            LOG_ERROR("Cannot determine scope status, failed to parse motor state.");
+            return false;
+        }
     }
     if( x != 4) GuideComplete(AXIS_RA);
     if( y != 4) GuideComplete(AXIS_DE);
@@ -708,10 +710,10 @@ bool StarGoTelescope::Goto(double ra, double dec)
          LOG_ERROR("Error setting coords for goto");
          return false;
     }
-    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
 
     if (!isSimulation())
     {
+        char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
         if(!sendQuery(":MS#", response))
         {
             LOG_ERROR("Error Slewing");
@@ -919,10 +921,6 @@ bool StarGoTelescope::SetTrackMode(uint8_t mode)
             strcpy(cmd, ":TL#");
             strcpy(s_mode, "Lunar");
             break;
-//        case TRACK_NONE:
-//            strcpy(cmd, ":TM#");
-//            strcpy(s_mode, "None");
-//            break;
         default:
             return false;
     }
@@ -938,6 +936,8 @@ bool StarGoTelescope::SetTrackMode(uint8_t mode)
 *******************************************************************************/
 bool StarGoTelescope::SetTrackRate(double raRate, double deRate)
 {
+// * Set tracking rate
+// * X1Ennnn where nnnn=0500 to 1500; 1000 is base rate
     LOGF_DEBUG("%s rarate=%lf deRate=%lf",__FUNCTION__,raRate, deRate);
     INDI_UNUSED(raRate);
     INDI_UNUSED(deRate);
@@ -1115,6 +1115,9 @@ bool StarGoTelescope::SetParkPosition(double Axis1Value, double Axis2Value)
     return SetCurrentPark();
 }
 
+/*******************************************************************************
+**
+*******************************************************************************/
 bool StarGoTelescope::SetDefaultPark()
 {
     LOG_DEBUG(__FUNCTION__);
@@ -1130,6 +1133,9 @@ bool StarGoTelescope::SetDefaultPark()
     return SetCurrentPark();
 }
 
+/*******************************************************************************
+**
+*******************************************************************************/
 bool StarGoTelescope::SetCurrentPark()
 {
     LOG_DEBUG(__FUNCTION__);
@@ -1139,6 +1145,9 @@ bool StarGoTelescope::SetCurrentPark()
     return true;
 }
 
+/*******************************************************************************
+**
+*******************************************************************************/
 void StarGoTelescope::WaitParkOptionReady()
 {
     // Check if waiting for park position to set. Reset in Abort())
@@ -1539,8 +1548,8 @@ bool StarGoTelescope::getMaxSlews(int *raSlew, int *decSlew)
 bool StarGoTelescope::setMaxSlews(int raSlew, int decSlew)
 {
     LOG_DEBUG(__FUNCTION__);
-    // Command query max slew rates  - :TTGMX#
-    //         response              - xxayy#
+    // Command query max slew rates  - :TTMX#
+    //         parama                - xxyy#
     //         xx RA; yy DEC
 
     char cmd[AVALON_COMMAND_BUFFER_LENGTH] = {0};
@@ -1623,6 +1632,97 @@ bool StarGoTelescope::getGuidingSpeeds (int *raSpeed, int *decSpeed)
         return false;
     }
 
+    return true;
+}
+
+/*******************************************************************************
+ * @brief Determine the centering and finding speeds for RA and DEC axis
+ * @param raSpeed factor for RA axis
+ * @param decSpeed factor for DEC axis
+ * @return
+*******************************************************************************/
+bool StarGoTelescope::getMoveSpeed(int *center, int * find )
+{
+    LOG_DEBUG(__FUNCTION__);
+    INDI_UNUSED(center);
+    INDI_UNUSED(find);
+    /*
+ * Set centre and find speeds
+ * X03aaaabbbb aaaa=center speed; bbbb=findspeed
+ * valid center speeds:
+2x  = 007:  = 0x7a = 122
+3x  = 0051  = 0x51 = 81
+4x  = 003=  = 0x3d = 61
+6x  = 0028  = 0x28 = 40
+8x  = 001>  = 0x1e = 40
+10x = 0018  = 0x18 = 24
+
+valid find speeds:
+10x  = 0031  = x31 = 49
+15x  = 0020  = x20 = 32
+20x  = 0018  = x18 = 24
+30x  = 0010  = x10 = 16
+50x  = 000:  = x0a = 10
+75x  = 0006  = x06 = 6
+100x = 0005  = x05 = 5
+150x = 0003  = x03 = 3
+*/
+    LOGF_DEBUG("%s %s", __FUNCTION__, "Not Implemented");
+    return false;
+
+}
+
+/*******************************************************************************
+ * @brief Set the centering and findign speeds for RA and DEC axis
+ * @param raSpeed factor for RA axis
+ * @param decSpeed factor for DEC axis
+ * @return
+*******************************************************************************/
+bool StarGoTelescope::setMoveSpeed(int center, int find )
+{
+    LOG_DEBUG(__FUNCTION__);
+    /*
+ * Set centre and find speeds
+ * X03aaaabbbb aaaa=center speed; bbbb=findspeed
+ * valid center speeds:
+2x  = 007:  = 0x7a = 122
+3x  = 0051  = 0x51 = 81
+4x  = 003=  = 0x3d = 61
+6x  = 0028  = 0x28 = 40
+8x  = 001>  = 0x1e = 40
+10x = 0018  = 0x18 = 24
+Parameter = 240/factor
+valid find speeds:
+10x  = 0031  = x31 = 49
+15x  = 0020  = x20 = 32
+20x  = 0018  = x18 = 24
+30x  = 0010  = x10 = 16
+50x  = 000:  = x0a = 10
+75x  = 0006  = x06 = 6
+100x = 0005  = x05 = 5
+150x = 0003  = x03 = 3
+Parameter = 480/factor
+*/
+    double centerpar = double(center) / 240.0;
+    double findpar = double(find) / 480.0;
+
+    char cmd[AVALON_COMMAND_BUFFER_LENGTH] = {0};
+    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
+
+    char centerstr[9] = {0};
+    char findstr[9] = {0};
+    int2ahex(centerstr, centerpar);
+    int2ahex(findstr, findpar);
+    sprintf(cmd, ":X03%4s%4s", centerstr, findstr);
+    if (sendQuery(cmd, response))
+    {
+        LOGF_INFO("Setting Center and Find to %2d %2d.", center, find);
+    }
+    else
+    {
+        LOGF_ERROR("Setting Center and Find to %2d %2d FAILED", center, find);
+        return false;
+    }
     return true;
 }
 
@@ -1838,7 +1938,10 @@ bool StarGoTelescope::setSiteLongitude(double longitude)
     getSexComponents(longitude, &d, &m, &s);
 
     if (d < 0 || m < 0 || s < 0)
-        snprintf(command, sizeof(command), ":Sg%04d*%02u:%02u#", d, m, s);
+        snprintf(command, sizeof(command), ":Sg%04d*%02u:%02u#",
+                 d,
+                 static_cast<uint32_t>(std::abs(m)),
+                 static_cast<uint32_t>(std::abs(s)));
     else
         snprintf(command, sizeof(command), ":Sg+%03d*%02d:%02d#", d, m, s);
 
@@ -1880,7 +1983,8 @@ bool StarGoTelescope::getSiteLatitude(double *siteLat)
 {
     LOG_DEBUG(__FUNCTION__);
     char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
-    if (!sendQuery(":Gt#", response)) {
+    if (!sendQuery(":Gt#", response)) 
+    {
         LOG_ERROR("Failed to send query get Site Latitude command.");
         return false;
     }
@@ -1927,7 +2031,10 @@ bool StarGoTelescope::setLocalSiderealTime(double longitude)
 
     char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
     char cmd[AVALON_COMMAND_BUFFER_LENGTH] = {0};
-    sprintf(cmd, ":X32%02hd%02hd%02hd#", (short) h, (short) m, (short) s);
+    sprintf(cmd, ":X32%02hd%02hd%02hd#",
+            static_cast<int16_t>(h),
+            static_cast<int16_t>(m),
+            static_cast<int16_t>(s));
     if(!sendQuery(cmd, response))
     {
         LOG_ERROR("Failed to set LST");
@@ -1950,12 +2057,16 @@ bool StarGoTelescope::setLocalDate(uint8_t days, uint8_t months, uint16_t years)
 // Use X50 using DDMMYY
     snprintf(cmd, sizeof(cmd), ":SC %02d%02d%02d#", months, days, yy);
     if (!sendQuery(cmd, response))
+    {
         LOG_ERROR("Failed to set date");
         return false;
+    }
 
     if (response[0] == '0')
+    {
         LOG_ERROR("Invalid reponse to set date");
         return false;
+    }
 
     return true;
 }
@@ -2681,22 +2792,31 @@ bool StarGoTelescope::sendQuery(const char* cmd, char* response, char end, int w
     if(!transmit(cmd))
     {
         LOGF_ERROR("Command <%s> failed.", cmd);
+        // sleep for 50 mseconds to avoid flooding the mount with commands
+        nanosleep(&mount_request_delay, nullptr);
         return false;
     }
     lresponse[0] = '\0';
     int lwait = wait;
+    bool found = false;
     while (receive(lresponse, &lbytes, end, lwait))
     {
 //        LOGF_DEBUG("Found response after %ds %s", lwait, lresponse);
         lbytes=0;
         if(! ParseMotionState(lresponse))
         {
-            // Don't change wait requirement but get the response
-            strcpy(response, lresponse);
+            // Take the first response that is no motion state
+            if (!found)
+                strcpy(response, lresponse);
+            found = true;
             lwait = 0;
         }
     }
     flush();
+    
+    // sleep for 50 mseconds to avoid flooding the mount with commands
+    nanosleep(&mount_request_delay, nullptr);
+    
     return true;
 }
 
@@ -2730,14 +2850,15 @@ bool StarGoTelescope::ParseMotionState(char* state)
                 break;
         };
     // Tracking modes
-    // t = 0 no tracking at all
+    // t = 0 no tracking at all (not used)
     // t = 1 tracking at moon speed
     // t = 2 tracking at sun speed
     // t = 3 tracking at stars speed (sidereal speed)
         switch(lmode)
         {
-            case 0:
-                CurrentTrackMode = TRACK_NONE;
+            case 0:  // Not used
+                // TRACK_NONE removed, do nothing
+                //CurrentTrackMode = TRACK_NONE;
                 break;
             case 1:
                 CurrentTrackMode = TRACK_LUNAR;
