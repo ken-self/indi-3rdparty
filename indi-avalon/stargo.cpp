@@ -524,7 +524,7 @@ bool StarGoTelescope::Handshake()
     char cmdsync[AVALON_COMMAND_BUFFER_LENGTH] = {0};
     char cmdlst[AVALON_COMMAND_BUFFER_LENGTH] = {0};
     char cmddate[AVALON_COMMAND_BUFFER_LENGTH] = {0};
-    char lst[AVALON_COMMAND_BUFFER_LENGTH] = {0};
+    char lst[AVALON_COMMAND_BUFFER_LENGTH-5] = {0};
     if(getLST_String(lst))
     {
         sprintf(cmdsync,":X31%s#", lst);
@@ -1200,7 +1200,7 @@ void StarGoTelescope::WaitParkOptionReady()
 bool StarGoTelescope::setHomeSync()
 {
     LOG_DEBUG(__FUNCTION__);
-    char input[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
+    char input[AVALON_RESPONSE_BUFFER_LENGTH-5] = {0};
     char cmd[AVALON_COMMAND_BUFFER_LENGTH] = {0};
     if (!getLST_String(input))
     {
