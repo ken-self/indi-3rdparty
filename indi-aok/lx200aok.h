@@ -1,5 +1,3 @@
-
-
 /*
     AOK Skywalker driver
     (based on Avalon driver)
@@ -117,24 +115,29 @@ class LX200Skywalker : public LX200Telescope
 
         int controller_format { LX200_LONG_FORMAT };
 
-        // override LX200Generic
+        // override
         virtual void getBasicData() override;
-        // virtual bool ReadScopeStatus() override;
-        virtual bool Park() override;
-        virtual bool UnPark();
-        //virtual bool UnPark() override;
         virtual bool saveConfigItems(FILE *fp) override;
         virtual bool Goto(double ra, double dec) override;
         virtual bool Connect() override;
         virtual bool Disconnect() override;
 
-        // Skywalker stuff
-        bool setParkPosition(ISState *states, char *names[], int n);
+        // override INDI::Telescope
+        bool Park() override;
+        bool UnPark() override;
+        bool SetCurrentPark() override;
+        bool SetDefaultPark() override;
+
+        //Skywalker stuff
+        bool SyncDefaultPark();
+        bool SavePark();
         bool getSystemSlewSpeed (int *xx);
         bool setSystemSlewSpeed (int xx);
         bool getJSONData_Y(int jindex, char *jstr);
         bool getJSONData_gp(int jindex, char *jstr);
-        bool setPierSide();
+        bool notifyPierSide();
+        void notifyMountLock(bool locked);
+        void notifyTrackState(INDI::Telescope::TelescopeStatus state);
         bool MountLocked();
         bool SetMountLock(bool enable);
 

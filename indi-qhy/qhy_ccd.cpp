@@ -27,7 +27,7 @@
 #include <algorithm>
 #include <math.h>
 
-#define TEMP_THRESHOLD       0.2   /* Differential temperature threshold (C)*/
+#define TEMP_THRESHOLD       0.05   /* Differential temperature threshold (C)*/
 #define MAX_DEVICES          4     /* Max device cameraCount */
 
 //NB Disable for real driver
@@ -277,6 +277,10 @@ bool QHYCCD::initProperties()
     FilterSlotN[0].min = 1;
     FilterSlotN[0].max = 9;
 
+    // QHY SDK Version
+    IUFillText(&SDKVersionT[0], "VERSION", "Version", "NA");
+    IUFillTextVector(&SDKVersionTP, SDKVersionT, 1, getDeviceName(), "SDK_VERSION", "SDK", "General Info", IP_RO, 60, IPS_OK);
+
     // CCD Cooler Switch
     IUFillSwitch(&CoolerS[0], "COOLER_ON", "On", ISS_OFF);
     IUFillSwitch(&CoolerS[1], "COOLER_OFF", "Off", ISS_ON);
@@ -293,30 +297,35 @@ bool QHYCCD::initProperties()
     IUFillNumberVector(&GainNP, GainN, 1, getDeviceName(), "CCD_GAIN", "Gain", MAIN_CONTROL_TAB, IP_RW, 60, IPS_IDLE);
 
     // CCD Offset
-    IUFillNumber(&OffsetN[0], "Offset", "Offset", "%.f", 0, 0, 1, 0);
+    IUFillNumber(&OffsetN[0], "OFFSET", "Offset", "%.f", 0, 0, 1, 0);
     IUFillNumberVector(&OffsetNP, OffsetN, 1, getDeviceName(), "CCD_OFFSET", "Offset", MAIN_CONTROL_TAB, IP_RW, 60,
                        IPS_IDLE);
 
     // USB Speed
-    IUFillNumber(&SpeedN[0], "Speed", "Speed", "%.f", 0, 0, 1, 0);
+    IUFillNumber(&SpeedN[0], "SPEED", "Speed", "%.f", 0, 0, 1, 0);
     IUFillNumberVector(&SpeedNP, SpeedN, 1, getDeviceName(), "USB_SPEED", "USB Speed", MAIN_CONTROL_TAB, IP_RW, 60,
                        IPS_IDLE);
 
     // Read Modes (initial support for QHY42Pro)
-    IUFillNumber(&ReadModeN[0], "Read Mode", "Read Mode", "%.f", 0, 1, 1, 0);
+    IUFillNumber(&ReadModeN[0], "MODE", "Mode", "%.f", 0, 1, 1, 0);
     IUFillNumberVector(&ReadModeNP, ReadModeN, 1, getDeviceName(), "READ_MODE", "Read Mode", MAIN_CONTROL_TAB, IP_RW, 60,
                        IPS_IDLE);
 
-
     // USB Traffic
-    IUFillNumber(&USBTrafficN[0], "Speed", "Speed", "%.f", 0, 0, 1, 0);
+    IUFillNumber(&USBTrafficN[0], "TRAFFIC", "Speed", "%.f", 0, 0, 1, 0);
     IUFillNumberVector(&USBTrafficNP, USBTrafficN, 1, getDeviceName(), "USB_TRAFFIC", "USB Traffic", MAIN_CONTROL_TAB,
+                       IP_RW, 60, IPS_IDLE);
+
+    // USB Buffer
+    IUFillNumber(&USBBufferN[0], "BUFFER", "Bytes", "%.f", 512, 4096, 512, 512);
+    IUFillNumberVector(&USBBufferNP, USBBufferN, 1, getDeviceName(), "USB_BUFFER", "USB Buffer", MAIN_CONTROL_TAB,
                        IP_RW, 60, IPS_IDLE);
 
     // Cooler Mode
     IUFillSwitch(&CoolerModeS[COOLER_AUTOMATIC], "COOLER_AUTOMATIC", "Auto", ISS_ON);
     IUFillSwitch(&CoolerModeS[COOLER_MANUAL], "COOLER_MANUAL", "Manual", ISS_OFF);
-    IUFillSwitchVector(&CoolerModeSP, CoolerModeS, 2, getDeviceName(), "CCD_COOLER_MODE", "Cooler Mode", MAIN_CONTROL_TAB, IP_RO,
+    IUFillSwitchVector(&CoolerModeSP, CoolerModeS, 2, getDeviceName(), "CCD_COOLER_MODE", "Cooler Mode", MAIN_CONTROL_TAB,
+                       IP_RO,
                        ISR_1OFMANY, 0, IPS_IDLE);
 
     addAuxControls();
@@ -366,6 +375,10 @@ void QHYCCD::ISGetProperties(const char *dev)
 
         if (HasUSBTraffic)
             defineNumber(&USBTrafficNP);
+
+        defineNumber(&USBBufferNP);
+
+        defineText(&SDKVersionTP);
     }
 }
 
@@ -555,6 +568,10 @@ bool QHYCCD::updateProperties()
             defineNumber(&USBTrafficNP);
         }
 
+        defineNumber(&USBBufferNP);
+
+        defineText(&SDKVersionTP);
+
         // Let's get parameters now from CCD
         setupParams();
     }
@@ -599,6 +616,10 @@ bool QHYCCD::updateProperties()
 
         if (HasUSBTraffic)
             deleteProperty(USBTrafficNP.name);
+
+        deleteProperty(USBBufferNP.name);
+
+        deleteProperty(SDKVersionTP.name);
     }
 
     return true;
@@ -658,6 +679,16 @@ bool QHYCCD::Connect()
             LOGF_ERROR("Init Camera failed (%d)", ret);
             return false;
         }
+
+        ////////////////////////////////////////////////////////////////////
+        /// SDK Version
+        ////////////////////////////////////////////////////////////////////
+        uint32_t year, month, day, subday;
+        GetQHYCCDSDKVersion(&year, &month, &day, &subday);
+        std::ostringstream versionInfo;
+        versionInfo << year << "." << month << "." << day;
+        LOGF_INFO("Using QHY SDK version %s", versionInfo.str().c_str());
+        IUSaveText(&SDKVersionT[0], versionInfo.str().c_str());
 
         ////////////////////////////////////////////////////////////////////
         /// Read Modes
@@ -997,7 +1028,7 @@ int QHYCCD::SetTemperature(double temperature)
 
     SetQHYCCDParam(m_CameraHandle, CONTROL_COOLER, m_TemperatureRequest);
 
-    setCoolerEnabled(m_TemperatureRequest < TemperatureN[0].value);
+    setCoolerEnabled(m_TemperatureRequest <= TemperatureN[0].value);
     setCoolerMode(COOLER_AUTOMATIC);
     return 0;
 }
@@ -1389,7 +1420,10 @@ bool QHYCCD::ISNewSwitch(const char *dev, const char *name, ISState *states, cha
             {
                 if (HasCoolerAutoMode)
                 {
-                    if (SetTemperature(0) == 0)
+                    double targetTemperature = TemperatureN[0].value;
+                    if (targetTemperature > 0)
+                        targetTemperature = 0;
+                    if (SetTemperature(targetTemperature) == 0)
                     {
                         TemperatureNP.s = IPS_BUSY;
                         IDSetNumber(&TemperatureNP, nullptr);
@@ -1598,6 +1632,19 @@ bool QHYCCD::ISNewNumber(const char *dev, const char *name, double values[], cha
             return true;
         }
 
+        //////////////////////////////////////////////////////////////////////
+        /// USB Buffer Control
+        //////////////////////////////////////////////////////////////////////
+        if (!strcmp(name, USBBufferNP.name))
+        {
+            IUUpdateNumber(&USBBufferNP, values, names, n);
+            SetQHYCCDBufferNumber(USBBufferN[0].value);
+            LOGF_INFO("USB Buffer updated to %.f", USBBufferN[0].value);
+            USBBufferNP.s = IPS_OK;
+            saveConfig(true, USBBufferNP.name);
+            IDSetNumber(&USBBufferNP, nullptr);
+            return true;
+        }
 
         //////////////////////////////////////////////////////////////////////
         /// Read Modes Control
@@ -1755,6 +1802,12 @@ void QHYCCD::updateTemperature()
         {
             SetQHYCCDParam(m_CameraHandle, CONTROL_MANULPWM, m_PWMRequest);
         }
+        // JM 2020-05-18: QHY reported the code below break automatic coolers, so it is only avaiable for manual coolers.
+        // Temperature Readout does not work, if we do not set "something", so lets set the current value...
+        else if (CoolerModeS[COOLER_MANUAL].s == ISS_ON && TemperatureNP.s == IPS_OK)
+        {
+            SetQHYCCDParam(m_CameraHandle, CONTROL_MANULPWM, CoolerN[0].value * 255.0 / 100 );
+        }
 
         ccdtemp   = GetQHYCCDParam(m_CameraHandle, CONTROL_CURTEMP);
         coolpower = GetQHYCCDParam(m_CameraHandle, CONTROL_CURPWM);
@@ -1780,9 +1833,17 @@ void QHYCCD::updateTemperature()
 
     if (TemperatureNP.s == IPS_BUSY && fabs(TemperatureN[0].value - m_TemperatureRequest) <= TEMP_THRESHOLD)
     {
-        TemperatureN[0].value = m_TemperatureRequest;
+        TemperatureN[0].value = ccdtemp;
         TemperatureNP.s       = IPS_OK;
     }
+
+    // Restart regulation if needed.
+    else if (TemperatureNP.s == IPS_OK && fabs(TemperatureN[0].value - m_TemperatureRequest) > TEMP_THRESHOLD)
+    {
+        TemperatureN[0].value = ccdtemp;
+        TemperatureNP.s       = IPS_BUSY;
+    }
+
 
     IDSetNumber(&TemperatureNP, nullptr);
     IDSetNumber(&CoolerNP, nullptr);
@@ -1814,11 +1875,18 @@ bool QHYCCD::saveConfigItems(FILE *fp)
     if (HasUSBTraffic)
         IUSaveConfigNumber(fp, &USBTrafficNP);
 
+    IUSaveConfigNumber(fp, &USBBufferNP);
+
     return true;
 }
 
 bool QHYCCD::StartStreaming()
 {
+#if defined(__arm__) || defined(__aarch64__)
+    if (USBBufferN[0].value < USBBufferN[0].min * 4)
+        LOGF_INFO("For better streaming performance, set USB buffer to %.f or higher.", USBBufferN[0].min * 4);
+#endif
+
     int ret = 0;
     m_ExposureRequest = 1.0 / Streamer->getTargetFPS();
 
@@ -2121,7 +2189,8 @@ bool QHYCCD::updateFilterProperties()
             snprintf(filterLabel, MAXINDILABEL, "Filter#%d", i + 1);
             IUFillText(&FilterNameT[i], filterName, filterLabel, filterLabel);
         }
-        IUFillTextVector(FilterNameTP, FilterNameT, m_MaxFilterCount, m_defaultDevice->getDeviceName(), "FILTER_NAME", "Filter", FilterSlotNP.group, IP_RW, 0, IPS_IDLE);
+        IUFillTextVector(FilterNameTP, FilterNameT, m_MaxFilterCount, m_defaultDevice->getDeviceName(), "FILTER_NAME", "Filter",
+                         FilterSlotNP.group, IP_RW, 0, IPS_IDLE);
 
         return true;
     }

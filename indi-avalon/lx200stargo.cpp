@@ -223,7 +223,7 @@ bool LX200StarGo::ISNewSwitch(const char *dev, const char *name, ISState *states
         {
             if (IUUpdateSwitch(&TrackModeSP, states, names, n) < 0)
                 return false;
-            int trackMode = IUFindOnSwitchIndex(&TrackModeSP);
+            uint8_t trackMode = static_cast<uint8_t>(IUFindOnSwitchIndex(&TrackModeSP));
 
             bool result = SetTrackMode(trackMode);
 
@@ -395,6 +395,32 @@ void LX200StarGo::ISGetProperties(const char *dev)
                 defineNumber(&FocusTimerNP);
                 defineSwitch(&FocusModeSP);
             }
+            IDSetNumber(&GuidingSpeedNP, nullptr);
+            return result;
+        } else if (!strcmp(name, MountRequestDelayNP.name))
+        {
+            int secs   = static_cast<int>(floor(values[0] / 1000.0));
+            long nsecs = static_cast<long>(round((values[0] - 1000.0 * secs) * 1000000.0));
+            setMountRequestDelay(secs, nsecs);
+
+            MountRequestDelayN[0].value = secs*1000 + nsecs/1000000;
+            MountRequestDelayNP.s = IPS_OK;
+            IDSetNumber(&MountRequestDelayNP, nullptr);
+            return true;
+        } else if (!strcmp(name, TrackingAdjustmentNP.name))
+        {
+            // changing tracking adjustment
+            bool success = setTrackingAdjustment(values[0]);
+            if (success)
+            {
+                TrackingAdjustment[0].value = values[0];
+                TrackingAdjustmentNP.s      = IPS_OK;
+            }
+            else
+                TrackingAdjustmentNP.s = IPS_ALERT;
+
+            IDSetNumber(&TrackingAdjustmentNP, nullptr);
+            return success;
         }
         */
 }
@@ -445,6 +471,9 @@ bool LX200StarGo::initProperties()
     IUFillSwitch(&SystemSpeedSlewS[3], "SYSTEM_SLEW_SPEED_HIGH", "high", ISS_OFF);
     IUFillSwitchVector(&SystemSpeedSlewSP, SystemSpeedSlewS, 4, getDeviceName(), "SYSTEM_SLEW_SPEED", "Slew Speed", RA_DEC_TAB, IP_RW, ISR_1OFMANY, 60, IPS_IDLE);
 
+    // Tracking adjustment
+    IUFillNumber(&TrackingAdjustment[0], "ADJUSTMENT_RA", "Adj. (max +/- 5%)", "%.2f", -5.0, 5.0, 0.01, 0.0);
+    IUFillNumberVector(&TrackingAdjustmentNP, TrackingAdjustment, 1, getDeviceName(), "TRACKING_ADJUSTMENT", "Tracking", RA_DEC_TAB, IP_RW, 60.0, IPS_IDLE);
 
     // meridian flip
     IUFillSwitch(&MeridianFlipModeS[0], "MERIDIAN_FLIP_AUTO", "auto", ISS_OFF);
@@ -478,6 +507,7 @@ bool LX200StarGo::updateProperties()
         defineSwitch(&ST4StatusSP);
         defineSwitch(&KeypadStatusSP);
         defineSwitch(&SystemSpeedSlewSP);
+        defineNumber(&TrackingAdjustmentNP);
         defineSwitch(&MeridianFlipModeSP);
         defineNumber(&MountRequestDelayNP);
         defineText(&MountFirmwareInfoTP);
@@ -491,6 +521,7 @@ bool LX200StarGo::updateProperties()
         deleteProperty(GuidingSpeedNP.name);
         deleteProperty(ST4StatusSP.name);
         deleteProperty(KeypadStatusSP.name);
+        deleteProperty(TrackingAdjustmentNP.name);
         deleteProperty(SystemSpeedSlewSP.name);
         deleteProperty(MeridianFlipModeSP.name);
         deleteProperty(MountRequestDelayNP.name);
@@ -532,6 +563,7 @@ bool LX200StarGo::ReadScopeStatus()
         return true;
     }
 
+    LOG_DEBUG("################################ ReadScopeStatus (start) ################################");
     int x, y;
 
     if (! getMotorStatus(&x, &y))
@@ -605,6 +637,8 @@ bool LX200StarGo::ReadScopeStatus()
         LOG_ERROR("Cannot determine scope status, failed to determine pier side.");
         return false;
     }
+
+    LOG_DEBUG("################################ ReadScopeStatus (finish) ###############################");
 
     if (focuserAux1.get() != nullptr && TrackState != SCOPE_SLEWING)
         return focuserAux1.get()->ReadFocuserStatus();
@@ -734,9 +768,131 @@ bool LX200StarGo::MoveWE(INDI_DIR_WE dir, TelescopeMotionCommand command)
 
     if (!isSimulation() && !sendQuery(cmd, response, 0))
     {
+<<<<<<< HEAD
         LOG_ERROR("Error W/E motion direction.");
         return false;
     }
+=======
+        checkLX200Format();
+
+        if (genericCapability & LX200_HAS_ALIGNMENT_TYPE)
+            getAlignment();
+
+        if (genericCapability & LX200_HAS_TRACKING_FREQ)
+        {
+            if (! getTrackFrequency(&TrackFreqN[0].value))
+                LOG_ERROR("Failed to get tracking frequency from device.");
+            else
+                IDSetNumber(&TrackingFreqNP, nullptr);
+        }
+        MountFirmwareInfoT[0].text = new char[64];
+        if (!getFirmwareInfo(MountFirmwareInfoT[0].text))
+            LOG_ERROR("Failed to get firmware from device.");
+        else
+            IDSetText(&MountFirmwareInfoTP, nullptr);
+
+        char parkHomeStatus[1] = {0};
+        if (getParkHomeStatus(parkHomeStatus))
+        {
+            SetParked(strcmp(parkHomeStatus, "2") == 0);
+            if (strcmp(parkHomeStatus, "1") == 0)
+            {
+                SyncHomeS[0].s = ISS_ON;
+                SyncHomeSP.s = IPS_OK;
+                IDSetSwitch(&SyncHomeSP, nullptr);
+            }
+        }
+        bool isEnabled;
+        if (getST4Status(&isEnabled))
+        {
+            ST4StatusS[0].s = isEnabled ? ISS_OFF : ISS_ON;
+            ST4StatusS[1].s = isEnabled ? ISS_ON : ISS_OFF;
+            ST4StatusSP.s = IPS_OK;
+        }
+        else
+        {
+            ST4StatusSP.s = IPS_ALERT;
+        }
+        IDSetSwitch(&ST4StatusSP, nullptr);
+
+        double raCorrection;
+        if (getTrackingAdjustment(&raCorrection))
+        {
+            TrackingAdjustment[0].value = raCorrection;
+            TrackingAdjustmentNP.s      = IPS_OK;
+        }
+        else
+            TrackingAdjustmentNP.s = IPS_ALERT;
+
+        IDSetNumber(&TrackingAdjustmentNP, nullptr);
+
+        if (getKeypadStatus(&isEnabled))
+        {
+            KeypadStatusS[0].s = isEnabled ? ISS_OFF : ISS_ON;
+            KeypadStatusS[1].s = isEnabled ? ISS_ON : ISS_OFF;
+            KeypadStatusSP.s = IPS_OK;
+        }
+        else
+        {
+            KeypadStatusSP.s = IPS_ALERT;
+        }
+        IDSetSwitch(&ST4StatusSP, nullptr);
+
+        int index;
+        if (GetMeridianFlipMode(&index))
+        {
+            IUResetSwitch(&MeridianFlipModeSP);
+            MeridianFlipModeS[index].s = ISS_ON;
+            MeridianFlipModeSP.s   = IPS_OK;
+            IDSetSwitch(&MeridianFlipModeSP, nullptr);
+        }
+        else
+        {
+            MeridianFlipEnabledSP.s = IPS_ALERT;
+        }
+        IDSetSwitch(&MeridianFlipEnabledSP, nullptr);
+
+        if (getSystemSlewSpeedMode(&index))
+        {
+            IUResetSwitch(&SystemSpeedSlewSP);
+            SystemSpeedSlewS[index].s = ISS_ON;
+            SystemSpeedSlewSP.s   = IPS_OK;
+            IDSetSwitch(&SystemSpeedSlewSP, nullptr);
+        }
+        else
+        {
+            SystemSpeedSlewSP.s = IPS_ALERT;
+        }
+        IDSetSwitch(&MeridianFlipEnabledSP, nullptr);
+
+        int raSpeed, decSpeed;
+        if (getGuidingSpeeds(&raSpeed, &decSpeed))
+        {
+            GuidingSpeedP[0].value = static_cast<double>(raSpeed) / 100.0;
+            GuidingSpeedP[1].value = static_cast<double>(decSpeed) / 100.0;
+            GuidingSpeedNP.s = IPS_OK;
+        }
+        else
+        {
+            GuidingSpeedNP.s = IPS_ALERT;
+        }
+        IDSetNumber(&GuidingSpeedNP, nullptr);
+    }
+
+
+    LOGF_DEBUG("sendLocation %s && %s", sendLocationOnStartup ? "T" : "F",
+               (GetTelescopeCapability() & TELESCOPE_HAS_LOCATION) ? "T" : "F");
+    if (sendLocationOnStartup && (GetTelescopeCapability() & TELESCOPE_HAS_LOCATION))
+        sendScopeLocation();
+
+    LOGF_DEBUG("sendTime %s && %s", sendTimeOnStartup ? "T" : "F",
+               (GetTelescopeCapability() & TELESCOPE_HAS_TIME) ? "T" : "F");
+    if (sendTimeOnStartup && (GetTelescopeCapability() & TELESCOPE_HAS_TIME))
+        sendScopeTime();
+    //FIXME collect othr fixed data here like Manufacturer, version etc...
+    if (genericCapability & LX200_HAS_PULSE_GUIDING)
+        usePulseCommand = true;
+>>>>>>> origin/master
 
     return true;
 }
@@ -1512,8 +1668,14 @@ bool LX200StarGo::setSystemSlewSpeedMode(int index)
         case 0:
             cmd.append("0606#");
             break;
+<<<<<<< HEAD
         case 1:
             cmd.append("0808#");
+=======
+        case 'W':
+            LOG_DEBUG("Detected pier side west.");
+            setPierSide(INDI::Telescope::PIER_EAST);
+>>>>>>> origin/master
             break;
         case 2:
             cmd.append("0909#");
@@ -1703,10 +1865,82 @@ int LX200StarGo::SendPulseCmd(int8_t direction, uint32_t duration_msec)
     return success;
 }
 
+<<<<<<< HEAD
 /**************************************************************************************
 **
 ***************************************************************************************/
 bool LX200StarGo::sendScopeLocation()
+=======
+/*
+ * Adjust RA tracking speed.
+ */
+bool LX200StarGo::setTrackingAdjustment(double adjustRA)
+{
+    LOG_DEBUG(__FUNCTION__);
+    char cmd[AVALON_COMMAND_BUFFER_LENGTH];
+
+    /*
+     * :X41sRRR# to adjust the RA tracking speed where s is the sign + or -  and RRR are three digits whose meaning is parts per 10000 of  RA correction .
+     * :X43sDDD# to fix the cf DEC offset
+     */
+
+    // ensure that -5 <= adjust <= 5
+    if (adjustRA > 5.0)
+    {
+        LOGF_ERROR("Adjusting tracking by %0.2f%% not allowed. Maximal value is 5.0%%", adjustRA);
+        return false;
+    }
+    else if (adjustRA < -5.0)
+    {
+        LOGF_ERROR("Adjusting tracking by %0.2f%% not allowed. Minimal value is -5.0%%", adjustRA);
+        return false;
+    }
+
+    int parameter = static_cast<int>(adjustRA * 100);
+    sprintf(cmd, ":X41%+03i#", parameter);
+
+    if(!transmit(cmd))
+    {
+        LOGF_ERROR("Cannot adjust tracking by %d%%", adjustRA);
+        return false;
+    }
+    if (adjustRA == 0.0)
+        LOG_INFO("RA tracking adjustment cleared.");
+    else
+        LOGF_INFO("RA tracking adjustment to %+0.2f%% succeded.", adjustRA);
+
+    return true;
+}
+
+
+bool LX200StarGo::getTrackingAdjustment(double *valueRA)
+{
+    /*
+     * :X42# to read the tracking adjustment value as orsRRR#
+     * :X44# to read the tracking adjustment value as odsDDD#
+
+     */
+    LOG_DEBUG(__FUNCTION__);
+    int raValue;
+    char response[RB_MAX_LEN] = {0};
+
+    if (!sendQuery(":X42#", response))
+        return false;
+
+    if (sscanf(response, "or%04i#", &raValue) < 1)
+    {
+        LOG_ERROR("Unable to parse response");
+        return false;
+    }
+
+    *valueRA = static_cast<double>(raValue / 100.0);
+    return true;
+}
+
+
+
+bool LX200StarGo::SetMeridianFlipMode(int index)
+>>>>>>> origin/master
 {
     LOG_DEBUG(__FUNCTION__);
     if (isSimulation())
@@ -1892,7 +2126,17 @@ bool LX200StarGo::setLocalTime24(uint8_t hour, uint8_t minute, uint8_t second)
 
     snprintf(cmd, sizeof(cmd), ":SL %02d:%02d:%02d#", hour, minute, second);
 
+<<<<<<< HEAD
     return (sendQuery(cmd, response, 0));
+=======
+    // Set slew to guiding
+    IUResetSwitch(&SlewRateSP);
+    SlewRateS[SLEW_GUIDE].s = ISS_ON;
+    IDSetSwitch(&SlewRateSP, nullptr);
+    guide_direction_ns = LX200_NORTH;
+    GuideNSTID      = IEAddTimer(static_cast<int>(ms), guideTimeoutHelperNS, this);
+    return IPS_BUSY;
+>>>>>>> origin/master
 }
 
 bool LX200StarGo::setUTCOffset(double offset)
@@ -1966,7 +2210,18 @@ bool LX200StarGo::getLocalDate(char *dateString)
         /* We need to have it in YYYY-MM-DD ISO format */
         snprintf(dateString, 32, "%s%02d-%02d-%02d", mell_prefix, yy, mm, dd);
     }
+<<<<<<< HEAD
     return true;
+=======
+
+    // Set slew to guiding
+    IUResetSwitch(&SlewRateSP);
+    SlewRateS[SLEW_GUIDE].s = ISS_ON;
+    IDSetSwitch(&SlewRateSP, nullptr);
+    guide_direction_ns = LX200_SOUTH;
+    GuideNSTID         = IEAddTimer(static_cast<int>(ms), guideTimeoutHelperNS, this);
+    return IPS_BUSY;
+>>>>>>> origin/master
 }
 
 bool LX200StarGo::getLocalTime(char *timeString)
@@ -1996,7 +2251,17 @@ bool LX200StarGo::getLocalTime(char *timeString)
         snprintf(timeString, 32, "%02d:%02d:%02d", h, m, s);
     }
 
+<<<<<<< HEAD
     return true;
+=======
+    // Set slew to guiding
+    IUResetSwitch(&SlewRateSP);
+    SlewRateS[SLEW_GUIDE].s = ISS_ON;
+    IDSetSwitch(&SlewRateSP, nullptr);
+    guide_direction_we = LX200_EAST;
+    GuideWETID         = IEAddTimer(static_cast<int>(ms), guideTimeoutHelperWE, this);
+    return IPS_BUSY;
+>>>>>>> origin/master
 }
 
 bool LX200StarGo::getUTFOffset(double *offset)
@@ -2026,9 +2291,19 @@ bool LX200StarGo::getUTFOffset(double *offset)
     else if (sscanf(response, "%d", &lx200_utc_offset) != 1)
         return false;
 
+<<<<<<< HEAD
     // LX200 TimeT Offset is defined at the number of hours added to LOCAL TIME to get TimeT. This is contrary to the normal definition.
     *offset = lx200_utc_offset * -1;
     return true;
+=======
+    // Set slew to guiding
+    IUResetSwitch(&SlewRateSP);
+    SlewRateS[SLEW_GUIDE].s = ISS_ON;
+    IDSetSwitch(&SlewRateSP, nullptr);
+    guide_direction_we = LX200_WEST;
+    GuideWETID         = IEAddTimer(static_cast<int>(ms), guideTimeoutHelperWE, this);
+    return IPS_BUSY;
+>>>>>>> origin/master
 }
 
 bool LX200StarGo::SetMeridianFlipMode(int index)
@@ -2089,8 +2364,23 @@ bool LX200StarGo::GetMeridianFlipMode(int* index)
         LOGF_ERROR("Cannot get Meridian Flip Mode %s %s", enableresp, forceresp);
         return false;
     }
+<<<<<<< HEAD
     int enable = 0;
     if (! sscanf(enableresp, "vs%01d", &enable))
+=======
+    return true;
+}
+
+bool LX200StarGo::SetTrackRate(double raRate, double deRate)
+{
+    LOG_DEBUG(__FUNCTION__);
+    INDI_UNUSED(deRate);
+    char cmd[AVALON_COMMAND_BUFFER_LENGTH];
+    char response[AVALON_RESPONSE_BUFFER_LENGTH];
+    int rate = static_cast<int>(raRate);
+    sprintf(cmd, ":X1E%04d", rate);
+    if(!sendQuery(cmd, response, 0))
+>>>>>>> origin/master
     {
         LOGF_ERROR("Invalid meridian flip enabled response '%s", enableresp);
         return false;
@@ -2574,8 +2864,19 @@ bool LX200StarGo::Connect()
 ***************************************************************************************/
 bool LX200StarGo::Disconnect()
 {
+<<<<<<< HEAD
     focuserAux1->activate(false);
     return DefaultDevice::Disconnect();
+=======
+    LOG_DEBUG(__FUNCTION__);
+    char cmd[RB_MAX_LEN] = {0};
+    char response[RB_MAX_LEN] = {0};
+    int hours = static_cast<int>(offset * -1.0);
+
+    snprintf(cmd, sizeof(cmd), ":SG %+03d#", hours);
+
+    return (sendQuery(cmd, response, 0));
+>>>>>>> origin/master
 }
 
 /**************************************************************************************

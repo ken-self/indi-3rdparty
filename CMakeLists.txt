@@ -65,6 +65,7 @@ option(BUILD_LIBS "Build 3rd Party Libraries, not 3rd Party Drivers" Off)
 option(WITH_EQMOD "Install EQMod Driver" On)
 option(WITH_STARBOOK "Install Starbook Driver" On)
 option(WITH_NSE "Install Nexstar Evo Driver" On)
+option(WITH_CAUX "Install Celestron AUX Driver" On)
 option(WITH_SX "Install StarLight Xpress Driver" On)
 option(WITH_MAXDOME "Install MaxDomeII Driver" On)
 option(WITH_NEXDOME "Install NexDome Driver" On)
@@ -77,7 +78,6 @@ option(WITH_INOVAPLX "Install i.Nova PLx Driver" On)
 option(WITH_APOGEE "Install Apogee Driver" On)
 option(WITH_FFMV "Install Point Grey FireFly MV Driver" On)
 option(WITH_QHY "Install QHY Driver" On)
-option(WITH_SSAG "Install Star Shoot Driver" On)
 option(WITH_GPHOTO "Install GPhoto Driver" On)
 option(WITH_QSI "Install QSI Driver" On)
 option(WITH_DUINO "Install Ariduino Driver" On)
@@ -92,6 +92,7 @@ option(WITH_LIMESDR "Install LIME-SDR Receiver" On)
 option(WITH_RTLSDR "Install RTL-SDR Receiver" On)
 option(WITH_RADIOSIM "Install RadioSim Receiver" On)
 option(WITH_GPSNMEA "Install GPS NMEA Driver" On)
+option(WITH_RTKLIB "Install RTKLIB Driver" On)
 option(WITH_ARMADILLO "Install Armadillo & Platypus Driver" On)
 option(WITH_FXLOAD "Install FX3 compatible fxload tool" Off)
 option(WITH_NIGHTSCAPE "Install Nightscape 8300 Driver" On)
@@ -102,8 +103,14 @@ option(WITH_AVALON "Install Avalon StarGO Driver" On)
 option(WITH_BEEFOCUS "Install Bee Focuser Driver" On)
 option(WITH_SHELYAK "Install Shelyak Spectrograph Driver" On)
 option(WITH_SKYWALKER "Install AOK SkyWalker Mount Driver" On)
+option(WITH_TALON6 "Install Talon6 Mount Driver" On)
+option(WITH_PENTAX "Install Pentax Driver" On)
+option(WITH_ASTROLINK4 "Install AstroLink4 Driver" On)
+option(WITH_AHP_INTERFEROMETER "Install AHP Interferometer Driver" On)
 
 find_package(FFmpeg)
+
+option(WITH_WEBCAM "Install INDI Webcam Driver based on FFMPEG" Off)
 
 if (FFMPEG_FOUND)
     message(STATUS "Since FFMPEG was found, INDI Webcam Driver can be built")
@@ -118,6 +125,8 @@ IF (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
     set(WITH_INOVAPLX Off)
     set(WITH_GIGE Off)
     set(WITH_FXLOAD Off)
+    set(WITH_PENTAX Off)
+    set(WITH_GPSD Off)
 ENDIF ()
 # Disable apogee, qhy and mi with gcc 4.8 and earlier versions
 IF (CMAKE_COMPILER_IS_GNUCXX AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 4.9)
@@ -135,6 +144,11 @@ if (WITH_APOGEE)
 add_subdirectory(libapogee)
 endif(WITH_APOGEE)
 
+#libasi
+if (WITH_ASICAM)
+add_subdirectory(libasi)
+endif (WITH_ASICAM)
+
 #libatik
 if (WITH_ATIK)
 add_subdirectory(libatik)
@@ -149,6 +163,11 @@ endif(WITH_FISHCAMP)
 if (WITH_FLI)
 add_subdirectory(libfli)
 endif(WITH_FLI)
+
+#libmicam
+if (WITH_MI)
+add_subdirectory(libmicam)
+endif(WITH_MI)
 
 #libinovasdk
 if (WITH_INOVAPLX)
@@ -170,12 +189,21 @@ if (WITH_SBIG)
 add_subdirectory(libsbig)
 endif (WITH_SBIG)
 
+#libpentax
+if (WITH_PENTAX)
+if(NOT ${CMAKE_SYSTEM_PROCESSOR} MATCHES "^aarch64")
+add_subdirectory(libricohcamerasdk)
+endif()
+add_subdirectory(libpktriggercord)
+endif (WITH_PENTAX)
+
 #toupbase dependencies
 if (WITH_TOUPBASE)
 add_subdirectory(libtoupcam)
 add_subdirectory(libaltaircam)
 add_subdirectory(libstarshootg)
 add_subdirectory(libnncam)
+add_subdirectory(libmallincam)
 endif (WITH_TOUPBASE)
 
 # This is the main 3rd Party build.  It runs if the Build Libs option is not selected.
@@ -185,6 +213,11 @@ ELSE(BUILD_LIBS)
 if (WITH_EQMOD)
 add_subdirectory(indi-eqmod)
 endif(WITH_EQMOD)
+
+## AstroLink4
+if (WITH_ASTROLINK4)
+add_subdirectory(indi-astrolink4)
+endif(WITH_ASTROLINK4)
 
 ## SkyWalker
 if (WITH_SKYWALKER)
@@ -211,6 +244,11 @@ if (WITH_NEXDOME)
 add_subdirectory(indi-nexdome)
 endif(WITH_NEXDOME)
 
+## Talon6
+if (WITH_TALON6)
+add_subdirectory(indi-talon6)
+endif(WITH_TALON6)
+
 ## SpectraCyber
 if (WITH_SPECTRACYBER)
 add_subdirectory(indi-spectracyber)
@@ -224,12 +262,18 @@ endif(WITH_SHELYAK)
 ## Cloud Watcher
 if (WITH_CLOUDWATCHER)
 add_subdirectory(indi-aagcloudwatcher)
+add_subdirectory(indi-aagcloudwatcher-ng)
 endif (WITH_CLOUDWATCHER)
 
 ## Nexstar Evo
 if (WITH_NSE)
 add_subdirectory(indi-nexstarevo)
 endif (WITH_NSE)
+
+## Celestron AUX
+if (WITH_CAUX)
+add_subdirectory(indi-celestronaux)
+endif (WITH_CAUX)
 
 ## GPhoto
 if (WITH_GPHOTO)
@@ -275,7 +319,8 @@ find_package(TOUPCAM)
 find_package(ALTAIRCAM)
 find_package(STARSHOOTG)
 find_package(NNCAM)
-if (TOUPCAM_FOUND AND ALTAIRCAM_FOUND AND STARSHOOTG_FOUND AND NNCAM_FOUND)
+find_package(MALLINCAM)
+if (TOUPCAM_FOUND AND ALTAIRCAM_FOUND AND STARSHOOTG_FOUND AND NNCAM_FOUND AND MALLINCAM_FOUND)
 add_subdirectory(indi-toupbase)
 else (TOUPCAM_FOUND AND ALTAIRCAM_FOUND AND STARSHOOTG_FOUND AND NNCAM_FOUND)
 if (NOT TOUPCAM_FOUND)
@@ -290,8 +335,11 @@ endif()
 if (NOT NNCAM_FOUND)
 add_subdirectory(libnncam)
 endif()
+if (NOT MALLINCAM_FOUND)
+add_subdirectory(libmallincam)
+endif()
 SET(LIBRARIES_FOUND FALSE)
-endif (TOUPCAM_FOUND AND ALTAIRCAM_FOUND AND STARSHOOTG_FOUND AND NNCAM_FOUND)
+endif (TOUPCAM_FOUND AND ALTAIRCAM_FOUND AND STARSHOOTG_FOUND AND NNCAM_FOUND AND MALLINCAM_FOUND)
 endif (WITH_TOUPBASE)
 
 ## Bee Focuser
@@ -340,7 +388,13 @@ endif (WITH_FFMV)
 
 ## Moravian
 if (WITH_MI)
+find_package(MICAM)
+if (MICAM_FOUND)
 add_subdirectory(indi-mi)
+else (MICAM_FOUND)
+add_subdirectory(libmicam)
+SET(LIBRARIES_FOUND FALSE)
+endif (MICAM_FOUND)
 endif (WITH_MI)
 
 ## Arduino
@@ -361,8 +415,13 @@ endif(WITH_FISHCAMP)
 
 ## ASI
 if (WITH_ASICAM)
-add_subdirectory(asi-common)
+find_package(ASI)
+if (ASI_FOUND)
 add_subdirectory(indi-asi)
+else (ASI_FOUND)
+add_subdirectory(libasi)
+SET(LIBRARIES_FOUND FALSE)
+endif(ASI_FOUND)
 endif(WITH_ASICAM)
 
 ## DSI
@@ -381,11 +440,6 @@ SET(LIBRARIES_FOUND FALSE)
 endif (QHY_FOUND)
 endif (WITH_QHY)
 
-## Star Shoot Auto Guider
-if (WITH_SSAG)
-add_subdirectory(indi-ssag)
-endif (WITH_SSAG)
-
 ## GPSD
 if (WITH_GPSD)
 add_subdirectory(indi-gpsd)
@@ -395,6 +449,11 @@ endif (WITH_GPSD)
 if (WITH_GPSNMEA)
 add_subdirectory(indi-gpsnmea)
 endif(WITH_GPSNMEA)
+
+## RTKLIB
+if (WITH_RTKLIB)
+add_subdirectory(indi-rtklib)
+endif(WITH_RTKLIB)
 
 ## GIGE
 if (WITH_GIGE)
@@ -456,6 +515,23 @@ if (WITH_AVALON)
 add_subdirectory(indi-avalon)
 endif(WITH_AVALON)
 
+# Pentax
+if (WITH_PENTAX)
+find_package(PENTAX)
+if (PENTAX_FOUND)
+add_subdirectory(indi-pentax)
+else (PENTAX_FOUND)
+if(NOT ${CMAKE_SYSTEM_PROCESSOR} MATCHES "^aarch64")
+add_subdirectory(libricohcamerasdk)
+endif()
+add_subdirectory(libpktriggercord)
+SET(LIBRARIES_FOUND FALSE)
+endif (PENTAX_FOUND)
+endif(WITH_PENTAX)
+
+if (WITH_AHP_INTERFEROMETER)
+add_subdirectory(indi-ahp-interferometer)
+endif(WITH_AHP_INTERFEROMETER)
 
 # Check if libraries are found. If not, we must build them, install them, THEN run CMake again to build and instal the drivers. If all the libraraies are installed, then we build and install the drivers only now.
 if (LIBRARIES_FOUND)
@@ -498,6 +574,10 @@ if (WITH_TOUPBASE AND NOT NNCAM_FOUND)
 message(STATUS "libnncam was not found and will now be built. Please install libnncam first before running cmake again to install indi-toupbase.")
 endif (WITH_TOUPBASE AND NOT NNCAM_FOUND)
 
+if (WITH_TOUPBASE AND NOT MALLINCAM_FOUND)
+message(STATUS "libmallincam was not found and will now be built. Please install libmallincam first before running cmake again to install indi-toupbase.")
+endif (WITH_TOUPBASE AND NOT MALLINCAM_FOUND)
+
 if (WITH_INOVAPLX AND NOT INOVASDK_FOUND)
 message(STATUS "libinovasdk was not found and will now be built. Please install libinovasdk first before running cmake again to install indi-inovaplx.")
 endif (WITH_INOVAPLX AND NOT INOVASDK_FOUND)
@@ -521,6 +601,10 @@ endif (WITH_LIMESDR AND NOT LIMESDR_FOUND)
 if (WITH_RTLSDR AND NOT RTLSDR)
 message(STATUS "librtlsdr was not found. Please install librtlsdr first before running cmake again to install indi-rtlsdr.")
 endif (WITH_RTLSDR AND NOT RTLSDR)
+
+if (WITH_PENTAX AND NOT PENTAX_FOUND)
+message(STATUS "libpktriggercord and/or libricohcamerasdk were not found and will now be built. Please install these libraries first before running cmake again to install indi-pentax.")
+endif (WITH_PENTAX AND NOT PENTAX_FOUND)
 
 message(STATUS "####################################################################################################################################")
 endif (LIBRARIES_FOUND)
