@@ -169,7 +169,7 @@ bool StarGoSystem::ReadScopeStatus()
     {
             return false;
     }
-    if(TrackState == SCOPE_SLEWING)
+    if(TrackState == SCOPE_SLEWING || TrackState == SCOPE_PARKING)
     {
         return true;  // While scope is slewing focuser cannot respond
     }
