@@ -561,6 +561,20 @@ bool StarGoTelescope::Handshake()
             continue;
         }
     }
+    int raSpeed, decSpeed;
+    if(getGuidingSpeeds(&raSpeed, &decSpeed))
+    {
+        GuidingSpeedN[0].value =  raSpeed/100.0;
+        GuidingSpeedN[1].value =  decSpeed/100.0;
+        GuidingSpeedNP.s = IPS_OK;
+    }
+    else
+    {
+        LOG_ERROR("Unable to get guiding speed");
+        GuidingSpeedNP.s = IPS_ALERT;
+    }
+    IDSetNumber(&GuidingSpeedNP, nullptr);   
+
     return true;
 }
 
