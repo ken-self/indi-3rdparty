@@ -392,8 +392,8 @@ void Skywatcher::Init()
 void Skywatcher::InquireBoardVersion(ITextVectorProperty *boardTP)
 {
     unsigned nprop             = 0;
-    char *boardinfo[2];
-    const char *boardinfopropnames[] = { "MOUNT_TYPE", "MOTOR_CONTROLLER" };
+    char *boardinfo[3];
+    const char *boardinfopropnames[] = { "MOUNT_TYPE", "MOTOR_CONTROLLER", "MOUNT_CODE" };
 
     /*
     uint32_t tmpMCVersion = 0;
@@ -406,7 +406,7 @@ void Skywatcher::InquireBoardVersion(ITextVectorProperty *boardTP)
     */
     minperiods[Axis1] = 6;
     minperiods[Axis2] = 6;
-    nprop             = 2;
+    nprop             = 3;
     //  strcpy(boardinfopropnames[0],"MOUNT_TYPE");
     boardinfo[0] = (char *)malloc(20 * sizeof(char));
     switch (MountCode)
@@ -447,6 +447,9 @@ void Skywatcher::InquireBoardVersion(ITextVectorProperty *boardTP)
         case 0x90:
             strcpy(boardinfo[0], "DOB");
             break;
+        case 0xA5:
+            strcpy(boardinfo[0], "AZ-GTi");
+            break;
         case 0xF0:
             strcpy(boardinfo[0], "GEEHALEL");
             minperiods[Axis1] = 13;
@@ -460,6 +463,9 @@ void Skywatcher::InquireBoardVersion(ITextVectorProperty *boardTP)
     boardinfo[1] = (char *)malloc(5);
     sprintf(boardinfo[1], "%04x", (MCVersion >> 8));
     boardinfo[1][4] = '\0';
+    boardinfo[2] = (char *)malloc(5);
+    sprintf(boardinfo[2], "0x%02X", MountCode);
+    boardinfo[2][4] = '\0';
     // should test this is ok
     IUUpdateText(boardTP, boardinfo, (char **)boardinfopropnames, nprop);
     IDSetText(boardTP, nullptr);
@@ -474,6 +480,7 @@ void Skywatcher::InquireBoardVersion(ITextVectorProperty *boardTP)
     */
     free(boardinfo[0]);
     free(boardinfo[1]);
+    free(boardinfo[2]);
 }
 
 void Skywatcher::InquireFeatures()
@@ -545,7 +552,7 @@ bool Skywatcher::HasPPEC()
 
 bool Skywatcher::HasSnapPort1()
 {
-    return MountCode == 0x04 ||  MountCode == 0x05 ||  MountCode == 0x06 ||  MountCode == 0x23;
+    return MountCode == 0x04 ||  MountCode == 0x05 ||  MountCode == 0x06 ||  MountCode == 0x23 || MountCode == 0xA5;
 }
 
 bool Skywatcher::HasSnapPort2()
@@ -608,7 +615,8 @@ void Skywatcher::InquireRAEncoderInfo(INumberVectorProperty *encoderNP)
     IUUpdateNumber(encoderNP, steppersvalues, (char **)steppersnames, 3);
     IDSetNumber(encoderNP, nullptr);
 
-    backlashperiod[Axis1] = static_cast<uint32_t>(((SKYWATCHER_STELLAR_DAY * RAStepsWorm) / static_cast<double>(RASteps360)) / SKYWATCHER_BACKLASH_SPEED_RA);
+    backlashperiod[Axis1] = static_cast<uint32_t>(((SKYWATCHER_STELLAR_DAY * RAStepsWorm) / static_cast<double>
+                            (RASteps360)) / SKYWATCHER_BACKLASH_SPEED_RA);
 }
 
 void Skywatcher::InquireDEEncoderInfo(INumberVectorProperty *encoderNP)
@@ -979,7 +987,8 @@ void Skywatcher::SetRARate(double rate)
         useHighspeed = true;
     }
     //}
-    period              = static_cast<uint32_t>(((SKYWATCHER_STELLAR_DAY * RAStepsWorm) / static_cast<double>(RASteps360)) / absrate);
+    period              = static_cast<uint32_t>(((SKYWATCHER_STELLAR_DAY * RAStepsWorm) / static_cast<double>
+                          (RASteps360)) / absrate);
     newstatus.direction = ((rate >= 0.0) ? FORWARD : BACKWARD);
     //newstatus.slewmode=RAStatus.slewmode;
     newstatus.slewmode = SLEW;
@@ -1021,7 +1030,8 @@ void Skywatcher::SetDERate(double rate)
         useHighspeed = true;
     }
     //}
-    period              = static_cast<uint32_t>(((SKYWATCHER_STELLAR_DAY * DEStepsWorm) / static_cast<double>(DESteps360)) / absrate);
+    period              = static_cast<uint32_t>(((SKYWATCHER_STELLAR_DAY * DEStepsWorm) / static_cast<double>
+                          (DESteps360)) / absrate);
     newstatus.direction = ((rate >= 0.0) ? FORWARD : BACKWARD);
     //newstatus.slewmode=DEStatus.slewmode;
     newstatus.slewmode = SLEW;
@@ -1118,7 +1128,8 @@ void Skywatcher::SetSpeed(SkywatcherAxis axis, uint32_t period)
 void Skywatcher::SetTarget(SkywatcherAxis axis, uint32_t increment)
 {
     char cmd[7];
-    DEBUGF(telescope->DBG_MOUNT, "%s() : Axis = %c -- increment=%ld", __FUNCTION__, AxisCmd[axis], static_cast<long>(increment));
+    DEBUGF(telescope->DBG_MOUNT, "%s() : Axis = %c -- increment=%ld", __FUNCTION__, AxisCmd[axis],
+           static_cast<long>(increment));
     long2Revu24str(increment, cmd);
     //IDLog("Setting target for axis %c  to %d\n", AxisCmd[axis], increment);
     dispatch_command(SetGotoTargetIncrement, axis, cmd);
@@ -1129,7 +1140,8 @@ void Skywatcher::SetTarget(SkywatcherAxis axis, uint32_t increment)
 void Skywatcher::SetTargetBreaks(SkywatcherAxis axis, uint32_t increment)
 {
     char cmd[7];
-    DEBUGF(telescope->DBG_MOUNT, "%s() : Axis = %c -- increment=%ld", __FUNCTION__, AxisCmd[axis], static_cast<long>(increment));
+    DEBUGF(telescope->DBG_MOUNT, "%s() : Axis = %c -- increment=%ld", __FUNCTION__, AxisCmd[axis],
+           static_cast<long>(increment));
     long2Revu24str(increment, cmd);
     //IDLog("Setting target for axis %c  to %d\n", AxisCmd[axis], increment);
     dispatch_command(SetBreakPointIncrement, axis, cmd);
@@ -1151,7 +1163,8 @@ void Skywatcher::SetAbsTarget(SkywatcherAxis axis, uint32_t target)
 void Skywatcher::SetAbsTargetBreaks(SkywatcherAxis axis, uint32_t breakstep)
 {
     char cmd[7];
-    DEBUGF(telescope->DBG_MOUNT, "%s() : Axis = %c -- breakstep=%ld", __FUNCTION__, AxisCmd[axis], static_cast<long>(breakstep));
+    DEBUGF(telescope->DBG_MOUNT, "%s() : Axis = %c -- breakstep=%ld", __FUNCTION__, AxisCmd[axis],
+           static_cast<long>(breakstep));
     long2Revu24str(breakstep, cmd);
     //IDLog("Setting target for axis %c  to %d\n", AxisCmd[axis], increment);
     dispatch_command(SetBreakStep, axis, cmd);
@@ -1284,11 +1297,14 @@ void Skywatcher::SetLEDBrightness(uint8_t value)
     char hexa[16] = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F' };
     cmd[0] = hexa[(value & 0xF0) >> 4];
     cmd[1] = hexa[(value & 0x0F)];
-    try {
+    try
+    {
         dispatch_command(SetPolarScopeLED, Axis1, cmd);
-    } catch (EQModError e) {
+    }
+    catch (EQModError e)
+    {
         DEBUGF(telescope->DBG_MOUNT, "%s(): Mount does not support led brightness  (%c command)", __FUNCTION__,
-                   SetPolarScopeLED);
+               SetPolarScopeLED);
     }
 }
 
@@ -1340,11 +1356,11 @@ void Skywatcher::GetDEPPECStatus(bool *intraining, bool *inppec)
 
 void Skywatcher::TurnSnapPort(SkywatcherAxis axis, bool on)
 {
-    char snapcmd[2]="0";
+    char snapcmd[2] = "0";
     if (on)
-        snapcmd[0]='1';
+        snapcmd[0] = '1';
     else
-        snapcmd[0]='0';
+        snapcmd[0] = '0';
     snapportstatus[axis] = on;
     DEBUGF(telescope->DBG_MOUNT, "%s() : Axis = %c -- snap=%c", __FUNCTION__, AxisCmd[axis], snapcmd);
     dispatch_command(SetSnapPort, axis, snapcmd);
@@ -1680,15 +1696,25 @@ bool Skywatcher::dispatch_command(SkywatcherCommand cmd, SkywatcherAxis axis, ch
         int nbytes_written = 0;
         if (!isSimulation())
         {
-            int err_code = 0, nbytes_written = 0;
+            int err_code = 0;
             tcflush(PortFD, TCIOFLUSH);
 
             if ((err_code = tty_write_string(PortFD, command, &nbytes_written)) != TTY_OK)
             {
-                char ttyerrormsg[ERROR_MSG_LENGTH];
-                tty_error_msg(err_code, ttyerrormsg, ERROR_MSG_LENGTH);
-                throw EQModError(EQModError::ErrDisconnect, "tty write failed, check connection: %s", ttyerrormsg);
-                //return false;
+                if (i == EQMOD_MAX_RETRY - 1)
+                {
+                    char ttyerrormsg[ERROR_MSG_LENGTH];
+                    tty_error_msg(err_code, ttyerrormsg, ERROR_MSG_LENGTH);
+                    throw EQModError(EQModError::ErrDisconnect, "tty write failed, check connection: %s", ttyerrormsg);
+                }
+                else
+                {
+                    struct timespec wait;
+                    wait.tv_sec  = 0;
+                    wait.tv_nsec = 100000000; // 100ms
+                    nanosleep(nullptr, &wait);
+                    continue;
+                }
             }
         }
         else

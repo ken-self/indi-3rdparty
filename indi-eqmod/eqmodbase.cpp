@@ -761,7 +761,7 @@ void EQMod::abnormalDisconnectCallback(void *userpointer)
 void EQMod::abnormalDisconnect()
 {
     // Ignore disconnect errors
-    Disconnect();
+    INDI::Telescope::Disconnect();
 
     // Set Disconnected
     setConnected(false, IPS_IDLE);
@@ -3776,6 +3776,11 @@ bool EQMod::saveConfigItems(FILE *fp)
         IUSaveConfigSwitch(fp, ReverseDECSP);
     if (LEDBrightnessNP)
         IUSaveConfigNumber(fp, LEDBrightnessNP);
+    if (HasPECState())
+    {
+        IUSaveConfigSwitch(fp, RAPPECSP);
+        IUSaveConfigSwitch(fp, DEPPECSP);
+    }
 
 #ifdef WITH_ALIGN_GEEHALEL
     if (align)

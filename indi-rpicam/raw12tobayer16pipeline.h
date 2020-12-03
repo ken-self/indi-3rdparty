@@ -51,7 +51,7 @@ private:
     int y {0};
     int pos {0};
     int raw_x {0};  // Position in the raw-data comming in.
-    enum {b1, b2, b3} state = b1; // Which byte in the RAW12 format (see above).
+    enum {b0, b1, b2} state = b0; // Which byte in the RAW12 format (see above).
 };
 
 #endif // RAW12TOBAYER16PIPELINE_H

@@ -54,22 +54,22 @@ void Raw12ToBayer16Pipeline::acceptByte(uint8_t byte)
         // RAW according to experiment.
         switch(state)
         {
+        case b0:
+            cur_row[x] = static_cast<uint16_t>((byte & 0x0F) << 4);
+            cur_row[x+1] = static_cast<uint16_t>((byte & 0xF0) << 0);
+            state = b1;
+            break;
+
         case b1:
-            cur_row[x] = (byte & 0x0F) << 4;
-            cur_row[x+1] = (byte & 0xF0) << 0;
+            cur_row[x] |= byte << 8;
+            x++;
             state = b2;
             break;
 
         case b2:
             cur_row[x] |= byte << 8;
             x++;
-            state = b3;
-            break;
-
-        case b3:
-            cur_row[x] |= byte << 8;
-            x++;
-            state = b1;
+            state = b0;
             break;
         }
     }
