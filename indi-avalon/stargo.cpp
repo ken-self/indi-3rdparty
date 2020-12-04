@@ -607,7 +607,7 @@ bool StarGoTelescope::ReadScopeStatus()
     if( x != 4) GuideComplete(AXIS_RA);
     if( y != 4) GuideComplete(AXIS_DE);
 
-    char parkHomeStatus[1] = {0};
+    char parkHomeStatus[2] = {'\0','\0'};
     if (! getParkHomeStatus(parkHomeStatus))
     {
        LOG_ERROR("Cannot determine scope status, failed to determine park/sync state.");
@@ -2432,7 +2432,7 @@ void StarGoTelescope::getBasicData()
         else
             IDSetText(&MountFirmwareInfoTP, nullptr);
 
-        char parkHomeStatus[1] = {0};
+        char parkHomeStatus[2] = {'\0','\0'};
         if (getParkHomeStatus(parkHomeStatus))
         {
             SetParked(strcmp(parkHomeStatus, "2") == 0);
