@@ -604,6 +604,41 @@ bool StarGoTelescope::ReadScopeStatus()
             return false;
         }
     }
+    int motion;
+    if( x == MOTION_SLEW || y == MOTION_SLEW)
+    {
+        motion = MOTION_SLEW;
+    }
+    else if( x == MOTION_ACCEL || y == MOTION_ACCEL)
+    {
+        motion = MOTION_SLEW;
+    }
+    else if( x == MOTION_DECEL || y == MOTION_DECEL)
+    {
+        motion = MOTION_SLEW;
+    }
+    else if( x == MOTION_GUIDE || y == MOTION_GUIDE)
+    {
+        motion = MOTION_GUIDE;
+    }
+    else if( x == MOTION_TRACK || y == MOTION_TRACK)
+    {
+        motion = MOTION_TRACK;
+    }
+    else if( x == MOTION_STATIC && y == MOTION_STATIC)
+    {
+        motion = MOTION_STATIC;
+    }
+    else
+    {
+       LOGF_ERROR("Invlid motion state: %d, %d", x, y);
+       return false;
+    }
+    if( motion == MOTION_GUIDE)
+    {
+        LOG_DEBUG("Guiding in progress");
+        return true;
+    }
     if( x != 4) GuideComplete(AXIS_RA);
     if( y != 4) GuideComplete(AXIS_DE);
 

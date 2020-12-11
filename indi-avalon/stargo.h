@@ -73,6 +73,15 @@ public:
         MOTORS_RA_ONLY=2,
         MOTORS_ON=3
     };
+    enum MotionState
+    {
+        MOTION_STATIC=0,
+        MOTION_TRACK=1,
+        MOTION_ACCEL=2,
+        MOTION_DECEL=3,
+        MOTION_GUIDE=4,
+        MOTION_SLEW=5
+    };
     TrackMode CurrentTrackMode;
     MotorsState CurrentMotorsState;
     TelescopeSlewRate CurrentSlewRate;
