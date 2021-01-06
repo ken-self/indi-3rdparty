@@ -773,7 +773,7 @@ bool LX200StarGo::MoveWE(INDI_DIR_WE dir, TelescopeMotionCommand command)
         return false;
     }
 =======
-        checkLX200Format();
+        checkLX200EquatorialFormat();
 
         if (genericCapability & LX200_HAS_ALIGNMENT_TYPE)
             getAlignment();
@@ -2421,7 +2421,7 @@ void LX200StarGo::getBasicData()
     LOG_DEBUG(__FUNCTION__);
     if (!isSimulation())
     {
-        checkLX200Format();
+        checkLX200EquatorialFormat();
 
         if (genericCapability & LX200_HAS_ALIGNMENT_TYPE)
             getAlignment();
@@ -2925,9 +2925,9 @@ void LX200StarGo::SetParked(bool isparked)
 }
 
 /**************************************************************************************
-* checkLX200Format not needed. Format is fixed value
+* checkLX200EquatorialFormat not needed. Format is fixed value
 ***************************************************************************************/
-bool LX200StarGo::checkLX200Format()
+bool LX200StarGo::checkLX200EquatorialFormat()
 {
     LOG_DEBUG(__FUNCTION__);
     char response[AVALON_RESPONSE_BUFFER_LENGTH];
