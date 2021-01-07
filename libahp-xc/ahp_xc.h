@@ -46,28 +46,22 @@ extern "C" {
 */
 /*@{*/
 
+///AHP_XC_VERSION This library version
+#define AHP_XC_VERSION 0x010010
+
+///AHP_XC_LIVE_AUTOCORRELATOR indicates if the correlator can do live spectrum analysis
 #define AHP_XC_LIVE_AUTOCORRELATOR (1<<0)
+///AHP_XC_LIVE_CROSSCORRELATOR indicates if the correlator can do live cross-correlation
 #define AHP_XC_LIVE_CROSSCORRELATOR (1<<1)
-#define AHP_XC_VERSION 0x010006
+///AHP_XC_HAS_LED_FLAGS indicates if the correlator has led lines available to drive
+#define AHP_XC_HAS_LED_FLAGS (1<<2)
+///AHP_XC_HAS_CROSSCORRELATOR indicates if the correlator can cross-correlate or can autocorrelate only
+#define AHP_XC_HAS_CROSSCORRELATOR (1<<3)
 
 /**
  * \defgroup DSP_Defines DSP API defines
 */
 /*@{*/
-///if min() is not present you can use this one
-#ifndef min
-#define min(a,b) \
-   ({ __typeof__ (a) _a = (a); \
-       __typeof__ (a) _b = (b); \
-     _a < _b ? _a : _b; })
-#endif
-///if max() is not present you can use this one
-#ifndef max
-#define max(a,b) \
-   ({ __typeof__ (a) _a = (a); \
-       __typeof__ (a) _b = (b); \
-     _a > _b ? _a : _b; })
-#endif
 
 ///XC_BASE_RATE is the base baud rate of the XC cross-correlators
 #define XC_BASE_RATE ((int)57600)
@@ -108,7 +102,24 @@ typedef struct {
     unsigned long correlations;
     unsigned long counts;
     double coherence;
-} correlation;
+} ahp_xc_correlation;
+
+typedef struct {
+    unsigned long jitter_size;
+    ahp_xc_correlation *correlations;
+} ahp_xc_sample;
+
+typedef struct {
+    unsigned long n_lines;
+    unsigned long n_baselines;
+    unsigned long tau;
+    unsigned long bps;
+    unsigned long cross_lag;
+    unsigned long auto_lag;
+    unsigned long* counts;
+    ahp_xc_sample* autocorrelations;
+    ahp_xc_sample* crosscorrelations;
+} ahp_xc_packet;
 
 /*@}*/
 
@@ -215,7 +226,7 @@ DLL_EXPORT int ahp_xc_get_frequency(void);
 DLL_EXPORT int ahp_xc_get_frequency_divider(void);
 
 /**
-* \brief Obtain the serial packet time
+* \brief Obtain the serial packet transmission time in microseconds
 * \return Returns the packet transmission time
 */
 DLL_EXPORT unsigned int ahp_xc_get_packettime(void);
@@ -232,14 +243,38 @@ DLL_EXPORT int ahp_xc_get_packetsize(void);
 /*@{*/
 
 /**
+* \brief Allocate and return a packet structure
+* \return Returns the packet structure
+*/
+DLL_EXPORT ahp_xc_packet *ahp_xc_alloc_packet();
+
+/**
+* \brief Free a previously allocated packet structure
+* \param packet the packet structure to be freed
+*/
+DLL_EXPORT void ahp_xc_free_packet(ahp_xc_packet *packet);
+
+/**
+* \brief Allocate and return a samples array
+* \return Returns the samples array
+*/
+DLL_EXPORT ahp_xc_sample *ahp_xc_alloc_samples(unsigned long nlines, unsigned long len);
+
+/**
+* \brief Free a previously allocated samples array
+* \param packet the samples array to be freed
+*/
+DLL_EXPORT void ahp_xc_free_samples(unsigned long nlines, ahp_xc_sample *samples);
+
+/**
 * \brief Grab a data packet
 * \param counts The counts of each input pulses within the packet time
-* \param autocorrelations The autocorrelations counts of each input pulses with itself delayed by the clock cycles defined with ahp_xc_set_line.
+* \param autocorrelations The autocorrelations counts of each input pulses with itself delayed by the clock cycles defined with ahp_xc_set_lag_auto.
 * \param crosscorrelations The crosscorrelations counts of each input's with others' pulses.
-* \sa ahp_xc_set_line
-* \sa ahp_xc_set_delay
+* \sa ahp_xc_set_lag_auto
+* \sa ahp_xc_set_lag_cross
 */
-DLL_EXPORT int ahp_xc_get_packet(correlation *autocorrelations, correlation *crosscorrelations);
+DLL_EXPORT int ahp_xc_get_packet(ahp_xc_packet *packet);
 
 /**
 * \brief Scan all available delay channels and get autocorrelations of each input
@@ -247,7 +282,7 @@ DLL_EXPORT int ahp_xc_get_packet(correlation *autocorrelations, correlation *cro
 * \param percent A pointer to a double which, during scanning, will be updated with the percent of completion.
 * \param interrupt A pointer to an integer whose value, during execution, if turns into 1 will abort scanning.
 */
-DLL_EXPORT void ahp_xc_scan_autocorrelations(correlation *autocorrelations, int stacksize, double *percent, int *interrupt);
+DLL_EXPORT void ahp_xc_scan_autocorrelations(ahp_xc_sample *autocorrelations, int stacksize, double *percent, int *interrupt);
 
 /**
 * \brief Scan all available delay channels and get crosscorrelations of each input with others
@@ -255,7 +290,7 @@ DLL_EXPORT void ahp_xc_scan_autocorrelations(correlation *autocorrelations, int 
 * \param percent A pointer to a double which, during scanning, will be updated with the percent of completion.
 * \param interrupt A pointer to an integer whose value, during execution, if turns into 1 will abort scanning.
 */
-DLL_EXPORT void ahp_xc_scan_crosscorrelations(correlation *crosscorrelations, int stacksize, double *percent, int *interrupt);
+DLL_EXPORT void ahp_xc_scan_crosscorrelations(ahp_xc_sample *crosscorrelations, int stacksize, double *percent, int *interrupt);
 
 /*@}*/
 /**
@@ -277,18 +312,18 @@ DLL_EXPORT void ahp_xc_enable_capture(int enable);
 DLL_EXPORT void ahp_xc_set_leds(int index, int leds);
 
 /**
-* \brief Set the delay index of the selected input for cross-correlation
+* \brief Set the lag of the selected input in clock cycles (for cross-correlation)
 * \param index The input line index starting from 0
-* \param value The delay line index
+* \param value The lag amount in clock cycles
 */
-DLL_EXPORT void ahp_xc_set_delay(int index, int value);
+DLL_EXPORT void ahp_xc_set_lag_cross(int index, int value);
 
 /**
-* \brief Set the delay index of the selected input for auto-correlation
+* \brief Set the lag of the selected input in clock cycles (for auto-correlation)
 * \param index The input line index starting from 0
-* \param value The delay line index
+* \param value The lag amount in clock cycles
 */
-DLL_EXPORT void ahp_xc_set_line(int index, int value);
+DLL_EXPORT void ahp_xc_set_lag_auto(int index, int value);
 
 /**
 * \brief Set the clock divider for autocorrelation and crosscorrelation
