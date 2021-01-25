@@ -158,8 +158,8 @@ bool NexDome::initProperties()
     ///////////////////////////////////////////////////////////////////////////////
     /// Rotator Settings
     ///////////////////////////////////////////////////////////////////////////////
-    IUFillNumber(&RotatorSettingsN[S_RAMP], "S_RAMP", "Acceleration Ramp (ms)", "%.f", 0.0, 5000, 1000.0, 0);
-    IUFillNumber(&RotatorSettingsN[S_VELOCITY], "S_VELOCITY", "Velocity (steps/s)", "%.f", 0.0, 5000, 1000.0, 0);
+    IUFillNumber(&RotatorSettingsN[S_RAMP], "S_RAMP", "Acceleration Ramp (ms)", "%.f", 100.0, 5000, 1000.0, 0);
+    IUFillNumber(&RotatorSettingsN[S_VELOCITY], "S_VELOCITY", "Velocity (steps/s)", "%.f", 32.0, 5000, 1000.0, 0);
     IUFillNumber(&RotatorSettingsN[S_ZONE], "S_ZONE", "Dead Zone (steps)", "%.f", 0.0, 32000, 1000.0, 2400);
     IUFillNumber(&RotatorSettingsN[S_RANGE], "S_RANGE", "Travel Range (steps)", "%.f", 0.0, 55080, 1000.0, 55080);
     IUFillNumberVector(&RotatorSettingsNP, RotatorSettingsN, 4, getDeviceName(), "ROTATOR_SETTINGS", "Rotator",
@@ -176,8 +176,8 @@ bool NexDome::initProperties()
     ///////////////////////////////////////////////////////////////////////////////
     /// Shutter Settings
     ///////////////////////////////////////////////////////////////////////////////
-    IUFillNumber(&ShutterSettingsN[S_RAMP], "S_RAMP", "Acceleration Ramp (ms)", "%.f", 0.0, 5000, 1000.0, 0);
-    IUFillNumber(&ShutterSettingsN[S_VELOCITY], "S_VELOCITY", "Velocity (step/s)", "%.f", 0.0, 5000, 1000.0, 0);
+    IUFillNumber(&ShutterSettingsN[S_RAMP], "S_RAMP", "Acceleration Ramp (ms)", "%.f", 100.0, 5000, 1000.0, 0);
+    IUFillNumber(&ShutterSettingsN[S_VELOCITY], "S_VELOCITY", "Velocity (step/s)", "%.f", 32.0, 5000, 1000.0, 0);
     IUFillNumberVector(&ShutterSettingsNP, ShutterSettingsN, 2, getDeviceName(), "SHUTTER_SETTINGS", "Shutter",
                        ND::SHUTTER_TAB.c_str(), IP_RW, 60, IPS_IDLE);
 
@@ -974,6 +974,7 @@ bool NexDome::getParameter(ND::Commands command, ND::Targets target, std::string
 {
     char res[ND::DRIVER_LEN] = {0};
     bool response_found = false;
+    int try_count = 0;
 
     std::string verb = ND::CommandsMap.at(command) + "R";
 
@@ -985,9 +986,24 @@ bool NexDome::getParameter(ND::Commands command, ND::Targets target, std::string
     // Target (Rotator or Shutter)
     cmd << ((target == ND::ROTATOR) ? "R" : "S");
 
-    if (sendCommand(cmd.str().c_str(), res))
+    while(!response_found && try_count < 2)
     {
-        std::string response(res);
+        std::string response;
+        if(try_count == 0)
+        {
+            if (!sendCommand(cmd.str().c_str(), res))
+                return response_found;  // ie false
+            response = res;
+        }
+        else
+        {
+// FIXME: Nexdome 4.0.0 should reliably respond to all commands with <:CMD#>
+// Sometimes the response gets hijacked by another event from Nexdome
+// So if the expected response is not received try again once with checkEvents
+            if (!checkEvents(response))
+                return response_found; // ie false
+        }
+        try_count++;
 
         // Since we can get many unrelated responses from the firmware
         // i.e. events, we need to parse all responses, and see which
