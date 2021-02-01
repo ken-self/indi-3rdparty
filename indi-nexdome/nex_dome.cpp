@@ -974,7 +974,7 @@ bool NexDome::getParameter(ND::Commands command, ND::Targets target, std::string
 {
     char res[ND::DRIVER_LEN] = {0};
     bool response_found = false;
-    int try_count = 0;
+//    int try_count = 0;
 
     std::string verb = ND::CommandsMap.at(command) + "R";
 
@@ -986,7 +986,8 @@ bool NexDome::getParameter(ND::Commands command, ND::Targets target, std::string
     // Target (Rotator or Shutter)
     cmd << ((target == ND::ROTATOR) ? "R" : "S");
 
-    while(!response_found && try_count < 2)
+    for(int try_count = 0; !response_found && try_count < 2; try_count++)
+//    while(!response_found && try_count < 2)
     {
         std::string response;
         if(try_count == 0)
@@ -1003,7 +1004,7 @@ bool NexDome::getParameter(ND::Commands command, ND::Targets target, std::string
             if (!checkEvents(response))
                 return response_found; // ie false
         }
-        try_count++;
+//        try_count++;
 
         // Since we can get many unrelated responses from the firmware
         // i.e. events, we need to parse all responses, and see which
