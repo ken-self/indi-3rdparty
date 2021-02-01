@@ -351,9 +351,9 @@ void StarGoTelescope::ISGetProperties(const char *dev)
     if (isConnected())
     {
         if (HasTrackMode() && TrackModeS != nullptr)
-            defineSwitch(&TrackModeSP);
+            defineProperty(&TrackModeSP);
         if (CanControlTrack())
-            defineSwitch(&TrackStateSP);
+            defineProperty(&TrackStateSP);
     }
 }
 
@@ -426,9 +426,12 @@ bool StarGoTelescope::initProperties()
     IUFillNumberVector(&MotorStepNP, MotorStepN, 2, getDeviceName(), "Motor Steps","Position", INFO_TAB, IP_RO, 60, IPS_IDLE);
 
     // Guiding settings
-    IUFillNumber(&GuidingSpeedN[0], "GUIDING_SPEED_RA", "RA Speed", "%.2f", 0.0, 2.0, 0.1, 0);
-    IUFillNumber(&GuidingSpeedN[1], "GUIDING_SPEED_DEC", "DEC Speed", "%.2f", 0.0, 2.0, 0.1, 0);
-    IUFillNumberVector(&GuidingSpeedNP, GuidingSpeedN, 2, getDeviceName(), "GUIDING_SPEED","Autoguiding", RA_DEC_TAB, IP_RW, 60, IPS_IDLE);
+    //FIXME: Change GUIDING_SPEED to GUIDE_RATE
+    //FIXME: Change GUIDING_SPEED_DE to GUIDE_RATE_NS
+    //FIXME: Change GUIDING_SPEED_RA to GUIDE_RATE_WE
+    IUFillNumber(&GuidingSpeedN[0], "GUIDE_RATE_WE", "RA Speed", "%.2f", 0.0, 2.0, 0.1, 0);
+    IUFillNumber(&GuidingSpeedN[1], "GUIDE_RATE_NS", "DEC Speed", "%.2f", 0.0, 2.0, 0.1, 0);
+    IUFillNumberVector(&GuidingSpeedNP, GuidingSpeedN, 2, getDeviceName(), "GUIDE_RATE","Autoguiding", RA_DEC_TAB, IP_RW, 60, IPS_IDLE);
 
     IUFillSwitch(&ST4StatusS[0], "ST4_DISABLED", "disabled", ISS_OFF);
     IUFillSwitch(&ST4StatusS[1], "ST4_ENABLED", "enabled", ISS_OFF);
@@ -463,23 +466,24 @@ bool StarGoTelescope::updateProperties()
 //    deleteProperty(ParkOptionS[PARK_WRITE_DATA].name);
 //    deleteProperty(ParkOptionS[PARK_PURGE_DATA].name);
 
+// FIXME: change all to defineProperty
     if (isConnected())
     {
-        defineNumber(&GuideNSNP);
-        defineNumber(&GuideWENP);
-        defineSwitch(&SyncHomeSP);
-        defineSwitch(&MountGotoHomeSP);
-//        defineSwitch(&MountSetParkSP);
-        defineNumber(&GuidingSpeedNP);
-        defineSwitch(&ST4StatusSP);
-        defineSwitch(&KeypadStatusSP);
-        defineSwitch(&MeridianFlipModeSP);
-        defineNumber(&MountRequestDelayNP);
-        defineText(&MountFirmwareInfoTP);
-        defineNumber(&TrackAdjustNP);
-        defineNumber(&GearRatioNP);
-        defineNumber(&MaxSlewNP);
-        defineNumber(&MotorStepNP);
+        defineProperty(&GuideNSNP);
+        defineProperty(&GuideWENP);
+        defineProperty(&SyncHomeSP);
+        defineProperty(&MountGotoHomeSP);
+//        defineProperty(&MountSetParkSP);
+        defineProperty(&GuidingSpeedNP);
+        defineProperty(&ST4StatusSP);
+        defineProperty(&KeypadStatusSP);
+        defineProperty(&MeridianFlipModeSP);
+        defineProperty(&MountRequestDelayNP);
+        defineProperty(&MountFirmwareInfoTP);
+        defineProperty(&TrackAdjustNP);
+        defineProperty(&GearRatioNP);
+        defineProperty(&MaxSlewNP);
+        defineProperty(&MotorStepNP);
 
         getBasicData();
     }
