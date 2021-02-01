@@ -102,6 +102,15 @@ bool DSICCD::Connect()
         LOG_INFO("Unable to find DSI. Has the firmware been loaded?");
         return false;
     }
+
+    cap |= CCD_CAN_ABORT;
+
+    if (dsi->isBinnable())
+        cap |= CCD_CAN_BIN;
+
+    if (dsi->isColor())
+        cap |= CCD_HAS_BAYER;
+
     ccd = dsi->getCcdChipName();
     if (ccd == "ICX254AL")
     {
@@ -123,18 +132,18 @@ bool DSICCD::Connect()
     {
         LOG_INFO("Found a DSI Pro III!");
     }
+    else if (ccd == "ICX285AQ")
+    {
+        // DSI III has a RGB color matrix
+        IUSaveText(&BayerT[0], "0");
+        IUSaveText(&BayerT[1], "0");
+        IUSaveText(&BayerT[2], "RGGB");
+        LOG_INFO("Found a DSI III!");
+    }
     else
     {
         LOGF_INFO("Found a DSI with an unknown CCD: %s", ccd.c_str());
     }
-
-    cap |= CCD_CAN_ABORT;
-
-    if (dsi->isBinnable())
-        cap |= CCD_CAN_BIN;
-
-    if (dsi->isColor())
-        cap |= CCD_HAS_BAYER;
 
     SetCCDCapability(cap);
 
@@ -237,11 +246,11 @@ bool DSICCD::updateProperties()
         setupParams();
 
         // Start the timer
-        SetTimer(POLLMS);
-        defineNumber(&GainNP);
-        defineNumber(&OffsetNP);
-        defineNumber(&CCDTempNP);
-        defineSwitch(&VddExpSP);
+        SetTimer(getCurrentPollingPeriod());
+        defineProperty(&GainNP);
+        defineProperty(&OffsetNP);
+        defineProperty(&CCDTempNP);
+        defineProperty(&VddExpSP);
     }
     else
     {
@@ -470,7 +479,7 @@ void DSICCD::TimerHit()
         }
     }
 
-    SetTimer(POLLMS);
+    SetTimer(getCurrentPollingPeriod());
     return;
 }
 
