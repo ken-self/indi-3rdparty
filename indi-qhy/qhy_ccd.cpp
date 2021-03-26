@@ -26,6 +26,7 @@
 
 #include <libnova/julian_day.h>
 #include <algorithm>
+#include <map>
 #include <math.h>
 
 #define TEMP_THRESHOLD       0.05   /* Differential temperature threshold (C)*/
@@ -2748,6 +2749,11 @@ void QHYCCD::addFITSKeywords(fitsfile *fptr, INDI::CCDChip *targetChip)
     if (HasAmpGlow)
     {
         fits_update_key_str(fptr, "Ampglow", IUFindOnSwitch(&AMPGlowSP)->label, "Mode", &status);
+    }
+
+    if (HasReadMode)
+    {
+        fits_update_key_dbl(fptr, "ReadMode", ReadModeN[0].value, 1, "Read Mode", &status);
     }
 
     if (HasGPS)
