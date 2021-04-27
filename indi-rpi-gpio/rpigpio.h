@@ -23,6 +23,8 @@
 #include <iostream>
 #include <stdio.h>
 #include <algorithm>
+//#include <boost/asio.hpp>
+#include <inditimer.h>
 
 #include <defaultdevice.h>
     static const int max_gpio_pin = 32;
@@ -67,6 +69,8 @@ public:
     virtual bool ISNewBLOB (const char *dev, const char *name, int sizes[], int blobsizes[], char *blobs[], char *formats[], char *names[], int n);
     virtual bool ISSnoopDevice(XMLEle *root);
     void TimerCallback(int pi, unsigned user_gpio, unsigned level, uint32_t tick);
+//    void BoostTimerCallback(int id, const boost::system::error_code& error);
+    void IndiTimerCallback(int id);
 
 protected:
     virtual bool saveConfigItems(FILE *fp);
@@ -107,8 +111,12 @@ private:
     bool timer_isexp[n_gpio_pin];
     int timer_counter[n_gpio_pin];
     void TimerChange(unsigned user_gpio, bool isInit=false, bool abort=false);
+    void IndiTimerChange(int id, bool isInit=false, bool abort=false);
     int FindPinIndex(unsigned user_gpio);
     int InitPiModel();
+    INDI::Timer timer[n_gpio_pin];
+    void startIndiTimer(int id, int msec); 
+    void stopIndiTimer(int id); 
 
 };
 inline int IndiRpiGpio::FindPinIndex(unsigned user_gpio)
@@ -117,4 +125,13 @@ inline int IndiRpiGpio::FindPinIndex(unsigned user_gpio)
     if (found != std::end(m_gpio_pin)) return std::distance(m_gpio_pin, found);
     return -1;
 }
+inline void IndiRpiGpio::startIndiTimer(int id, int msec)
+{
+    timer[id].start(msec);
+}
+inline void IndiRpiGpio::stopIndiTimer(int id)
+{
+    timer[id].stop();
+}
+
 #endif
