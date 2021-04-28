@@ -22,6 +22,7 @@
 #include <string.h>
 #include <iostream>
 #include <stdio.h>
+#include <inditimer.h>
 
 #include <defaultdevice.h>
     static const int max_pwm_duty = 100;
@@ -51,6 +52,7 @@ public:
     virtual bool ISNewBLOB (const char *dev, const char *name, int sizes[], int blobsizes[], char *blobs[], char *formats[], char *names[], int n);
     virtual bool ISSnoopDevice(XMLEle *root);
     void DslrTimer(int pi, unsigned user_gpio, unsigned level, uint32_t tick);
+    void IndiTimerCallback();
 
 protected:
     virtual bool saveConfigItems(FILE *fp);
@@ -80,6 +82,8 @@ private:
     bool dslr_isexp;
     int dslr_counter;
     void DslrChange(bool isInit=false, bool abort=false);
+    void IndiTimerChange(bool isInit=false, bool abort=false);
+    INDI::Timer timer;
 
 };
 

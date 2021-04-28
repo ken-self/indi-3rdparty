@@ -91,6 +91,8 @@ IndiAsiPower::IndiAsiPower()
     dslr_end = dslr_last = 0;
     dslr_isexp = false;
     dslr_counter = 0;
+        timer.callOnTimeout([this](){IndiTimerCallback();});
+        timer.setSingleShot(true);
 }
 IndiAsiPower::~IndiAsiPower()
 {
@@ -398,6 +400,7 @@ bool IndiAsiPower::ISNewSwitch (const char *dev, const char *name, ISState *stat
                 IDSetSwitch(&DslrSP, nullptr);
                 DEBUGF(INDI::Logger::DBG_SESSION, "DSLR Start Exposure: Duration %0.2f s Count %0.0f Delay %0.2f s", DslrExpN[0].value, DslrExpN[1].value, DslrExpN[2].value);
                 DslrChange(true);
+                IndiTimerChange(true);
                 DslrExpNP.s = IPS_BUSY;
                 IDSetNumber(&DslrExpNP, nullptr);
                 return true;
@@ -407,6 +410,7 @@ bool IndiAsiPower::ISNewSwitch (const char *dev, const char *name, ISState *stat
                 DslrSP.s = IPS_IDLE;
                 IDSetSwitch(&DslrSP, nullptr);
                 DslrChange(false, true);
+                IndiTimerChange(false, true);
                 DEBUG(INDI::Logger::DBG_SESSION, "DSLR Stop exposure");
                 DslrExpNP.s = IPS_IDLE;
                 IDSetNumber(&DslrExpNP, nullptr);
@@ -541,4 +545,71 @@ void IndiAsiPower::DslrTimer(int pi, unsigned user_gpio, unsigned level, uint32_
 
     DEBUGF(INDI::Logger::DBG_DEBUG, "DSLR callback: This tick %d ms Last tick %d ms End tick %d ms Left %d ms", tick_ms, last_ms, end_ms, left_ms);
     dslr_last = tick;
+}
+void IndiAsiPower::IndiTimerChange(bool isInit, bool abort)
+{
+    gpio_write(m_piId, dslr_pin, PI_LOW);
+    timer.stop();
+    if (isInit)
+    {
+        dslr_counter = DslrExpN[1].value + 1;
+        DEBUGF(INDI::Logger::DBG_DEBUG, "DSLR SEQ INIT: Counter %d", dslr_counter);
+        dslr_isexp = true;
+    }
+    else
+    {
+        DEBUGF(INDI::Logger::DBG_SESSION, "DSLR END: %s timer: Counter %d", dslr_isexp ? "Expose":"Delay", dslr_counter);
+    }
+    if (dslr_isexp)
+    {
+        dslr_counter--;
+    }
+    if(abort)
+    {
+        DEBUGF(INDI::Logger::DBG_DEBUG, "DSLR SEQ ABORT: %s Counter %d", dslr_isexp ? "Expose":"Delay", dslr_counter);
+        dslr_counter = 0;
+    }
+    dslr_isexp =  ! dslr_isexp;
+
+    if (dslr_counter <= 0)
+    {
+        DEBUGF(INDI::Logger::DBG_SESSION, "DSLR SEQ END: %s Counter %d", dslr_isexp ? "Expose":"Delay", dslr_counter);
+        DslrS[0].s = ISS_OFF;
+        DslrS[1].s = ISS_ON;
+        DslrSP.s = IPS_IDLE;
+        IDSetSwitch(&DslrSP, nullptr);
+        DslrExpNP.s = IPS_IDLE;
+        IDSetNumber(&DslrExpNP, nullptr);
+        return;
+    }
+    uint32_t l_duration = (dslr_isexp ? DslrExpN[0].value : DslrExpN[2].value)*1000;
+
+    if (l_duration > 0) // non-zero duration
+    {
+        if(l_duration > max_timer_ms) l_duration = max_timer_ms;
+        gpio_write(m_piId, dslr_pin, dslr_isexp ? PI_HIGH: PI_LOW);
+        timer.start(l_duration);
+        DEBUGF(INDI::Logger::DBG_DEBUG, "DSLR START %s timer: Last tick %lu ms End tick %lu ms", dslr_isexp ? "Expose":"Delay", dslr_last/1000, dslr_end/1000);
+        DEBUGF(INDI::Logger::DBG_SESSION, "DSLR START %s timer: Duration %d ms", dslr_isexp ? "Expose":"Delay", l_duration);
+    }
+    else
+    {
+        if (dslr_isexp)
+        {
+            DEBUG(INDI::Logger::DBG_ERROR, "DSLR Zero length exposure requested");
+        }
+        else
+        {
+            DEBUGF(INDI::Logger::DBG_SESSION, "DSLR START %s timer: zero length duration %d ms", dslr_isexp ? "Expose":"Delay", l_duration);
+            IndiTimerChange();  // Handle a zero length delay
+        }
+    }
+    return;
+}
+
+void IndiAsiPower::IndiTimerCallback()
+{
+        DEBUG(INDI::Logger::DBG_DEBUG, "DSLR callback: Timer ended");
+        IndiTimerChange();  // Handle end of timer
+        return;
 }
