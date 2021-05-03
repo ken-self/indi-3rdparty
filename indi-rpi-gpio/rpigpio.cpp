@@ -34,27 +34,18 @@ public:
         device.reset(new IndiRpiGpio());
     }
 } loader;
-//static std::unique_ptr<IndiRpiGpio> device(new IndiRpiGpio());
-
-static void TimerCallback(int pi, unsigned user_gpio, unsigned level, uint32_t tick)
-{
-    loader.device->TimerCallback(pi, user_gpio, level, tick);
-}
 
 IndiRpiGpio::IndiRpiGpio()
 {
     setVersion(VERSION_MAJOR,VERSION_MINOR);
     std::fill_n(m_gpio_pin, n_gpio_pin, -1);
     std::fill_n(m_type, n_dev_type, 0);
-    std::fill_n(timer_end, n_gpio_pin, 0);
-    std::fill_n(timer_last, n_gpio_pin, 0);
+    std::fill_n(timer_counter, n_gpio_pin, 0);
     std::fill_n(timer_isexp, n_gpio_pin, 0);
-    std::fill_n(timer_end, n_gpio_pin, 0);
-    std::fill_n(timer_cb, n_gpio_pin, -1);
 
     for(int i=0; i<n_gpio_pin;i++)
     {
-        timer[i].callOnTimeout([this,i](){IndiTimerCallback(i);});
+        timer[i].callOnTimeout([this,i](){TimerCallback(i);});
         timer[i].setSingleShot(true);
     }
 }
@@ -73,11 +64,7 @@ IndiRpiGpio::~IndiRpiGpio()
     }
     for(int i=0; i<n_gpio_pin;i++)
     {
-        if(timer_cb[i] >= 0)
-        {
-//            callback_cancel(timer_cb[i]);
-            timer_cb[i] = -1;
-        }
+        stopTimer(i);
     }
     pigpio_stop(m_piId);
 }
@@ -190,11 +177,7 @@ bool IndiRpiGpio::Disconnect()
     // Close GPIO
     for(int i=0; i<n_gpio_pin;i++)
     {
-        if(timer_cb[i] >= 0)
-        {
-//            callback_cancel(timer_cb[i]);
-            timer_cb[i] = -1;
-        }
+        stopTimer(i);
     }
     DEBUG(INDI::Logger::DBG_SESSION, "RPi GPIO disconnected successfully.");
     return true;
@@ -477,12 +460,8 @@ bool IndiRpiGpio::ISNewSwitch (const char *dev, const char *name, ISState *state
                 // See if the GPIO has changed
                 if( m_gpio_pin[i] != l_gpio_pin)
                 {
-                    if(timer_cb[i] >= 0)    // Cancel the timer on the old pin
-                    {
-//                        callback_cancel(timer_cb[i]);
-                        timer_cb[i] = -1;
-                        DEBUGF(INDI::Logger::DBG_SESSION, "%s type %s GPIO# %d timer cancelled", DeviceSP[i].label, dev_type[m_type[i]].c_str(), m_gpio_pin[i] );
-                    }
+                    stopTimer(i);
+                    DEBUGF(INDI::Logger::DBG_SESSION, "%s type %s GPIO# %d timer cancelled", DeviceSP[i].label, dev_type[m_type[i]].c_str(), m_gpio_pin[i] );
                     if(dev_pwm[m_type[i]])     // Cancel the PWM on the old pin (not really needed if switched off)
                     {
                     // If Active LOW then the duty cycle is the complement of the Active HIGH 
@@ -497,14 +476,14 @@ bool IndiRpiGpio::ISNewSwitch (const char *dev, const char *name, ISState *state
                     m_gpio_pin[i] = l_gpio_pin;
                     set_pull_up_down(m_piId, m_gpio_pin[i], PI_PUD_DOWN);  // Ensure Pull Up/Down set to Pull Down
                     gpio_write(m_piId, m_gpio_pin[i], (ActiveS[i][0].s == ISS_ON)? PI_LOW: PI_HIGH);  // Assume OFF
-                    if(dev_timer[m_type[i]])   // Create a timer on the new pin
-                    {
-                        if(m_gpio_pin[i] >= 0 && timer_cb[i] < 0)
-                        {
+//                    if(dev_timer[m_type[i]])   // Create a timer on the new pin
+//                    {
+//                        if(m_gpio_pin[i] >= 0 && timer_cb[i] < 0)
+//                        {
 //                            timer_cb[i] = callback(m_piId, m_gpio_pin[i], EITHER_EDGE, ::TimerCallback);
-                            DEBUGF(INDI::Logger::DBG_SESSION, "%s type %s GPIO# %d timer callback set", DeviceSP[i].label, dev_type[m_type[i]].c_str(), m_gpio_pin[i] );
-                        }
-                    }
+//                            DEBUGF(INDI::Logger::DBG_SESSION, "%s type %s GPIO# %d timer callback set", DeviceSP[i].label, dev_type[m_type[i]].c_str(), m_gpio_pin[i] );
+//                        }
+//                    }
                     if(dev_pwm[m_type[i]])    // Set up PWM on the new pin
                     {
                         set_PWM_frequency(m_piId, m_gpio_pin[i], pwm_freq);
@@ -542,8 +521,7 @@ bool IndiRpiGpio::ISNewSwitch (const char *dev, const char *name, ISState *state
                 {
                     if(dev_timer[m_type[i]] && !dev_timer[l_type])    // Cancel the timer
                     {
-//                        callback_cancel(timer_cb[i]);
-                        timer_cb[i] = -1;
+                        stopTimer(i);
                         DEBUGF(INDI::Logger::DBG_SESSION, "%s type %s GPIO# %d timer cancelled", DeviceSP[i].label, dev_type[m_type[i]].c_str(), m_gpio_pin[i] );
                     }
                     if(dev_pwm[m_type[i]] && !dev_pwm[l_type])         // Cancel the PWM
@@ -553,13 +531,13 @@ bool IndiRpiGpio::ISNewSwitch (const char *dev, const char *name, ISState *state
                         DEBUGF(INDI::Logger::DBG_SESSION, "%s type %s GPIO# %d PWM disabled", DeviceSP[i].label, dev_type[m_type[i]].c_str(), m_gpio_pin[i] );
                     }
                     m_type[i] = l_type;
-                    if(dev_timer[m_type[i]] && timer_cb[i] < 0)   // Create a timer for the new type
-                    {
-                        if(m_gpio_pin[i] >= 0)
-                        {
+//                    if(dev_timer[m_type[i]] && timer_cb[i] < 0)   // Create a timer for the new type
+//                    {
+//                        if(m_gpio_pin[i] >= 0)
+//                        {
 //                            timer_cb[i] = callback(m_piId, m_gpio_pin[i], EITHER_EDGE, ::TimerCallback);
-                        }
-                    }
+//                        }
+//                    }
                     if(dev_pwm[m_type[i]])    // Set up PWM on the new pin
                     {
                         set_PWM_frequency(m_piId, m_gpio_pin[i], pwm_freq);
@@ -611,7 +589,7 @@ bool IndiRpiGpio::ISNewSwitch (const char *dev, const char *name, ISState *state
                         else
                         {
 //                            TimerChange(m_gpio_pin[i], false, true);
-                            IndiTimerChange(i, false, true);
+                            TimerChange(i, false, true);
                             DEBUG(INDI::Logger::DBG_SESSION, "Timer Stop exposure");
                             TimerOnNP[i].s = IPS_IDLE;
                             IDSetNumber(&TimerOnNP[i], nullptr);
@@ -641,7 +619,7 @@ bool IndiRpiGpio::ISNewSwitch (const char *dev, const char *name, ISState *state
                         {
                             DEBUGF(INDI::Logger::DBG_SESSION, "%s %s GPIO# %d start timer: Duration %0.2f s Count %0.0f Delay %0.2f s", DeviceSP[i].label, dev_type[m_type[i]].c_str(), m_gpio_pin[i], TimerOnN[i][0].value, TimerOnN[i][1].value, TimerOnN[i][2].value);
 //                            TimerChange(m_gpio_pin[i], true);
-                            IndiTimerChange(i, true);
+                            TimerChange(i, true);
                             TimerOnNP[i].s = IPS_BUSY;
                             IDSetNumber(&TimerOnNP[i], nullptr);
                         }
@@ -726,11 +704,12 @@ bool IndiRpiGpio::saveConfigItems(FILE *fp)
     return true;
 }
 
-void IndiRpiGpio::TimerChange(unsigned user_gpio, bool isInit, bool abort)
+void IndiRpiGpio::TimerChange(int i, bool isInit, bool abort)
 {
-    int i = FindPinIndex(user_gpio);
+    unsigned user_gpio = m_gpio_pin[i];
     gpio_write(m_piId, user_gpio, (ActiveS[i][0].s == ISS_ON)? PI_LOW: PI_HIGH);
-    set_watchdog(m_piId, user_gpio, 0);
+    stopTimer(i);
+    auto now = std::chrono::system_clock::now();
     if(i < 0 || !dev_timer[m_type[i]])
     {
         DEBUGF(INDI::Logger::DBG_ERROR, "TimerChange: Invalid GPIO or not timed %lu", user_gpio);
@@ -743,7 +722,9 @@ void IndiRpiGpio::TimerChange(unsigned user_gpio, bool isInit, bool abort)
     }
     else
     {
-        DEBUGF(INDI::Logger::DBG_SESSION, "Timer END: %s timer: Counter %d", timer_isexp ? "Expose":"Delay", timer_counter[i]);
+    // integral duration: requires duration_cast
+        auto int_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now - timer_start[i]);
+        DEBUGF(INDI::Logger::DBG_SESSION, "Timer END: %s timer: Duration %d ms, Counter %d", timer_isexp ? "Expose":"Delay", int_ms, timer_counter[i]);
     }
     if (timer_isexp[i])
     {
@@ -769,15 +750,17 @@ void IndiRpiGpio::TimerChange(unsigned user_gpio, bool isInit, bool abort)
     }
     uint32_t l_duration = (timer_isexp[i] ? TimerOnN[i][0].value : TimerOnN[i][2].value)*1000;
 
-    timer_last[i] = get_current_tick(m_piId);
-    timer_end[i] = static_cast<uint64_t>(timer_last[i]) + static_cast<uint64_t>(l_duration*1000);
+//    timer_last[i] = get_current_tick(m_piId);
+//    timer_end[i] = static_cast<uint64_t>(timer_last[i]) + static_cast<uint64_t>(l_duration*1000);
 
     if (l_duration > 0) // non-zero duration
     {
         if(l_duration > max_timer_ms) l_duration = max_timer_ms;
         gpio_write(m_piId, user_gpio, timer_isexp[i] ? ((ActiveS[i][0].s == ISS_ON)? PI_HIGH: PI_LOW): ((ActiveS[i][0].s == ISS_ON)? PI_LOW: PI_HIGH));
-        set_watchdog(m_piId, user_gpio, l_duration);
-        DEBUGF(INDI::Logger::DBG_DEBUG, "Timer START %s timer: Last tick %lu ms End tick %lu ms", timer_isexp[i] ? "Expose":"Delay", timer_last[i]/1000, timer_end[i]/1000);
+        startTimer(i, l_duration);
+        timer_start[i] = std::chrono::system_clock::now();
+//        set_watchdog(m_piId, user_gpio, l_duration);
+//        DEBUGF(INDI::Logger::DBG_DEBUG, "Timer START %s timer: Last tick %lu ms End tick %lu ms", timer_isexp[i] ? "Expose":"Delay", timer_last[i]/1000, timer_end[i]/1000);
         DEBUGF(INDI::Logger::DBG_SESSION, "Timer START %s timer: Duration %d ms", timer_isexp[i] ? "Expose":"Delay", l_duration);
     }
     else
@@ -789,12 +772,13 @@ void IndiRpiGpio::TimerChange(unsigned user_gpio, bool isInit, bool abort)
         else
         {
             DEBUGF(INDI::Logger::DBG_SESSION, "Timer START %s timer: zero length duration %d ms", timer_isexp[i] ? "Expose":"Delay", l_duration);
-            TimerChange(user_gpio);  // Handle a zero length delay
+            TimerChange(i);  // Handle a zero length delay
         }
     }
     return;
 }
 
+/*
 void IndiRpiGpio::TimerCallback(int pi, unsigned user_gpio, unsigned level, uint32_t tick)
 {
     int i = FindPinIndex(user_gpio);
@@ -831,78 +815,9 @@ void IndiRpiGpio::TimerCallback(int pi, unsigned user_gpio, unsigned level, uint
     DEBUGF(INDI::Logger::DBG_DEBUG, "Timer callback: This tick %d ms Last tick %d ms End tick %d ms Left %d ms", tick_ms, last_ms, end_ms, left_ms);
     timer_last[i] = tick;
 }
+*/
 
-void IndiRpiGpio::IndiTimerChange(int i, bool isInit, bool abort)
-{
-    unsigned user_gpio = m_gpio_pin[i];
-    gpio_write(m_piId, user_gpio, (ActiveS[i][0].s == ISS_ON)? PI_LOW: PI_HIGH);
-    stopIndiTimer(i);
-    if(i < 0 || !dev_timer[m_type[i]])
-    {
-        DEBUGF(INDI::Logger::DBG_ERROR, "TimerChange: Invalid GPIO or not timed %lu", user_gpio);
-    }
-    if (isInit)
-    {
-        timer_counter[i] = TimerOnN[i][1].value + 1;
-        DEBUGF(INDI::Logger::DBG_DEBUG, "Timer SEQ INIT: Counter %d", timer_counter[i]);
-        timer_isexp[i] = true;
-    }
-    else
-    {
-        DEBUGF(INDI::Logger::DBG_SESSION, "Timer END: %s timer: Counter %d", timer_isexp ? "Expose":"Delay", timer_counter[i]);
-    }
-    if (timer_isexp[i])
-    {
-        timer_counter[i]--;
-    }
-    if(abort)
-    {
-        DEBUGF(INDI::Logger::DBG_DEBUG, "Timer SEQ ABORT: %s Counter %d", timer_isexp ? "Expose":"Delay", timer_counter[i]);
-        timer_counter[i] = 0;
-    }
-    timer_isexp[i] =  ! timer_isexp[i];
-
-    if (timer_counter[i] <= 0)
-    {
-        DEBUGF(INDI::Logger::DBG_SESSION, "Timer SEQ END: %s Counter %d", timer_isexp[i] ? "Expose":"Delay", timer_counter[i]);
-        OnOffS[i][0].s = ISS_ON;
-        OnOffS[i][1].s = ISS_OFF;
-        OnOffSP[i].s = IPS_IDLE;
-        IDSetSwitch(&OnOffSP[i], nullptr);
-        TimerOnNP[i].s = IPS_IDLE;
-        IDSetNumber(&TimerOnNP[i], nullptr);
-        return;
-    }
-    uint32_t l_duration = (timer_isexp[i] ? TimerOnN[i][0].value : TimerOnN[i][2].value)*1000;
-
-//    timer_last[i] = get_current_tick(m_piId);
-//    timer_end[i] = static_cast<uint64_t>(timer_last[i]) + static_cast<uint64_t>(l_duration*1000);
-
-    if (l_duration > 0) // non-zero duration
-    {
-        if(l_duration > max_timer_ms) l_duration = max_timer_ms;
-        gpio_write(m_piId, user_gpio, timer_isexp[i] ? ((ActiveS[i][0].s == ISS_ON)? PI_HIGH: PI_LOW): ((ActiveS[i][0].s == ISS_ON)? PI_LOW: PI_HIGH));
-        startIndiTimer(i, l_duration);
-//        set_watchdog(m_piId, user_gpio, l_duration);
-//        DEBUGF(INDI::Logger::DBG_DEBUG, "Timer START %s timer: Last tick %lu ms End tick %lu ms", timer_isexp[i] ? "Expose":"Delay", timer_last[i]/1000, timer_end[i]/1000);
-        DEBUGF(INDI::Logger::DBG_SESSION, "Timer START %s timer: Duration %d ms", timer_isexp[i] ? "Expose":"Delay", l_duration);
-    }
-    else
-    {
-        if (timer_isexp[i])
-        {
-            DEBUG(INDI::Logger::DBG_ERROR, "Timer Zero length exposure requested");
-        }
-        else
-        {
-            DEBUGF(INDI::Logger::DBG_SESSION, "Timer START %s timer: zero length duration %d ms", timer_isexp[i] ? "Expose":"Delay", l_duration);
-            IndiTimerChange(i);  // Handle a zero length delay
-        }
-    }
-    return;
-}
-
-void IndiRpiGpio::IndiTimerCallback(int i)
+void IndiRpiGpio::TimerCallback(int i)
 {
     if(i < 0 || i >= n_gpio_pin)
     {
@@ -911,7 +826,7 @@ void IndiRpiGpio::IndiTimerCallback(int i)
     }
     { // Timer ended
         DEBUGF(INDI::Logger::DBG_SESSION, "Timer callback: Timer ended for id %d", i);
-        IndiTimerChange(i);  // Handle end of timer
+        TimerChange(i);  // Handle end of timer
         return;
     }
 }

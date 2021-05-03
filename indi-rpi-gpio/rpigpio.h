@@ -23,7 +23,7 @@
 #include <iostream>
 #include <stdio.h>
 #include <algorithm>
-//#include <boost/asio.hpp>
+#include <chrono>
 #include <inditimer.h>
 
 #include <defaultdevice.h>
@@ -68,9 +68,9 @@ public:
     virtual bool ISNewText (const char *dev, const char *name, char *texts[], char *names[], int n);
     virtual bool ISNewBLOB (const char *dev, const char *name, int sizes[], int blobsizes[], char *blobs[], char *formats[], char *names[], int n);
     virtual bool ISSnoopDevice(XMLEle *root);
-    void TimerCallback(int pi, unsigned user_gpio, unsigned level, uint32_t tick);
+//    void TimerCallback(int pi, unsigned user_gpio, unsigned level, uint32_t tick);
 //    void BoostTimerCallback(int id, const boost::system::error_code& error);
-    void IndiTimerCallback(int id);
+    void TimerCallback(int id);
 
 protected:
     virtual bool saveConfigItems(FILE *fp);
@@ -105,18 +105,19 @@ private:
     INumberVectorProperty TimerOnNP[n_gpio_pin];
 
 // Need to track all gpio pins with a timer including Timer Change
-    int timer_cb[n_gpio_pin];
-    uint64_t timer_end[n_gpio_pin];
-    uint32_t timer_last[n_gpio_pin];
+//    int timer_cb[n_gpio_pin];
+//    uint64_t timer_end[n_gpio_pin];
+//    uint32_t timer_last[n_gpio_pin];
+
+    std::chrono::time_point<std::chrono::system_clock> timer_start[n_gpio_pin];
     bool timer_isexp[n_gpio_pin];
     int timer_counter[n_gpio_pin];
-    void TimerChange(unsigned user_gpio, bool isInit=false, bool abort=false);
-    void IndiTimerChange(int id, bool isInit=false, bool abort=false);
+    void TimerChange(int id, bool isInit=false, bool abort=false);
     int FindPinIndex(unsigned user_gpio);
     int InitPiModel();
     INDI::Timer timer[n_gpio_pin];
-    void startIndiTimer(int id, int msec); 
-    void stopIndiTimer(int id); 
+    void startTimer(int id, int msec); 
+    void stopTimer(int id); 
 
 };
 inline int IndiRpiGpio::FindPinIndex(unsigned user_gpio)
@@ -125,11 +126,11 @@ inline int IndiRpiGpio::FindPinIndex(unsigned user_gpio)
     if (found != std::end(m_gpio_pin)) return std::distance(m_gpio_pin, found);
     return -1;
 }
-inline void IndiRpiGpio::startIndiTimer(int id, int msec)
+inline void IndiRpiGpio::startTimer(int id, int msec)
 {
     timer[id].start(msec);
 }
-inline void IndiRpiGpio::stopIndiTimer(int id)
+inline void IndiRpiGpio::stopTimer(int id)
 {
     timer[id].stop();
 }
