@@ -21,11 +21,13 @@
 #include <string.h>
 #include <math.h>
 #include <config.h>
+#include <chrono>
 #include <pigpiod_if2.h>
 #include <asipower.h>
 
 static class Loader
 {
+public:
     std::unique_ptr<IndiAsiPower> device;
 public:
     Loader()
@@ -33,20 +35,22 @@ public:
         device.reset(new IndiAsiPower());
     }
 } loader;
-
+/*
 static void DslrTimer(int pi, unsigned user_gpio, unsigned level, uint32_t tick)
 {
-    device->DslrTimer(pi, user_gpio, level, tick);
+    loader.device->DslrTimer(pi, user_gpio, level, tick);
 }
-
+*/
 IndiAsiPower::IndiAsiPower()
 {
     setVersion(VERSION_MAJOR,VERSION_MINOR);
     std::fill_n(m_type, n_dev_type, 0);
-    dslr_cb = 0;
-    dslr_end = dslr_last = 0;
+//    dslr_cb = 0;
+//    dslr_end = dslr_last = 0;
     dslr_isexp = false;
     dslr_counter = 0;
+    timer.callOnTimeout([this](){IndiTimerCallback();});
+    timer.setSingleShot(true);
 }
 IndiAsiPower::~IndiAsiPower()
 {
@@ -58,7 +62,7 @@ IndiAsiPower::~IndiAsiPower()
     }
     deleteProperty(DslrSP.name);
     deleteProperty(DslrExpNP.name);
-    callback_cancel(dslr_cb);
+//    callback_cancel(dslr_cb);
 }
 bool IndiAsiPower::Connect()
 {
@@ -77,15 +81,15 @@ bool IndiAsiPower::Connect()
     {
         set_pull_up_down(m_piId, gpio_pin[i], PI_PUD_DOWN);
     }
-    dslr_cb = callback(m_piId, dslr_pin, EITHER_EDGE, ::DslrTimer);
-    DEBUGF(INDI::Logger::DBG_DEBUG, "Callback id %d pin %d", dslr_cb, dslr_pin);
+//    dslr_cb = callback(m_piId, dslr_pin, EITHER_EDGE, ::DslrTimer);
+//    DEBUGF(INDI::Logger::DBG_DEBUG, "Callback id %d pin %d", dslr_cb, dslr_pin);
     DEBUG(INDI::Logger::DBG_SESSION, "ASI Power connected successfully.");
     return true;
 }
 bool IndiAsiPower::Disconnect()
 {
     // Close GPIO
-    callback_cancel(dslr_cb);
+//    callback_cancel(dslr_cb);
     pigpio_stop(m_piId);
     DEBUG(INDI::Logger::DBG_SESSION, "ASI Power disconnected successfully.");
     return true;
@@ -402,7 +406,78 @@ bool IndiAsiPower::saveConfigItems(FILE *fp)
 void IndiAsiPower::DslrChange(bool isInit, bool abort)
 {
     gpio_write(m_piId, dslr_pin, PI_LOW);
-    set_watchdog(m_piId, dslr_pin, 0);
+    timer.stop();
+    auto now = std::chrono::system_clock::now();
+//    set_watchdog(m_piId, dslr_pin, 0);
+    if (isInit)
+    {
+        dslr_counter = DslrExpN[1].value + 1;
+        DEBUGF(INDI::Logger::DBG_DEBUG, "DSLR SEQ INIT: Counter %d", dslr_counter);
+        dslr_isexp = true;
+    }
+    else
+    {
+    // integral duration: requires duration_cast
+        auto int_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now - dslr_start);
+        DEBUGF(INDI::Logger::DBG_SESSION, "DSLR END: %s timer: Duration %d ms, Counter %d", dslr_isexp ? "Expose":"Delay", int_ms, dslr_counter);
+    }
+    if (dslr_isexp)
+    {
+        dslr_counter--;
+    }
+    if(abort)
+    {
+        DEBUGF(INDI::Logger::DBG_DEBUG, "DSLR SEQ ABORT: %s Counter %d", dslr_isexp ? "Expose":"Delay", dslr_counter);
+        dslr_counter = 0;
+    }
+    dslr_isexp =  ! dslr_isexp;
+
+    if (dslr_counter <= 0)
+    {
+        DEBUGF(INDI::Logger::DBG_SESSION, "DSLR SEQ END: %s Counter %d", dslr_isexp ? "Expose":"Delay", dslr_counter);
+        DslrS[0].s = ISS_OFF;
+        DslrS[1].s = ISS_ON;
+        DslrSP.s = IPS_IDLE;
+        IDSetSwitch(&DslrSP, nullptr);
+        DslrExpNP.s = IPS_IDLE;
+        IDSetNumber(&DslrExpNP, nullptr);
+        return;
+    }
+    uint32_t l_duration = (dslr_isexp ? DslrExpN[0].value : DslrExpN[2].value)*1000;
+
+//    dslr_last = get_current_tick(m_piId);
+//    dslr_end = static_cast<uint64_t>(dslr_last) + static_cast<uint64_t>(l_duration*1000);
+
+    if (l_duration > 0) // non-zero duration
+    {
+        if(l_duration > max_timer_ms) l_duration = max_timer_ms;
+        gpio_write(m_piId, dslr_pin, dslr_isexp ? PI_HIGH: PI_LOW);
+        timer.start(l_duration);
+        dslr_start = std::chrono::system_clock::now();
+//        set_watchdog(m_piId, dslr_pin, l_duration);
+//        DEBUGF(INDI::Logger::DBG_DEBUG, "DSLR START %s timer: Last tick %lu ms End tick %lu ms", dslr_isexp ? "Expose":"Delay", dslr_last/1000, dslr_end/1000);
+        DEBUGF(INDI::Logger::DBG_SESSION, "DSLR START %s timer: Duration %d ms", dslr_isexp ? "Expose":"Delay", l_duration);
+    }
+    else
+    {
+        if (dslr_isexp)
+        {
+            DEBUG(INDI::Logger::DBG_ERROR, "DSLR Zero length exposure requested");
+        }
+        else
+        {
+            DEBUGF(INDI::Logger::DBG_SESSION, "DSLR START %s timer: zero length duration %d ms", dslr_isexp ? "Expose":"Delay", l_duration);
+            DslrChange();  // Handle a zero length delay
+        }
+    }
+    return;
+}
+
+/*
+void IndiAsiPower::IndiTimerChange(bool isInit, bool abort)
+{
+    gpio_write(m_piId, dslr_pin, PI_LOW);
+    timer.stop();
     if (isInit)
     {
         dslr_counter = DslrExpN[1].value + 1;
@@ -437,14 +512,11 @@ void IndiAsiPower::DslrChange(bool isInit, bool abort)
     }
     uint32_t l_duration = (dslr_isexp ? DslrExpN[0].value : DslrExpN[2].value)*1000;
 
-    dslr_last = get_current_tick(m_piId);
-    dslr_end = static_cast<uint64_t>(dslr_last) + static_cast<uint64_t>(l_duration*1000);
-
     if (l_duration > 0) // non-zero duration
     {
         if(l_duration > max_timer_ms) l_duration = max_timer_ms;
         gpio_write(m_piId, dslr_pin, dslr_isexp ? PI_HIGH: PI_LOW);
-        set_watchdog(m_piId, dslr_pin, l_duration);
+        timer.start(l_duration);
         DEBUGF(INDI::Logger::DBG_DEBUG, "DSLR START %s timer: Last tick %lu ms End tick %lu ms", dslr_isexp ? "Expose":"Delay", dslr_last/1000, dslr_end/1000);
         DEBUGF(INDI::Logger::DBG_SESSION, "DSLR START %s timer: Duration %d ms", dslr_isexp ? "Expose":"Delay", l_duration);
     }
@@ -457,12 +529,13 @@ void IndiAsiPower::DslrChange(bool isInit, bool abort)
         else
         {
             DEBUGF(INDI::Logger::DBG_SESSION, "DSLR START %s timer: zero length duration %d ms", dslr_isexp ? "Expose":"Delay", l_duration);
-            DslrChange();  // Handle a zero length delay
+            IndiTimerChange();  // Handle a zero length delay
         }
     }
     return;
 }
-
+*/
+/*
 void IndiAsiPower::DslrTimer(int pi, unsigned user_gpio, unsigned level, uint32_t tick)
 {
     if(pi != m_piId || user_gpio != dslr_pin || level != PI_TIMEOUT)
@@ -497,4 +570,11 @@ void IndiAsiPower::DslrTimer(int pi, unsigned user_gpio, unsigned level, uint32_
 
     DEBUGF(INDI::Logger::DBG_DEBUG, "DSLR callback: This tick %d ms Last tick %d ms End tick %d ms Left %d ms", tick_ms, last_ms, end_ms, left_ms);
     dslr_last = tick;
+}
+*/
+void IndiAsiPower::IndiTimerCallback()
+{
+        DEBUG(INDI::Logger::DBG_DEBUG, "DSLR callback: Timer ended");
+        DslrChange();  // Handle end of timer
+        return;
 }
