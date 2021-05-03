@@ -51,7 +51,7 @@ public:
     virtual bool ISNewText (const char *dev, const char *name, char *texts[], char *names[], int n);
     virtual bool ISNewBLOB (const char *dev, const char *name, int sizes[], int blobsizes[], char *blobs[], char *formats[], char *names[], int n);
     virtual bool ISSnoopDevice(XMLEle *root);
-    void DslrTimer(int pi, unsigned user_gpio, unsigned level, uint32_t tick);
+//    void DslrTimer(int pi, unsigned user_gpio, unsigned level, uint32_t tick);
     void IndiTimerCallback();
 
 protected:
@@ -76,13 +76,13 @@ private:
     INumber DslrExpN[3];
     INumberVectorProperty DslrExpNP;
     
-    int dslr_cb;
-    uint64_t dslr_end;
-    uint32_t dslr_last;
+//    int dslr_cb;
+//    uint64_t dslr_end;
+//    uint32_t dslr_last;
     bool dslr_isexp;
     int dslr_counter;
     void DslrChange(bool isInit=false, bool abort=false);
-    void IndiTimerChange(bool isInit=false, bool abort=false);
+//    void IndiTimerChange(bool isInit=false, bool abort=false);
     INDI::Timer timer;
 
 };
