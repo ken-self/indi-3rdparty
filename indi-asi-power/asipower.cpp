@@ -26,6 +26,7 @@
 
 static class Loader
 {
+public:
     std::unique_ptr<IndiAsiPower> device;
 public:
     Loader()
@@ -36,7 +37,7 @@ public:
 
 static void DslrTimer(int pi, unsigned user_gpio, unsigned level, uint32_t tick)
 {
-    device->DslrTimer(pi, user_gpio, level, tick);
+    loader.device->DslrTimer(pi, user_gpio, level, tick);
 }
 
 IndiAsiPower::IndiAsiPower()
