@@ -906,11 +906,11 @@ void IndiRpiGpio::IndiTimerCallback(int i)
 {
     if(i < 0 || i >= n_gpio_pin)
     {
-        DEBUGF(INDI::Logger::DBG_DEBUG, "Timer callback: Invalid callback received for Id %d", i);
+        DEBUGF(INDI::Logger::DBG_SESSION, "Timer callback: Invalid callback received for Id %d", i);
         return;
     }
     { // Timer ended
-        DEBUGF(INDI::Logger::DBG_DEBUG, "Timer callback: Timer ended for id %d", i);
+        DEBUGF(INDI::Logger::DBG_SESSION, "Timer callback: Timer ended for id %d", i);
         IndiTimerChange(i);  // Handle end of timer
         return;
     }
