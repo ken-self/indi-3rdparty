@@ -24,12 +24,21 @@
 #include <pigpiod_if2.h>
 #include <rpigpio.h>
 
-// We declare an auto pointer to IndiRpiGpio
-static std::unique_ptr<IndiRpiGpio> device(new IndiRpiGpio());
+static class Loader
+{
+public:
+    std::unique_ptr<IndiRpiGpio> device;
+public:
+    Loader()
+    {
+        device.reset(new IndiRpiGpio());
+    }
+} loader;
+//static std::unique_ptr<IndiRpiGpio> device(new IndiRpiGpio());
 
 static void TimerCallback(int pi, unsigned user_gpio, unsigned level, uint32_t tick)
 {
-    device->TimerCallback(pi, user_gpio, level, tick);
+    loader.device->TimerCallback(pi, user_gpio, level, tick);
 }
 
 IndiRpiGpio::IndiRpiGpio()
