@@ -407,6 +407,7 @@ void IndiAsiPower::DslrChange(bool isInit, bool abort)
 {
     gpio_write(m_piId, dslr_pin, PI_LOW);
     timer.stop();
+    auto now = std::chrono::system_clock::now();
 //    set_watchdog(m_piId, dslr_pin, 0);
     if (isInit)
     {
@@ -416,7 +417,9 @@ void IndiAsiPower::DslrChange(bool isInit, bool abort)
     }
     else
     {
-        DEBUGF(INDI::Logger::DBG_SESSION, "DSLR END: %s timer: Counter %d", dslr_isexp ? "Expose":"Delay", dslr_counter);
+    // integral duration: requires duration_cast
+        auto int_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now - dslr_start);
+        DEBUGF(INDI::Logger::DBG_SESSION, "DSLR END: %s timer: Duration %d ms, Counter %d", dslr_isexp ? "Expose":"Delay", int_ms, dslr_counter);
     }
     if (dslr_isexp)
     {
@@ -450,6 +453,7 @@ void IndiAsiPower::DslrChange(bool isInit, bool abort)
         if(l_duration > max_timer_ms) l_duration = max_timer_ms;
         gpio_write(m_piId, dslr_pin, dslr_isexp ? PI_HIGH: PI_LOW);
         timer.start(l_duration);
+        dslr_start = std::chrono::system_clock::now();
 //        set_watchdog(m_piId, dslr_pin, l_duration);
 //        DEBUGF(INDI::Logger::DBG_DEBUG, "DSLR START %s timer: Last tick %lu ms End tick %lu ms", dslr_isexp ? "Expose":"Delay", dslr_last/1000, dslr_end/1000);
         DEBUGF(INDI::Logger::DBG_SESSION, "DSLR START %s timer: Duration %d ms", dslr_isexp ? "Expose":"Delay", l_duration);

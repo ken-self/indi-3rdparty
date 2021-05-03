@@ -79,6 +79,7 @@ private:
 //    int dslr_cb;
 //    uint64_t dslr_end;
 //    uint32_t dslr_last;
+    std::chrono::time_point<std::chrono::system_clock> dslr_start;
     bool dslr_isexp;
     int dslr_counter;
     void DslrChange(bool isInit=false, bool abort=false);
