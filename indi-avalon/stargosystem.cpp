@@ -23,6 +23,7 @@
 #include <cstring>
 #include <memory>
 
+/*
 // Unique pointers
 static std::unique_ptr<StarGoSystem> device;
 
@@ -82,6 +83,17 @@ void ISSnoopDevice(XMLEle *root)
     ISInit();
     device->ISSnoopDevice(root);
 }
+*/
+static class Loader
+{
+public:
+    std::unique_ptr<StarGoSystem> device;
+public:
+    Loader()
+    {
+        device.reset(new StarGoSystem());
+    }
+} loader;
 
 #define AVALON_FOCUSER_POSITION_OFFSET                  500000
 
