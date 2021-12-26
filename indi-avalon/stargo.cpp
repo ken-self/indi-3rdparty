@@ -2707,7 +2707,7 @@ bool StarGoTelescope::setTrackingAdjustment(double adjustRA)
 //   }
 
     char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
-    if(!sendQuery(cmd, response))
+    if(!sendQuery(cmd, response, 0))
     {
         LOGF_ERROR("Cannot adjust tracking by %d%%", adjustRA);
         return false;
