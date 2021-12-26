@@ -121,7 +121,7 @@ bool StarGoSystem::saveConfigItems(FILE *fp)
 {
     LOG_DEBUG(__FUNCTION__);
     IUSaveConfigSwitch(fp, &Aux1FocuserSP);
-    StarGoFocuser::saveConfigItems(fp);
+    m_focuser->saveConfigItems(fp);
     StarGoTelescope::saveConfigItems(fp);
     return true;
 }
@@ -164,5 +164,6 @@ bool StarGoSystem::ReadScopeStatus()
     }
     bool activated = (IUFindOnSwitchIndex(&Aux1FocuserSP) == DefaultDevice::INDI_ENABLED);
     if (activated) return m_focuser->ReadStatus();
+    return true;
 }
 
