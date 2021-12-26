@@ -2695,6 +2695,8 @@ bool StarGoTelescope::setTrackingAdjustment(double adjustRA)
     /*
      * :X41sRRR# to adjust the RA tracking speed where s is the sign + or -  and RRR are three digits whose meaning is parts per 10000 of  RA correction .
      * :X43sDDD# to fix the cf DEC offset
+     
+     :X1Ennnn 
      */
 
     // ensure that -5 <= adjust <= 5
@@ -2709,8 +2711,9 @@ bool StarGoTelescope::setTrackingAdjustment(double adjustRA)
         return false;
     }
 
-    int parameter = static_cast<int>(adjustRA * 100);
-    sprintf(cmd, ":X41%+03i#", parameter);
+    int parameter = static_cast<int>(adjustRA * 100) + 1000;
+//    sprintf(cmd, ":X41%+03i#", parameter);
+    sprintf(cmd, ":X1E%04d", parameter);
 
 //   if(!transmit(cmd))
 //   {
