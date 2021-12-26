@@ -646,6 +646,18 @@ bool StarGoTelescope::ReadScopeStatus()
     }
     IDSetNumber(&MotorStepNP, nullptr);
 
+    double raCorrection;
+    if (getTrackingAdjustment(&raCorrection))
+    {
+        TrackAdjustN[0].value = raCorrection;
+        TrackAdjustNP.s      = IPS_OK;
+    }
+    else
+    {
+        TrackAdjustNP.s = IPS_ALERT;
+    }
+    IDSetNumber(&TrackAdjustNP, nullptr);
+
     double r, d;
     if(!getEqCoordinates(&r, &d))
     {
@@ -2712,9 +2724,6 @@ bool StarGoTelescope::setTrackingAdjustment(double adjustRA)
         LOGF_ERROR("Cannot adjust tracking by %d%%", adjustRA);
         return false;
     }
-
-
-
     if (adjustRA == 0.0)
         LOG_INFO("RA tracking adjustment cleared.");
     else
