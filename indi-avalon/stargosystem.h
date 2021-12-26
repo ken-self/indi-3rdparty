@@ -38,6 +38,7 @@ public:
     bool initProperties() override;
     bool updateProperties() override;
     bool ReadScopeStatus() override;
+    bool saveConfigItems(FILE *fp) override;
 
     bool ISNewSwitch(const char *dev, const char *name, ISState *states, char *names[], int n) override;
     bool ISNewNumber(const char *dev, const char *name, double values[], char *names[], int n) override;
