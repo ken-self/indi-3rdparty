@@ -28,6 +28,10 @@ class StarGoFocuser;
 class StarGoSystem : public StarGoTelescope
 {
 public:
+    // AUX focusers control
+    ISwitchVectorProperty Aux1FocuserSP;
+    ISwitch Aux1FocuserS[2];
+
     StarGoSystem();
     virtual ~StarGoSystem() = default;
 //protected:

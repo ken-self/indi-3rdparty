@@ -46,69 +46,6 @@ Unimplemented commands
 
 #include "config.h"
 
-/*
-#ifndef NO_FOCUSER
-// Unique pointers
-static std::unique_ptr<StarGoTelescope> telescope;
-
-void ISInit()
-{
-    static int isInit = 0;
-
-    if (isInit)
-        return;
-
-    isInit = 1;
-    if (telescope.get() == nullptr)
-    {
-        StarGoTelescope* myScope = new StarGoTelescope();
-        telescope.reset(myScope);
-    }
-}
-
-void ISGetProperties(const char *dev)
-{
-    ISInit();
-    telescope->ISGetProperties(dev);
-}
-
-void ISNewSwitch(const char *dev, const char *name, ISState *states, char *names[], int n)
-{
-    ISInit();
-    telescope->ISNewSwitch(dev, name, states, names, n);
-}
-
-void ISNewText(const char *dev, const char *name, char *texts[], char *names[], int n)
-{
-    ISInit();
-    telescope->ISNewText(dev, name, texts, names, n);
-}
-
-void ISNewNumber(const char *dev, const char *name, double values[], char *names[], int n)
-{
-    ISInit();
-    telescope->ISNewNumber(dev, name, values, names, n);
-}
-
-void ISNewBLOB(const char *dev, const char *name, int sizes[], int blobsizes[], char *blobs[], char *formats[],
-               char *names[], int n)
-{
-    INDI_UNUSED(dev);
-    INDI_UNUSED(name);
-    INDI_UNUSED(sizes);
-    INDI_UNUSED(blobsizes);
-    INDI_UNUSED(blobs);
-    INDI_UNUSED(formats);
-    INDI_UNUSED(names);
-    INDI_UNUSED(n);
-}
-void ISSnoopDevice(XMLEle *root)
-{
-    ISInit();
-    telescope->ISSnoopDevice(root);
-}
-#endif // NO_FOCUSER
-*/
 /*******************************************************************************
 *** StarGo Implementation
 *******************************************************************************/
@@ -426,9 +363,6 @@ bool StarGoTelescope::initProperties()
     IUFillNumberVector(&MotorStepNP, MotorStepN, 2, getDeviceName(), "Motor Steps","Position", INFO_TAB, IP_RO, 60, IPS_IDLE);
 
     // Guiding settings
-    //FIXME: Change GUIDING_SPEED to GUIDE_RATE
-    //FIXME: Change GUIDING_SPEED_DE to GUIDE_RATE_NS
-    //FIXME: Change GUIDING_SPEED_RA to GUIDE_RATE_WE
     IUFillNumber(&GuidingSpeedN[0], "GUIDE_RATE_WE", "RA Speed", "%.2f", 0.0, 2.0, 0.1, 0);
     IUFillNumber(&GuidingSpeedN[1], "GUIDE_RATE_NS", "DEC Speed", "%.2f", 0.0, 2.0, 0.1, 0);
     IUFillNumberVector(&GuidingSpeedNP, GuidingSpeedN, 2, getDeviceName(), "GUIDE_RATE","Autoguiding", RA_DEC_TAB, IP_RW, 60, IPS_IDLE);
@@ -461,12 +395,7 @@ bool StarGoTelescope::initProperties()
 bool StarGoTelescope::updateProperties()
 {
     if (! INDI::Telescope::updateProperties()) return false;
-//    deleteProperty(ParkPositionNP.name);
-//    deleteProperty(ParkOptionS[PARK_DEFAULT].name);
-//    deleteProperty(ParkOptionS[PARK_WRITE_DATA].name);
-//    deleteProperty(ParkOptionS[PARK_PURGE_DATA].name);
 
-// FIXME: change all to defineProperty
     if (isConnected())
     {
         defineProperty(&GuideNSNP);
@@ -1089,8 +1018,6 @@ bool StarGoTelescope::saveConfigItems(FILE *fp)
 {
     LOG_DEBUG(__FUNCTION__);
     INDI::Telescope::saveConfigItems(fp);
-//    IUSaveConfigSwitch(fp, &UsePulseCmdSP);
-
     return true;
 }
 

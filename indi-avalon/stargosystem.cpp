@@ -23,67 +23,7 @@
 #include <cstring>
 #include <memory>
 
-/*
-// Unique pointers
-static std::unique_ptr<StarGoSystem> device;
 
-void ISInit()
-{
-    static int isInit = 0;
-
-    if (isInit)
-        return;
-
-    isInit = 1;
-    if (device.get() == nullptr)
-    {
-        StarGoSystem* myDevice = new StarGoSystem();
-        device.reset(myDevice);
-    }
-}
-
-void ISGetProperties(const char *dev)
-{
-    ISInit();
-    device->ISGetProperties(dev);
-}
-
-void ISNewSwitch(const char *dev, const char *name, ISState *states, char *names[], int n)
-{
-    ISInit();
-    device->ISNewSwitch(dev, name, states, names, n);
-}
-
-void ISNewText(const char *dev, const char *name, char *texts[], char *names[], int n)
-{
-    ISInit();
-    device->ISNewText(dev, name, texts, names, n);
-}
-
-void ISNewNumber(const char *dev, const char *name, double values[], char *names[], int n)
-{
-    ISInit();
-    device->ISNewNumber(dev, name, values, names, n);
-}
-
-void ISNewBLOB(const char *dev, const char *name, int sizes[], int blobsizes[], char *blobs[], char *formats[],
-               char *names[], int n)
-{
-    INDI_UNUSED(dev);
-    INDI_UNUSED(name);
-    INDI_UNUSED(sizes);
-    INDI_UNUSED(blobsizes);
-    INDI_UNUSED(blobs);
-    INDI_UNUSED(formats);
-    INDI_UNUSED(names);
-    INDI_UNUSED(n);
-}
-void ISSnoopDevice(XMLEle *root)
-{
-    ISInit();
-    device->ISSnoopDevice(root);
-}
-*/
 static class Loader
 {
 public:
@@ -113,6 +53,11 @@ StarGoSystem::StarGoSystem()
  ***************************************************************************/
 bool StarGoSystem::initProperties()
 {
+    IUFillSwitch(&Aux1FocuserS[DefaultDevice::INDI_ENABLED], "INDI_ENABLED", "Enabled", ISS_OFF);
+    IUFillSwitch(&Aux1FocuserS[DefaultDevice::INDI_DISABLED], "INDI_DISABLED", "Disabled", ISS_ON);
+    IUFillSwitchVector(&Aux1FocuserSP, Aux1FocuserS, 2, getDeviceName(), "AUX1_FOCUSER_CONTROL", "AUX1 Focuser",
+                       MAIN_CONTROL_TAB, IP_RW, ISR_ATMOST1, 60, IPS_IDLE);
+
     StarGoTelescope::initProperties();
     m_focuser->initProperties();
 
@@ -125,6 +70,14 @@ bool StarGoSystem::initProperties()
  ***************************************************************************/
 bool StarGoSystem::updateProperties()
 {
+    if (isConnected())
+    {
+        defineProperty(&Aux1FocuserSP);
+    }
+    else
+    {
+        deleteProperty(Aux1FocuserSP.name);
+    }
     StarGoTelescope::updateProperties();
     m_focuser->updateProperties();
     return true;
@@ -142,12 +95,34 @@ bool StarGoSystem::ISNewSwitch(const char *dev, const char *name, ISState *state
     //  first check if it's for our device
     if (dev != nullptr && strcmp(dev, getDeviceName()) == 0)
     {
-        if (strstr(name, "FOCUS"))
+        if (!strcmp(name, Aux1FocuserSP.name))
+        {
+            if (IUUpdateSwitch(&Aux1FocuserSP, states, names, n) < 0)
+                return false;
+            bool activated = (IUFindOnSwitchIndex(&Aux1FocuserSP) == DefaultDevice::INDI_ENABLED);
+            Aux1FocuserSP.s = activated ? IPS_OK : IPS_IDLE;
+            IDSetSwitch(&Aux1FocuserSP, nullptr);
+            return true;
+        }
+        bool activated = (IUFindOnSwitchIndex(&Aux1FocuserSP) == DefaultDevice::INDI_ENABLED);
+        if (strstr(name, "FOCUS") && activated)
         {
             return m_focuser->processSwitch(dev, name, states, names, n);
         }
         return StarGoTelescope::ISNewSwitch(dev, name, states, names, n);
     }
+    return true;
+}
+
+/*******************************************************************************
+**
+*******************************************************************************/
+bool StarGoSystem::saveConfigItems(FILE *fp)
+{
+    LOG_DEBUG(__FUNCTION__);
+    IUSaveConfigSwitch(fp, &Aux1FocuserSP);
+    StarGoFocuser::saveConfigItems(fp);
+    StarGoTelescope::saveConfigItems(fp);
     return true;
 }
 
@@ -163,7 +138,8 @@ bool StarGoSystem::ISNewNumber(const char *dev, const char *name, double values[
     //  first check if it's for our device
     if (dev != nullptr && strcmp(dev, getDeviceName()) == 0)
     {
-        if (strstr(name, "FOCUS"))
+        bool activated = (IUFindOnSwitchIndex(&Aux1FocuserSP) == DefaultDevice::INDI_ENABLED);
+        if (strstr(name, "FOCUS") && activated)
         {
             return m_focuser->processNumber(dev, name, values, names, n);
         }
@@ -171,6 +147,7 @@ bool StarGoSystem::ISNewNumber(const char *dev, const char *name, double values[
     }
     return true;
 }
+
 bool StarGoSystem::sendQuery(const char* cmd, char* response, char end, int wait)
 {
     return StarGoTelescope::sendQuery(cmd, response, end, wait);
@@ -185,6 +162,7 @@ bool StarGoSystem::ReadScopeStatus()
     {
         return true;  // While scope is slewing focuser cannot respond
     }
-    return m_focuser->ReadStatus();
+    bool activated = (IUFindOnSwitchIndex(&Aux1FocuserSP) == DefaultDevice::INDI_ENABLED);
+    if (activated) return m_focuser->ReadStatus();
 }
 

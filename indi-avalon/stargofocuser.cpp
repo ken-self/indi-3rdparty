@@ -40,11 +40,7 @@ StarGoFocuser::StarGoFocuser(StarGoSystem *dev) : FI(dev), m_device(dev)
  ***************************************************************************/
 bool StarGoFocuser::initProperties()
 {
-//    m_device->initProperties();
     FI::initProperties(FOCUS_TAB);
-
-//    IUFillNumber(&FocusSyncPosN[0], "FOCUS_SYNC_POSITION_VALUE", "Ticks", "%4.0f", 0.0, 100000.0, 1000.0, 0);
-//    IUFillNumberVector(&FocusSyncPosNP, FocusSyncPosN, 1, getDeviceName(), "FOCUS_SYNC_POSITION", "Sync", deviceName, IP_WO, 0, IPS_OK);
 
     FI::SetCapability(
         FOCUSER_CAN_ABS_MOVE        | /*!< Can the focuser move by absolute position? */
@@ -68,52 +64,9 @@ bool StarGoFocuser::initProperties()
  ***************************************************************************/
 bool StarGoFocuser::updateProperties()
 {
-//    m_device->updateProperties();
     FI::updateProperties();
     return true;
 }
-
-/***************************************************************************
- * Reaction to UI commands
- ***************************************************************************/
-//bool StarGoFocuser::ISNewSwitch(const char *dev, const char *name, ISState *states, char *names[], int n)
-//{
-//    INDI_UNUSED(states);
-//    INDI_UNUSED(names);
-//    INDI_UNUSED(n);
-//
-//    //  first check if it's for our device
-//    if (dev != nullptr && strcmp(dev, m_device->getDeviceName()) == 0)
-//    {
-//        if (strstr(name, "FOCUS"))
-//        {
-//            return FI::processSwitch(dev, name, states, names, n);
-//        }
-////        return m_device->ISNewSwitch(dev, name, states, names, n);
-//    }
-//    return true;
-//}
-
-/***************************************************************************
- *
- ***************************************************************************/
-//bool StarGoFocuser::ISNewNumber(const char *dev, const char *name, double values[], char *names[], int n)
-//{
-//    INDI_UNUSED(values);
-//    INDI_UNUSED(names);
-//    INDI_UNUSED(n);
-//
-//    //  first check if it's for our device
-//    if (dev != nullptr && strcmp(dev, m_device->getDeviceName()) == 0)
-//    {
-//        if (strstr(name, "FOCUS"))
-//        {
-//            return FI::processNumber(dev, name, values, names, n);
-//        }
-////        return m_device->ISNewNumber(dev, name, values, names, n);
-//    }
-//    return true;
-//}
 
 /***************************************************************************
  *
@@ -204,7 +157,6 @@ IPState StarGoFocuser::MoveAbsFocuser(uint32_t position)
  *
  ***************************************************************************/
 IPState StarGoFocuser::MoveRelFocuser(FocusDirection dir, uint32_t relativePosition)
-//IPState StarGoFocuser::moveFocuserRelative(int relativePosition)
 {
     int absolutePosition = relativePosition * (dir==FOCUS_INWARD?-1:+1);
     return MoveAbsFocuser(absolutePosition);
@@ -258,11 +210,6 @@ bool StarGoFocuser::getFocuserPosition(int* position)
         LOG_ERROR("Failed to get AUX1 position request.");
         return false;
     }
-//    if (!receive(response, &bytesReceived)) 
-//    {
-//        DEBUGF(INDI::Logger::DBG_ERROR, "%s: Failed to receive AUX1 position response.", getDeviceName());
-//        return false;
-//    }
     int tempPosition = 0;
     int returnCode = sscanf(response, "%*c%*c%*c%*c%07d", &tempPosition);
     if (returnCode <= 0) 
