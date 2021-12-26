@@ -171,7 +171,6 @@ protected:
 
     struct timespec mount_request_delay = {0, 50000000L};
 
-
     virtual bool ReadScopeStatus() override;
     virtual bool Goto(double ra, double dec) override;
     virtual bool Sync(double ra, double dec) override;
@@ -258,6 +257,9 @@ protected:
     bool getMotorStatus(int *xSpeed, int *ySpeed);
     bool getSideOfPier();
 
+    // tracking adjustment
+    bool setTrackingAdjustment(double adjustRA);
+    bool getTrackingAdjustment(double *valueRA);
     void setMountRequestDelay(int secs, long nanosecs) {mount_request_delay.tv_sec = secs; mount_request_delay.tv_nsec = nanosecs; };
 
 // Simulate Mount in simulation mode

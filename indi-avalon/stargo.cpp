@@ -154,6 +154,21 @@ bool StarGoTelescope::ISNewNumber(const char *dev, const char *name, double valu
             IDSetNumber(&MoveSpeedNP, nullptr);
             return result;
         }
+        else if (!strcmp(name, TrackAdjustNP.name))
+        {
+            // change tracking adjustment
+            bool success = setTrackingAdjustment(values[0]);
+            if (success)
+            {
+                TrackAdjustN[0].value = values[0];
+                TrackAdjustNP.s      = IPS_OK;
+            }
+            else
+                TrackAdjustNP.s = IPS_ALERT;
+
+            IDSetNumber(&TrackAdjustNP, nullptr);
+            return success;
+        }
     }
 
     //  Nobody has claimed this, so pass it to the parent
@@ -344,7 +359,7 @@ bool StarGoTelescope::initProperties()
     IUFillNumberVector(&GearRatioNP, GearRatioN, 2, getDeviceName(), "Gear Ratio","Gearing", INFO_TAB, IP_RO, 60, IPS_IDLE);
 
     // Tracking Adjustment
-    IUFillNumber(&TrackAdjustN[0], "RA_TRACK_ADJ", "RA Tracking Adjust", "%.2f", -500.0, 500.0, 1, 0);
+    IUFillNumber(&TrackAdjustN[0], "RA_TRACK_ADJ", "RA Tracking Adjust (%)", "%.2f", -5.0, 5.0, 0.01, 0);
     IUFillNumberVector(&TrackAdjustNP, TrackAdjustN, 1, getDeviceName(), "Track Adjust","Tracking", INFO_TAB, IP_RO, 60, IPS_IDLE);
 
     // Max Slew Speeds
@@ -2448,6 +2463,18 @@ void StarGoTelescope::getBasicData()
         }
         IDSetSwitch(&MeridianFlipModeSP, nullptr);
 
+        double raCorrection;
+        if (getTrackingAdjustment(&raCorrection))
+        {
+            TrackAdjustN[0].value = raCorrection;
+            TrackAdjustNP.s      = IPS_OK;
+        }
+        else
+        {
+            TrackAdjustNP.s = IPS_ALERT;
+        }
+        IDSetNumber(&TrackAdjustNP, nullptr);
+
         int raRatio, decRatio;
         if (getGearRatios(&raRatio, &decRatio))
         {
@@ -2642,6 +2669,84 @@ bool StarGoTelescope::getSideOfPier()
         break;
     }
 
+    return true;
+}
+
+/*******************************************************************************
+ * Adjust RA tracking speed.
+*******************************************************************************/
+bool StarGoTelescope::setTrackingAdjustment(double adjustRA)
+{
+    LOG_DEBUG(__FUNCTION__);
+    char cmd[AVALON_COMMAND_BUFFER_LENGTH];
+
+    /*
+     * :X41sRRR# to adjust the RA tracking speed where s is the sign + or -  and RRR are three digits whose meaning is parts per 10000 of  RA correction .
+     * :X43sDDD# to fix the cf DEC offset
+     */
+
+    // ensure that -5 <= adjust <= 5
+    if (adjustRA > 5.0)
+    {
+        LOGF_ERROR("Adjusting tracking by %0.2f%% not allowed. Maximal value is 5.0%%", adjustRA);
+        return false;
+    }
+    else if (adjustRA < -5.0)
+    {
+        LOGF_ERROR("Adjusting tracking by %0.2f%% not allowed. Minimal value is -5.0%%", adjustRA);
+        return false;
+    }
+
+    int parameter = static_cast<int>(adjustRA * 100);
+    sprintf(cmd, ":X41%+03i#", parameter);
+
+//   if(!transmit(cmd))
+//   {
+//       LOGF_ERROR("Cannot adjust tracking by %d%%", adjustRA);
+//       return false;
+//   }
+
+    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
+    if(!sendQuery(cmd, response))
+    {
+        LOGF_ERROR("Cannot adjust tracking by %d%%", adjustRA);
+        return false;
+    }
+
+
+
+    if (adjustRA == 0.0)
+        LOG_INFO("RA tracking adjustment cleared.");
+    else
+        LOGF_INFO("RA tracking adjustment to %+0.2f%% succeded.", adjustRA);
+
+    return true;
+}
+
+/*******************************************************************************
+**
+*******************************************************************************/
+bool StarGoTelescope::getTrackingAdjustment(double *valueRA)
+{
+    /*
+     * :X42# to read the tracking adjustment value as orsRRR#
+     * :X44# to read the tracking adjustment value as odsDDD#
+
+     */
+    LOG_DEBUG(__FUNCTION__);
+    int raValue;
+    char response[RB_MAX_LEN] = {0};
+
+    if (!sendQuery(":X42#", response))
+        return false;
+
+    if (sscanf(response, "or%04i#", &raValue) < 1)
+    {
+        LOG_ERROR("Unable to parse tracking adjustment response");
+        return false;
+    }
+
+    *valueRA = static_cast<double>(raValue / 100.0);
     return true;
 }
 

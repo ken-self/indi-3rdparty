@@ -104,25 +104,20 @@ bool StarGoSystem::ISNewSwitch(const char *dev, const char *name, ISState *state
             IDSetSwitch(&Aux1FocuserSP, nullptr);
             return true;
         }
-        bool activated = (IUFindOnSwitchIndex(&Aux1FocuserSP) == DefaultDevice::INDI_ENABLED);
-        if (strstr(name, "FOCUS") && activated)
+        if (strstr(name, "FOCUS"))
         {
-            return m_focuser->processSwitch(dev, name, states, names, n);
+            bool activated = (IUFindOnSwitchIndex(&Aux1FocuserSP) == DefaultDevice::INDI_ENABLED);
+            if (activated)
+            {
+                return m_focuser->processSwitch(dev, name, states, names, n);
+            }
+            else
+            {
+                LOG_INFO("Focuser is disabled - no action taken");
+            }
         }
         return StarGoTelescope::ISNewSwitch(dev, name, states, names, n);
     }
-    return true;
-}
-
-/*******************************************************************************
-**
-*******************************************************************************/
-bool StarGoSystem::saveConfigItems(FILE *fp)
-{
-    LOG_DEBUG(__FUNCTION__);
-    IUSaveConfigSwitch(fp, &Aux1FocuserSP);
-    m_focuser->saveConfigItems(fp);
-    StarGoTelescope::saveConfigItems(fp);
     return true;
 }
 
@@ -138,13 +133,32 @@ bool StarGoSystem::ISNewNumber(const char *dev, const char *name, double values[
     //  first check if it's for our device
     if (dev != nullptr && strcmp(dev, getDeviceName()) == 0)
     {
-        bool activated = (IUFindOnSwitchIndex(&Aux1FocuserSP) == DefaultDevice::INDI_ENABLED);
-        if (strstr(name, "FOCUS") && activated)
+        if (strstr(name, "FOCUS"))
         {
-            return m_focuser->processNumber(dev, name, values, names, n);
+            bool activated = (IUFindOnSwitchIndex(&Aux1FocuserSP) == DefaultDevice::INDI_ENABLED);
+            if (activated)
+            {
+                return m_focuser->processNumber(dev, name, values, names, n);
+            }
+            else
+            {
+                LOG_INFO("Focuser is disabled - no action taken");
+            }
         }
         return StarGoTelescope::ISNewNumber(dev, name, values, names, n);
     }
+    return true;
+}
+
+/*******************************************************************************
+**
+*******************************************************************************/
+bool StarGoSystem::saveConfigItems(FILE *fp)
+{
+    LOG_DEBUG(__FUNCTION__);
+    IUSaveConfigSwitch(fp, &Aux1FocuserSP);
+    m_focuser->saveConfigItems(fp);
+    StarGoTelescope::saveConfigItems(fp);
     return true;
 }
 
