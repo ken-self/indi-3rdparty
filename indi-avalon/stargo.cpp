@@ -360,7 +360,8 @@ bool StarGoTelescope::initProperties()
 
     // Tracking Adjustment
     IUFillNumber(&TrackAdjustN[0], "RA_TRACK_ADJ", "RA Tracking Adjust (%)", "%.2f", -5.0, 5.0, 0.01, 0);
-    IUFillNumberVector(&TrackAdjustNP, TrackAdjustN, 1, getDeviceName(), "Track Adjust","Tracking", INFO_TAB, IP_RW, 60, IPS_IDLE);
+//    IUFillNumberVector(&TrackAdjustNP, TrackAdjustN, 1, getDeviceName(), "Track Adjust","Tracking", INFO_TAB, IP_RW, 60, IPS_IDLE);
+    IUFillNumberVector(&TrackAdjustNP, TrackAdjustN, 1, getDeviceName(), "Track Adjust","Tracking", INFO_TAB, IP_RO, 60, IPS_IDLE);
 
     // Max Slew Speeds
     IUFillNumber(&MaxSlewN[0], "MAX_SLEW_RA", "RA Max Slew", "%.2f", 0.0, 100.0, 1, 0);
@@ -2691,7 +2692,6 @@ bool StarGoTelescope::setTrackingAdjustment(double adjustRA)
 {
     LOG_DEBUG(__FUNCTION__);
     char cmd[AVALON_COMMAND_BUFFER_LENGTH];
-
     /*
      * :X41sRRR# to adjust the RA tracking speed where s is the sign + or -  and RRR are three digits whose meaning is parts per 10000 of  RA correction .
      * :X43sDDD# to fix the cf DEC offset
@@ -2720,7 +2720,8 @@ bool StarGoTelescope::setTrackingAdjustment(double adjustRA)
 //       LOGF_ERROR("Cannot adjust tracking by %d%%", adjustRA);
 //       return false;
 //   }
-
+    LOG_ERROR("Adjusting tracking is disabled");
+/*
     char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
     if(!sendQuery(cmd, response, 0))
     {
@@ -2731,7 +2732,7 @@ bool StarGoTelescope::setTrackingAdjustment(double adjustRA)
         LOG_INFO("RA tracking adjustment cleared.");
     else
         LOGF_INFO("RA tracking adjustment to %+0.2f%% succeded.", adjustRA);
-
+*/
     return true;
 }
 
