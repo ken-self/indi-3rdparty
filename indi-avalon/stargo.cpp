@@ -360,7 +360,7 @@ bool StarGoTelescope::initProperties()
 
     // Tracking Adjustment
     IUFillNumber(&TrackAdjustN[0], "RA_TRACK_ADJ", "RA Tracking Adjust (%)", "%.2f", -5.0, 5.0, 0.01, 0);
-    IUFillNumberVector(&TrackAdjustNP, TrackAdjustN, 1, getDeviceName(), "Track Adjust","Tracking", INFO_TAB, IP_RO, 60, IPS_IDLE);
+    IUFillNumberVector(&TrackAdjustNP, TrackAdjustN, 1, getDeviceName(), "Track Adjust","Tracking", INFO_TAB, IP_RW, 60, IPS_IDLE);
 
     // Max Slew Speeds
     IUFillNumber(&MaxSlewN[0], "MAX_SLEW_RA", "RA Max Slew", "%.2f", 0.0, 100.0, 1, 0);
