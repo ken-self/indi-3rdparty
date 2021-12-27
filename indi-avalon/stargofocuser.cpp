@@ -50,10 +50,17 @@ bool StarGoFocuser::initProperties()
         FOCUSER_CAN_SYNC            | /*!< Can the focuser sync to a custom position */
         FOCUSER_HAS_VARIABLE_SPEED    /*!< Can the focuser move in different configurable speeds? */
     );
-    FocusSpeedN[0].min   = 0;
-    FocusSpeedN[0].max   = 10;
-    FocusSpeedN[0].step  = 1;
-    FocusSpeedN[0].value = 1;
+    FocusSpeedN[0].min   = 0.0;
+    FocusSpeedN[0].max   = 10.0;
+    FocusSpeedN[0].step  = 1.0;
+    FocusSpeedN[0].value = 1.0;
+
+    // set default values
+    FocusAbsPosN[0].min = 0.0;
+    FocusAbsPosN[0].max = 100000.0;
+    FocusAbsPosN[0].step = 1000.0;
+    FocusRelPosN[0].step = 1000.0;
+    FocusSyncN[0].step = 1000.0;
 
     return true;
 }

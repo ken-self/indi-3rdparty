@@ -26,7 +26,7 @@
 
 static class Loader
 {
-public:
+private:
     std::unique_ptr<StarGoSystem> device;
 public:
     Loader()

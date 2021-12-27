@@ -235,13 +235,16 @@ bool StarGoTelescope::ISNewSwitch(const char *dev, const char *name, ISState *st
         }
         else if (!strcmp(name, ST4StatusSP.name))
         {
-            bool enabled = (states[0] == ISS_OFF);
+//            bool enabled = (states[0] == ISS_OFF);
+            bool enabled = !strcmp(IUFindOnSwitchName(states, names, n), ST4StatusS[INDI_ENABLED].name);
             bool result = setST4Enabled(enabled);
 
             if(result)
             {
-                ST4StatusS[0].s = enabled ? ISS_OFF : ISS_ON;
-                ST4StatusS[1].s = enabled ? ISS_ON : ISS_OFF;
+//                ST4StatusS[0].s = enabled ? ISS_OFF : ISS_ON;
+//                ST4StatusS[1].s = enabled ? ISS_ON : ISS_OFF;
+                ST4StatusS[INDI_ENABLED].s = enabled ? ISS_ON : ISS_OFF;
+                ST4StatusS[INDI_DISABLED].s = enabled ? ISS_OFF : ISS_ON;
                 ST4StatusSP.s = IPS_OK;
             }
             else
@@ -253,13 +256,16 @@ bool StarGoTelescope::ISNewSwitch(const char *dev, const char *name, ISState *st
         }
         else if (!strcmp(name, KeypadStatusSP.name))
         {
-            bool enabled = (states[0] == ISS_OFF);
+//            bool enabled = (states[0] == ISS_OFF);
+            bool enabled = !strcmp(IUFindOnSwitchName(states, names, n), KeypadStatusS[INDI_ENABLED].name);
             bool result = setKeyPadEnabled(enabled);
 
             if(result)
             {
-                KeypadStatusS[0].s = enabled ? ISS_OFF : ISS_ON;
-                KeypadStatusS[1].s = enabled ? ISS_ON : ISS_OFF;
+//                KeypadStatusS[0].s = enabled ? ISS_OFF : ISS_ON;
+//                KeypadStatusS[1].s = enabled ? ISS_ON : ISS_OFF;
+                KeypadStatusS[INDI_ENABLED].s = enabled ? ISS_ON : ISS_OFF;
+                KeypadStatusS[INDI_DISABLED].s = enabled ? ISS_OFF : ISS_ON;
                 KeypadStatusSP.s = IPS_OK;
             }
             else
@@ -383,13 +389,13 @@ bool StarGoTelescope::initProperties()
     IUFillNumber(&GuidingSpeedN[1], "GUIDE_RATE_NS", "DEC Speed", "%.2f", 0.0, 2.0, 0.1, 0);
     IUFillNumberVector(&GuidingSpeedNP, GuidingSpeedN, 2, getDeviceName(), "GUIDE_RATE","Autoguiding", RA_DEC_TAB, IP_RW, 60, IPS_IDLE);
 
-    IUFillSwitch(&ST4StatusS[0], "ST4_DISABLED", "disabled", ISS_OFF);
-    IUFillSwitch(&ST4StatusS[1], "ST4_ENABLED", "enabled", ISS_OFF);
+    IUFillSwitch(&ST4StatusS[INDI_ENABLED], "INDI_ENABLED", "Enabled", ISS_OFF);
+    IUFillSwitch(&ST4StatusS[INDI_DISABLED], "INDI_DISABLED", "Disabled", ISS_OFF);
     IUFillSwitchVector(&ST4StatusSP, ST4StatusS, 2, getDeviceName(), "ST4", "ST4", RA_DEC_TAB, IP_RW, ISR_ATMOST1, 60, IPS_IDLE);
 
     // keypad enabled / disabled
-    IUFillSwitch(&KeypadStatusS[0], "KEYPAD_DISABLED", "disabled", ISS_OFF);
-    IUFillSwitch(&KeypadStatusS[1], "KEYPAD_ENABLED", "enabled", ISS_ON);
+    IUFillSwitch(&KeypadStatusS[INDI_ENABLED], "INDI_ENABLED", "Enabled", ISS_ON);
+    IUFillSwitch(&KeypadStatusS[INDI_DISABLED], "INDI_DISABLED", "Disabled", ISS_OFF);
     IUFillSwitchVector(&KeypadStatusSP, KeypadStatusS, 2, getDeviceName(), "Keypad", "Keypad", RA_DEC_TAB, IP_RW, ISR_1OFMANY, 60, IPS_IDLE);
 
     // meridian flip
@@ -948,6 +954,9 @@ bool StarGoTelescope::SetTrackRate(double raRate, double deRate)
 {
 // * Set tracking rate
 // * X1Ennnn where nnnn=0500 to 1500; 1000 is base rate
+// See also SetTrackingAdjustment.
+// This virtual function should set values in arcsec/second
+
     LOGF_DEBUG("%s rarate=%lf deRate=%lf",__FUNCTION__,raRate, deRate);
     INDI_UNUSED(raRate);
     INDI_UNUSED(deRate);
@@ -960,6 +969,86 @@ bool StarGoTelescope::SetTrackRate(double raRate, double deRate)
         LOGF_ERROR("Failed to set tracking t %d", rate);
         return false;
     }
+    return true;
+}
+
+/*******************************************************************************
+ * Adjust RA tracking speed.
+*******************************************************************************/
+bool StarGoTelescope::setTrackingAdjustment(double adjustRA)
+{
+    LOG_DEBUG(__FUNCTION__);
+    char cmd[AVALON_COMMAND_BUFFER_LENGTH];
+    /*
+     * :X41sRRR# to adjust the RA tracking speed where s is the sign + or -  and RRR are three digits whose meaning is parts per 10000 of  RA correction .
+     * :X43sDDD# to fix the cf DEC offset
+     X41 command only applies whole number percentages i.e +/- 100, 200, 300, 400, 500. Does not appear to work with 000
+     
+     :X1Ennnn # where nnnn is between 0500 and 1500. 1000 represents no adjustment and 0500 is -5% and 1500 is +5%
+     Ascertained from the StarGo ASCOM driver
+     */
+
+    // ensure that -5 <= adjust <= 5
+    if (adjustRA > 5.0)
+    {
+        LOGF_ERROR("Adjusting tracking by %0.2f%% not allowed. Maximal value is 5.0%%", adjustRA);
+        return false;
+    }
+    else if (adjustRA < -5.0)
+    {
+        LOGF_ERROR("Adjusting tracking by %0.2f%% not allowed. Minimal value is -5.0%%", adjustRA);
+        return false;
+    }
+
+    int parameter = static_cast<int>(adjustRA * 100) + 1000; // Add 1000 to X41 value for X1E1 value
+//    sprintf(cmd, ":X41%+03i#", parameter);
+    sprintf(cmd, ":X1E%04d", parameter);
+
+//   if(!transmit(cmd))
+//   {
+//       LOGF_ERROR("Cannot adjust tracking by %d%%", adjustRA);
+//       return false;
+//   }
+    LOG_ERROR("Adjusting tracking is disabled");
+/*
+    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
+    if(!sendQuery(cmd, response, 0))
+    {
+        LOGF_ERROR("Cannot adjust tracking by %d%%", adjustRA);
+        return false;
+    }
+    if (adjustRA == 0.0)
+        LOG_INFO("RA tracking adjustment cleared.");
+    else
+        LOGF_INFO("RA tracking adjustment to %+0.2f%% succeded.", adjustRA);
+*/
+    return true;
+}
+
+/*******************************************************************************
+**
+*******************************************************************************/
+bool StarGoTelescope::getTrackingAdjustment(double *valueRA)
+{
+    /*
+     * :X42# to read the tracking adjustment value as orsRRR#
+     * :X44# to read the tracking adjustment value as odsDDD#
+
+     */
+    LOG_DEBUG(__FUNCTION__);
+    int raValue;
+    char response[RB_MAX_LEN] = {0};
+
+    if (!sendQuery(":X42#", response))
+        return false;
+
+    if (sscanf(response, "or%04i#", &raValue) < 1)
+    {
+        LOG_ERROR("Unable to parse tracking adjustment response");
+        return false;
+    }
+
+    *valueRA = static_cast<double>(raValue / 100.0);
     return true;
 }
 
@@ -2440,8 +2529,8 @@ void StarGoTelescope::getBasicData()
         bool isEnabled;
         if (getST4Status(&isEnabled))
         {
-            ST4StatusS[0].s = isEnabled ? ISS_OFF : ISS_ON;
-            ST4StatusS[1].s = isEnabled ? ISS_ON : ISS_OFF;
+            ST4StatusS[INDI_ENABLED].s = isEnabled ? ISS_ON : ISS_OFF;
+            ST4StatusS[INDI_DISABLED].s = isEnabled ? ISS_OFF : ISS_ON;
             ST4StatusSP.s = IPS_OK;
         }
         else
@@ -2452,15 +2541,14 @@ void StarGoTelescope::getBasicData()
 
         if (getKeypadStatus(&isEnabled))
         {
-            KeypadStatusS[0].s = isEnabled ? ISS_OFF : ISS_ON;
-            KeypadStatusS[1].s = isEnabled ? ISS_ON : ISS_OFF;
+            KeypadStatusS[INDI_ENABLED].s = isEnabled ? ISS_ON : ISS_OFF;
+            KeypadStatusS[INDI_DISABLED].s = isEnabled ? ISS_OFF : ISS_ON;
             KeypadStatusSP.s = IPS_OK;
         }
         else
         {
             KeypadStatusSP.s = IPS_ALERT;
         }
-//        IDSetSwitch(&ST4StatusSP, nullptr);
         IDSetSwitch(&KeypadStatusSP, nullptr);
 
         int index;
@@ -2682,84 +2770,6 @@ bool StarGoTelescope::getSideOfPier()
         break;
     }
 
-    return true;
-}
-
-/*******************************************************************************
- * Adjust RA tracking speed.
-*******************************************************************************/
-bool StarGoTelescope::setTrackingAdjustment(double adjustRA)
-{
-    LOG_DEBUG(__FUNCTION__);
-    char cmd[AVALON_COMMAND_BUFFER_LENGTH];
-    /*
-     * :X41sRRR# to adjust the RA tracking speed where s is the sign + or -  and RRR are three digits whose meaning is parts per 10000 of  RA correction .
-     * :X43sDDD# to fix the cf DEC offset
-     
-     :X1Ennnn 
-     */
-
-    // ensure that -5 <= adjust <= 5
-    if (adjustRA > 5.0)
-    {
-        LOGF_ERROR("Adjusting tracking by %0.2f%% not allowed. Maximal value is 5.0%%", adjustRA);
-        return false;
-    }
-    else if (adjustRA < -5.0)
-    {
-        LOGF_ERROR("Adjusting tracking by %0.2f%% not allowed. Minimal value is -5.0%%", adjustRA);
-        return false;
-    }
-
-    int parameter = static_cast<int>(adjustRA * 100) + 1000;
-//    sprintf(cmd, ":X41%+03i#", parameter);
-    sprintf(cmd, ":X1E%04d", parameter);
-
-//   if(!transmit(cmd))
-//   {
-//       LOGF_ERROR("Cannot adjust tracking by %d%%", adjustRA);
-//       return false;
-//   }
-    LOG_ERROR("Adjusting tracking is disabled");
-/*
-    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
-    if(!sendQuery(cmd, response, 0))
-    {
-        LOGF_ERROR("Cannot adjust tracking by %d%%", adjustRA);
-        return false;
-    }
-    if (adjustRA == 0.0)
-        LOG_INFO("RA tracking adjustment cleared.");
-    else
-        LOGF_INFO("RA tracking adjustment to %+0.2f%% succeded.", adjustRA);
-*/
-    return true;
-}
-
-/*******************************************************************************
-**
-*******************************************************************************/
-bool StarGoTelescope::getTrackingAdjustment(double *valueRA)
-{
-    /*
-     * :X42# to read the tracking adjustment value as orsRRR#
-     * :X44# to read the tracking adjustment value as odsDDD#
-
-     */
-    LOG_DEBUG(__FUNCTION__);
-    int raValue;
-    char response[RB_MAX_LEN] = {0};
-
-    if (!sendQuery(":X42#", response))
-        return false;
-
-    if (sscanf(response, "or%04i#", &raValue) < 1)
-    {
-        LOG_ERROR("Unable to parse tracking adjustment response");
-        return false;
-    }
-
-    *valueRA = static_cast<double>(raValue / 100.0);
     return true;
 }
 

@@ -181,6 +181,9 @@ protected:
     virtual bool Abort() override;
     virtual bool SetTrackMode(uint8_t mode) override;
     virtual bool SetTrackRate(double raRate, double deRate) override;
+    // tracking adjustment
+    bool setTrackingAdjustment(double adjustRA);
+    bool getTrackingAdjustment(double *valueRA);
     virtual bool SetTrackEnabled(bool enabled) override;
 //    virtual bool updateTime(ln_date *utc, double utc_offset);
     virtual bool updateLocation(double latitude, double longitude, double elevation) override;
@@ -257,9 +260,6 @@ protected:
     bool getMotorStatus(int *xSpeed, int *ySpeed);
     bool getSideOfPier();
 
-    // tracking adjustment
-    bool setTrackingAdjustment(double adjustRA);
-    bool getTrackingAdjustment(double *valueRA);
     void setMountRequestDelay(int secs, long nanosecs) {mount_request_delay.tv_sec = secs; mount_request_delay.tv_nsec = nanosecs; };
 
 // Simulate Mount in simulation mode
