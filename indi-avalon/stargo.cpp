@@ -1000,17 +1000,17 @@ bool StarGoTelescope::setTrackingAdjustment(double adjustRA)
         return false;
     }
 
-    int parameter = static_cast<int>(adjustRA * 100) + 1000; // Add 1000 to X41 value for X1E1 value
-//    sprintf(cmd, ":X41%+03i#", parameter);
-    sprintf(cmd, ":X1E%04d", parameter);
+    int parameter = static_cast<int>(adjustRA * 100); // + 1000; // Add 1000 to X41 value for X1E1 value
+    sprintf(cmd, ":X41%+04i#", parameter);
+//    sprintf(cmd, ":X1E%04d", parameter);
 
 //   if(!transmit(cmd))
 //   {
 //       LOGF_ERROR("Cannot adjust tracking by %d%%", adjustRA);
 //       return false;
 //   }
-    LOG_ERROR("Adjusting tracking is disabled");
-/*
+//    LOG_ERROR("Adjusting tracking is disabled");
+
     char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
     if(!sendQuery(cmd, response, 0))
     {
@@ -1021,7 +1021,7 @@ bool StarGoTelescope::setTrackingAdjustment(double adjustRA)
         LOG_INFO("RA tracking adjustment cleared.");
     else
         LOGF_INFO("RA tracking adjustment to %+0.2f%% succeded.", adjustRA);
-*/
+
     return true;
 }
 
