@@ -82,6 +82,11 @@ public:
         MOTION_GUIDE=4,
         MOTION_SLEW=5
     };
+    enum MotorReverseection
+    {
+        DIRECTION_NORMAL=0,
+        DIRECTION_REVERSE=1
+    };
     TrackMode CurrentTrackMode;
     MotorsState CurrentMotorsState;
     TelescopeSlewRate CurrentSlewRate;
@@ -115,6 +120,16 @@ protected:
     // Gear ratios
     INumberVectorProperty GearRatioNP;
     INumber GearRatioN[2];
+
+    // Torque
+    INumberVectorProperty TorqueNP;
+    INumber TorqueN[1];
+
+    // MotorReverseection
+    ISwitchVectorProperty RaMotorReverseSP;
+    ISwitch RaMotorReverseS[1];
+    ISwitchVectorProperty DecMotorReverseSP;
+    ISwitch DecMotorReverseS[1];
 
     // Max slew speed
     INumberVectorProperty MaxSlewNP;
@@ -224,14 +239,18 @@ protected:
     bool getMaxSlews(int *raSlew, int *decSlew);
     bool setMaxSlews(int raSlew, int decSlew);
     bool getMotorSteps(double *raSteps, double *decSteps);
-    bool getMoveSpeed(int *raSpeed, int * decSpeed );
-    bool setMoveSpeed(int raSpeed, int decSpeed );
+    bool getMoveSpeed(int *centerSpeed, int *findSpeed ); // Not implemented
+    bool setMoveSpeed(int centerSpeed, int findSpeed );
 
     bool setST4Enabled(bool enabled);
     bool getST4Status(bool *isEnabled);
     int SendPulseCmd(int8_t direction, uint32_t duration_msec) ;
-    bool getFindCenterSlews(int *findSlew, int *centerSlew);
-    bool setFindCenterSlews(int findSlew, int centerSlew);
+//    bool getFindCenterSlews(int *findSlew, int *centerSlew);  //see GetMoveSpeed
+//    bool setFindCenterSlews(int findSlew, int centerSlew);  //see SetMoveSpeed
+    bool getMotorReverse(bool *raDir, bool *decDir);   //Not implemented
+    bool setMotorReverse(bool raDir, bool decDir);  //Not implemented
+    bool getTorque(int *torque);  //Not implemented
+    bool setTorque(int torque);  //Not implemented
 
     // location
     bool sendScopeLocation();

@@ -30,7 +30,6 @@ Unimplemented commands
  Get: TTGT
  Set: 
  GET Tracking rate adjust
-    //    focuser->initProperties("AUX1 Focuser");
 */
 #include "stargo.h"
 
@@ -169,6 +168,23 @@ bool StarGoTelescope::ISNewNumber(const char *dev, const char *name, double valu
             IDSetNumber(&TrackAdjustNP, nullptr);
             return success;
         }
+        else if (!strcmp(name, TorqueNP.name))
+        {
+            int torque  = static_cast<int>(values[0]);
+            bool result  = setTorque(torque);
+
+            if(result)
+            {
+                TorqueN[0].value = torque;
+                TorqueNP.s = IPS_OK;
+            }
+            else
+            {
+                TorqueNP.s = IPS_ALERT;
+            }
+            IDSetNumber(&TorqueNP, nullptr);
+            return result;
+        }
     }
 
     //  Nobody has claimed this, so pass it to the parent
@@ -291,6 +307,40 @@ bool StarGoTelescope::ISNewSwitch(const char *dev, const char *name, ISState *st
             IDSetSwitch(&MeridianFlipModeSP, nullptr);
             return true;
         }
+        else if (!strcmp(name, RaMotorReverseSP.name))
+        {
+            int preIndex = IUFindOnSwitchIndex(&RaMotorReverseSP);
+            int decIndex = IUFindOnSwitchIndex(&DecMotorReverseSP);
+            IUUpdateSwitch(&RaMotorReverseSP, states, names, n);
+            int raIndex = IUFindOnSwitchIndex(&RaMotorReverseSP);
+            if (setMotorReverse(raIndex, decIndex) == false)
+            {
+                IUResetSwitch(&RaMotorReverseSP);
+                RaMotorReverseS[preIndex].s = ISS_ON;
+                RaMotorReverseSP.s          = IPS_ALERT;
+            }
+            else
+                RaMotorReverseSP.s = IPS_OK;
+            IDSetSwitch(&RaMotorReverseSP, nullptr);
+            return true;
+        }
+        else if (!strcmp(name, DecMotorReverseSP.name))
+        {
+            int preIndex = IUFindOnSwitchIndex(&DecMotorReverseSP);
+            int raIndex = IUFindOnSwitchIndex(&RaMotorReverseSP);
+            IUUpdateSwitch(&DecMotorReverseSP, states, names, n);
+            int decIndex = IUFindOnSwitchIndex(&DecMotorReverseSP);
+            if (setMotorReverse(raIndex, decIndex) == false)
+            {
+                IUResetSwitch(&DecMotorReverseSP);
+                DecMotorReverseS[preIndex].s = ISS_ON;
+                DecMotorReverseSP.s          = IPS_ALERT;
+            }
+            else
+                DecMotorReverseSP.s = IPS_OK;
+            IDSetSwitch(&DecMotorReverseSP, nullptr);
+            return true;
+        }
     }
 
 //  Nobody has claimed this, so pass it to the parent
@@ -364,6 +414,19 @@ bool StarGoTelescope::initProperties()
     IUFillNumber(&GearRatioN[1], "GEAR_RATIO_DEC", "DEC Gearing", "%.2f", 0.0, 1000.0, 1, 0);
     IUFillNumberVector(&GearRatioNP, GearRatioN, 2, getDeviceName(), "Gear Ratio","Gearing", INFO_TAB, IP_RO, 60, IPS_IDLE);
 
+    // Torque
+    IUFillNumber(&TorqueN[0], "TORQUE_RA", "Motor Torque", "%.0f", 0.0, 100.0, 1, 0);
+    IUFillNumberVector(&TorqueNP, TorqueN, 2, getDeviceName(), "Torque","Torque", INFO_TAB, IP_RO, 60, IPS_IDLE);
+
+    // RA and Dec motor direction
+    IUFillSwitch(&RaMotorReverseS[INDI_ENABLED], "INDI_ENABLED", "Normal", ISS_OFF);
+    IUFillSwitch(&RaMotorReverseS[INDI_DISABLED], "INDI_DISABLED", "Reverse", ISS_OFF);
+    IUFillSwitchVector(&RaMotorReverseSP, RaMotorReverseS, 2, getDeviceName(), "RA_DIR", "RA dir", RA_DEC_TAB, IP_RW, ISR_ATMOST1, 60, IPS_IDLE);
+
+    IUFillSwitch(&DecMotorReverseS[INDI_ENABLED], "INDI_ENABLED", "Normal", ISS_OFF);
+    IUFillSwitch(&DecMotorReverseS[INDI_DISABLED], "INDI_DISABLED", "Reverse", ISS_OFF);
+    IUFillSwitchVector(&DecMotorReverseSP, DecMotorReverseS, 2, getDeviceName(), "DEC_DIR", "Dec dir", RA_DEC_TAB, IP_RW, ISR_ATMOST1, 60, IPS_IDLE);
+
     // Max Slew Speeds
     IUFillNumber(&MaxSlewN[0], "MAX_SLEW_RA", "RA Max Slew", "%.2f", 0.0, 100.0, 1, 0);
     IUFillNumber(&MaxSlewN[1], "MAX_SLEW_DEC", "DEC Max Slew", "%.2f", 0.0, 100.0, 1, 0);
@@ -433,6 +496,9 @@ bool StarGoTelescope::updateProperties()
         defineProperty(&MountFirmwareInfoTP);
         defineProperty(&TrackAdjustNP);
         defineProperty(&GearRatioNP);
+        defineProperty(&TorqueNP);
+        defineProperty(&RaMotorReverseSP);
+        defineProperty(&DecMotorReverseSP);
         defineProperty(&MaxSlewNP);
         defineProperty(&MotorStepNP);
 
@@ -453,6 +519,9 @@ bool StarGoTelescope::updateProperties()
         deleteProperty(MountFirmwareInfoTP.name);
         deleteProperty(TrackAdjustNP.name);
         deleteProperty(GearRatioNP.name);
+        deleteProperty(TorqueNP.name);
+        deleteProperty(RaMotorReverseSP.name);
+        deleteProperty(DecMotorReverseSP.name);
         deleteProperty(MaxSlewNP.name);
         deleteProperty(MotorStepNP.name);
     }
@@ -1978,6 +2047,131 @@ int StarGoTelescope::SendPulseCmd(int8_t direction, uint32_t duration_msec)
 }
 
 /*******************************************************************************
+**
+*******************************************************************************/
+bool StarGoTelescope::getMotorReverse(bool *raDir, bool *decDir)
+{
+    LOG_DEBUG(__FUNCTION__);
+//    INDI_UNUSED(raDir);
+//    INDI_UNUSED(decDir);
+/*
+ * Get RA and Dec motor directions (Forward, Reverse)
+ * Get X1B => wrd where r=RA; d=DEC
+ *
+*/
+//    LOGF_DEBUG("%s %s", __FUNCTION__, "Not Implemented");
+    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
+
+    if (!sendQuery(":X1B#", response))
+    {
+        LOG_ERROR("Failed to send query Motor Reverse request.");
+        return false;
+    }
+    int radir = 0, decdir=0;
+    if (! sscanf(response, "w%01d%01d", &radir, &decdir))
+    {
+        LOGF_ERROR("Unexpected Motor reverse response '%s'.", response);
+        return false;
+    }
+
+    *raDir = (radir == 1);
+    *decDir = (decdir == 1);
+    return true;
+
+}
+
+/*******************************************************************************
+**
+*******************************************************************************/
+bool StarGoTelescope::setMotorReverse(bool raDir, bool decDir)
+{
+    LOG_DEBUG(__FUNCTION__);
+//    INDI_UNUSED(raDir);
+//    INDI_UNUSED(decDir);
+/*
+ * Set RA and Dec motor directions (Forward, Reverse)
+ * Reverse RA X1A0n; DEC X1A1n
+ * where n = 0/1
+*/
+//    LOGF_DEBUG("%s %s", __FUNCTION__, "Not Implemented");
+    const char *racmd = raDir ? ":X1A00#" : ":X1A01#";
+    const char *deccmd = decDir ? ":X1A10#" : ":X1A11#";
+    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
+    if (sendQuery(racmd, response))
+    {
+        LOG_INFO(raDir ? "RA reversed." : "RA normal.");
+    }
+    else
+    {
+        LOG_ERROR("Setting RA Reverse FAILED");
+        return false;
+    }
+    if (sendQuery(deccmd, response))
+    {
+        LOG_INFO(decDir ? "DEC reversed." : "DEC normal.");
+    }
+    else
+    {
+        LOG_ERROR("Setting DEC Reverse FAILED");
+        return false;
+    }
+    return true;
+}
+
+/*******************************************************************************
+**
+*******************************************************************************/
+bool StarGoTelescope::getTorque(int *torque)
+{
+    LOG_DEBUG(__FUNCTION__);
+//    INDI_UNUSED(torque);
+/*
+ Get: TTGT
+ Return tnnn# where nnn is torque %
+*/
+//    LOGF_DEBUG("%s %s", __FUNCTION__, "Not Implemented");
+    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
+    if (!sendQuery(":TTGT#", response))
+    {
+        LOG_ERROR("Failed to send query get Torque command.");
+        return false;
+    }
+    if (! sscanf(response, "t%03d", torque))
+    {
+        LOGF_ERROR("Unexpected torque response '%s'.", response);
+        return false;
+    }
+    return true;
+}
+
+/*******************************************************************************
+**
+*******************************************************************************/
+bool StarGoTelescope::setTorque(int torque)
+{
+    LOG_DEBUG(__FUNCTION__);
+//    INDI_UNUSED(torque);
+/*
+ * Set motor torque %
+ :TTTnnn#
+*/
+//    LOGF_DEBUG("%s %s", __FUNCTION__, "Not Implemented");
+    char cmd[AVALON_COMMAND_BUFFER_LENGTH] = {0};
+    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
+    sprintf(cmd, ":TTT%03d", torque);
+    if (sendQuery(cmd, response))
+    {
+        LOGF_INFO("Setting Torque to %3d%%.", torque);
+    }
+    else
+    {
+        LOGF_ERROR("Setting Torque to %3d %% FAILED", torque);
+        return false;
+    }
+    return true;
+}
+
+/*******************************************************************************
 **sendScopeLocation called from getBasicData i.e. when a client connects
 *******************************************************************************/
 bool StarGoTelescope::sendScopeLocation()
@@ -2588,6 +2782,37 @@ void StarGoTelescope::getBasicData()
             GearRatioNP.s = IPS_ALERT;
         }
         IDSetNumber(&GearRatioNP, nullptr);
+
+        int torque;
+        if(getTorque(&torque))
+        {
+            TorqueN[0].value =  static_cast<double>(torque);
+            TorqueNP.s = IPS_OK;
+        }
+        else
+        {
+            LOG_ERROR("Unable to get torque");
+            TorqueNP.s = IPS_ALERT;
+        }
+        IDSetNumber(&TorqueNP, nullptr);   
+
+        bool raDir, decDir;
+        if (getMotorReverse(&raDir, &decDir))
+        {
+            RaMotorReverseS[INDI_ENABLED].s = raDir ? ISS_ON : ISS_OFF;
+            RaMotorReverseS[INDI_DISABLED].s = raDir ? ISS_OFF : ISS_ON;
+            RaMotorReverseSP.s = IPS_OK;
+            DecMotorReverseS[INDI_ENABLED].s = decDir ? ISS_ON : ISS_OFF;
+            DecMotorReverseS[INDI_DISABLED].s = decDir ? ISS_OFF : ISS_ON;
+            DecMotorReverseSP.s = IPS_OK;
+        }
+        else
+        {
+            RaMotorReverseSP.s = IPS_ALERT;
+            DecMotorReverseSP.s = IPS_ALERT;
+        }
+        IDSetSwitch(&RaMotorReverseSP, nullptr);
+        IDSetSwitch(&DecMotorReverseSP, nullptr);
 
         int raSlew, decSlew;
         if (getMaxSlews(&raSlew, &decSlew))
