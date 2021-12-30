@@ -48,7 +48,7 @@ Unimplemented commands
 /*******************************************************************************
 *** StarGo Implementation
 *******************************************************************************/
-const char *RA_DEC_TAB = "RA / DEC";
+const char *ADVANCED_TAB = "Advanced";
 
 StarGoTelescope::StarGoTelescope()
 {
@@ -157,10 +157,12 @@ bool StarGoTelescope::ISNewNumber(const char *dev, const char *name, double valu
         {
             // change tracking adjustment
             bool success = setTrackingAdjustment(values[0]);
+            double adjust;
             if (success)
             {
-                TrackAdjustN[0].value = values[0];
-                TrackAdjustNP.s      = IPS_OK;
+                success = getTrackingAdjustment(&adjust);  // Get the value set in the mount
+                TrackAdjustN[0].value = adjust;
+                TrackAdjustNP.s       = IPS_OK;
             }
             else
                 TrackAdjustNP.s = IPS_ALERT;
@@ -414,28 +416,28 @@ bool StarGoTelescope::initProperties()
     IUFillNumber(&GearRatioN[1], "GEAR_RATIO_DEC", "DEC Gearing", "%.2f", 0.0, 1000.0, 1, 0);
     IUFillNumberVector(&GearRatioNP, GearRatioN, 2, getDeviceName(), "Gear Ratio","Gearing", INFO_TAB, IP_RO, 60, IPS_IDLE);
 
-    // Torque
-    IUFillNumber(&TorqueN[0], "TORQUE_RA", "Motor Torque", "%.0f", 0.0, 100.0, 1, 0);
-    IUFillNumberVector(&TorqueNP, TorqueN, 1, getDeviceName(), "Torque","Torque", INFO_TAB, IP_RO, 60, IPS_IDLE);
-
-    // RA and Dec motor direction
-    IUFillSwitch(&RaMotorReverseS[INDI_ENABLED], "INDI_ENABLED", "Reverse", ISS_OFF);
-    IUFillSwitch(&RaMotorReverseS[INDI_DISABLED], "INDI_DISABLED", "Normal", ISS_OFF);
-    IUFillSwitchVector(&RaMotorReverseSP, RaMotorReverseS, 2, getDeviceName(), "RA_REVERSE", "RA Reverse", RA_DEC_TAB, IP_RW, ISR_ATMOST1, 60, IPS_IDLE);
-
-    IUFillSwitch(&DecMotorReverseS[INDI_ENABLED], "INDI_ENABLED", "Reverse", ISS_OFF);
-    IUFillSwitch(&DecMotorReverseS[INDI_DISABLED], "INDI_DISABLED", "Normal", ISS_OFF);
-    IUFillSwitchVector(&DecMotorReverseSP, DecMotorReverseS, 2, getDeviceName(), "DEC_REVERSE", "Dec Reverse", RA_DEC_TAB, IP_RW, ISR_ATMOST1, 60, IPS_IDLE);
-
     // Max Slew Speeds
     IUFillNumber(&MaxSlewN[0], "MAX_SLEW_RA", "RA Max Slew", "%.2f", 0.0, 100.0, 1, 0);
     IUFillNumber(&MaxSlewN[1], "MAX_SLEW_DEC", "DEC Max Slew", "%.2f", 0.0, 100.0, 1, 0);
-    IUFillNumberVector(&MaxSlewNP, MaxSlewN, 2, getDeviceName(), "Max Slew","Slewing", RA_DEC_TAB, IP_RW, 60, IPS_IDLE);
+    IUFillNumberVector(&MaxSlewNP, MaxSlewN, 2, getDeviceName(), "Max Slew","Slewing", ADVANCED_TAB, IP_RW, 60, IPS_IDLE);
 
     // Move Speeds
     IUFillNumber(&MoveSpeedN[0], "MOVE_SPEED_CENTER", "Center Speed", "%.2f", 1.0, 10.0, 1, 0);
     IUFillNumber(&MoveSpeedN[1], "MOVE_SPEED_FIND", "Find Speed", "%.2f", 1.0, 150.0, 1, 0);
-    IUFillNumberVector(&MoveSpeedNP, MoveSpeedN, 2, getDeviceName(), "Goto Speed","Slewing", RA_DEC_TAB, IP_RW, 60, IPS_IDLE);
+    IUFillNumberVector(&MoveSpeedNP, MoveSpeedN, 2, getDeviceName(), "Goto Speed","Slewing", ADVANCED_TAB, IP_RW, 60, IPS_IDLE);
+
+    // RA and Dec motor direction
+    IUFillSwitch(&RaMotorReverseS[INDI_ENABLED], "INDI_ENABLED", "Reverse", ISS_OFF);
+    IUFillSwitch(&RaMotorReverseS[INDI_DISABLED], "INDI_DISABLED", "Normal", ISS_OFF);
+    IUFillSwitchVector(&RaMotorReverseSP, RaMotorReverseS, 2, getDeviceName(), "RA_REVERSE", "RA Reverse", ADVANCED_TAB, IP_RW, ISR_ATMOST1, 60, IPS_IDLE);
+
+    IUFillSwitch(&DecMotorReverseS[INDI_ENABLED], "INDI_ENABLED", "Reverse", ISS_OFF);
+    IUFillSwitch(&DecMotorReverseS[INDI_DISABLED], "INDI_DISABLED", "Normal", ISS_OFF);
+    IUFillSwitchVector(&DecMotorReverseSP, DecMotorReverseS, 2, getDeviceName(), "DEC_REVERSE", "Dec Reverse", ADVANCED_TAB, IP_RW, ISR_ATMOST1, 60, IPS_IDLE);
+
+    // Torque
+    IUFillNumber(&TorqueN[0], "TORQUE_RA", "Motor Torque", "%.0f", 0.0, 100.0, 1, 0);
+    IUFillNumberVector(&TorqueNP, TorqueN, 1, getDeviceName(), "Torque","Torque", ADVANCED_TAB, IP_RW, 60, IPS_IDLE);
 
     // Motor Step Position
     IUFillNumber(&MotorStepN[0], "MOTOR_STEP_RA", "RA Step Pos", "%.2f", -100000.0, 100000.0, 1, 0);
@@ -445,31 +447,31 @@ bool StarGoTelescope::initProperties()
     // Guiding settings
     IUFillNumber(&GuidingSpeedN[0], "GUIDE_RATE_WE", "RA Speed", "%.2f", 0.0, 2.0, 0.1, 0);
     IUFillNumber(&GuidingSpeedN[1], "GUIDE_RATE_NS", "DEC Speed", "%.2f", 0.0, 2.0, 0.1, 0);
-    IUFillNumberVector(&GuidingSpeedNP, GuidingSpeedN, 2, getDeviceName(), "GUIDE_RATE","Autoguiding", RA_DEC_TAB, IP_RW, 60, IPS_IDLE);
+    IUFillNumberVector(&GuidingSpeedNP, GuidingSpeedN, 2, getDeviceName(), "GUIDE_RATE","Autoguiding", ADVANCED_TAB, IP_RW, 60, IPS_IDLE);
 
     // Tracking Adjustment
     IUFillNumber(&TrackAdjustN[0], "RA_TRACK_ADJ", "RA Tracking Adjust (%)", "%.2f", -5.0, 5.0, 0.01, 0);
-    IUFillNumberVector(&TrackAdjustNP, TrackAdjustN, 1, getDeviceName(), "Track Adjust","Tracking", RA_DEC_TAB, IP_RW, 60, IPS_IDLE);
+    IUFillNumberVector(&TrackAdjustNP, TrackAdjustN, 1, getDeviceName(), "Track Adjust","Tracking", ADVANCED_TAB, IP_RW, 60, IPS_IDLE);
 //    IUFillNumberVector(&TrackAdjustNP, TrackAdjustN, 1, getDeviceName(), "Track Adjust","Tracking", INFO_TAB, IP_RO, 60, IPS_IDLE);
 
     IUFillSwitch(&ST4StatusS[INDI_ENABLED], "INDI_ENABLED", "Enabled", ISS_OFF);
     IUFillSwitch(&ST4StatusS[INDI_DISABLED], "INDI_DISABLED", "Disabled", ISS_OFF);
-    IUFillSwitchVector(&ST4StatusSP, ST4StatusS, 2, getDeviceName(), "ST4", "ST4", RA_DEC_TAB, IP_RW, ISR_ATMOST1, 60, IPS_IDLE);
+    IUFillSwitchVector(&ST4StatusSP, ST4StatusS, 2, getDeviceName(), "ST4", "ST4", ADVANCED_TAB, IP_RW, ISR_ATMOST1, 60, IPS_IDLE);
 
     // keypad enabled / disabled
     IUFillSwitch(&KeypadStatusS[INDI_ENABLED], "INDI_ENABLED", "Enabled", ISS_ON);
     IUFillSwitch(&KeypadStatusS[INDI_DISABLED], "INDI_DISABLED", "Disabled", ISS_OFF);
-    IUFillSwitchVector(&KeypadStatusSP, KeypadStatusS, 2, getDeviceName(), "Keypad", "Keypad", RA_DEC_TAB, IP_RW, ISR_1OFMANY, 60, IPS_IDLE);
+    IUFillSwitchVector(&KeypadStatusSP, KeypadStatusS, 2, getDeviceName(), "Keypad", "Keypad", ADVANCED_TAB, IP_RW, ISR_1OFMANY, 60, IPS_IDLE);
 
     // meridian flip
-    IUFillSwitch(&MeridianFlipModeS[0], "MERIDIAN_FLIP_AUTO", "auto", ISS_OFF);
-    IUFillSwitch(&MeridianFlipModeS[1], "MERIDIAN_FLIP_DISABLED", "disabled", ISS_OFF);
-    IUFillSwitch(&MeridianFlipModeS[2], "MERIDIAN_FLIP_FORCED", "forced", ISS_OFF);
-    IUFillSwitchVector(&MeridianFlipModeSP, MeridianFlipModeS, 3, getDeviceName(), "MERIDIAN_FLIP_MODE", "Meridian Flip", RA_DEC_TAB, IP_RW, ISR_ATMOST1, 60, IPS_IDLE);
+    IUFillSwitch(&MeridianFlipModeS[0], "MERIDIAN_FLIP_AUTO", "Auto", ISS_OFF);
+    IUFillSwitch(&MeridianFlipModeS[1], "MERIDIAN_FLIP_DISABLED", "Disabled", ISS_OFF);
+    IUFillSwitch(&MeridianFlipModeS[2], "MERIDIAN_FLIP_FORCED", "Forced", ISS_OFF);
+    IUFillSwitchVector(&MeridianFlipModeSP, MeridianFlipModeS, 3, getDeviceName(), "MERIDIAN_FLIP_MODE", "Meridian Flip", ADVANCED_TAB, IP_RW, ISR_ATMOST1, 60, IPS_IDLE);
 
     // mount command delay
     IUFillNumber(&MountRequestDelayN[0], "MOUNT_REQUEST_DELAY", "Request Delay (ms)", "%.0f", 0.0, 1000, 1.0, 50.0);
-    IUFillNumberVector(&MountRequestDelayNP, MountRequestDelayN, 1, getDeviceName(), "REQUEST_DELAY", "StarGO", RA_DEC_TAB, IP_RW, 60, IPS_OK);
+    IUFillNumberVector(&MountRequestDelayNP, MountRequestDelayN, 1, getDeviceName(), "REQUEST_DELAY", "StarGO", ADVANCED_TAB, IP_RW, 60, IPS_OK);
 
     return true;
 }
@@ -500,6 +502,7 @@ bool StarGoTelescope::updateProperties()
         defineProperty(&RaMotorReverseSP);
         defineProperty(&DecMotorReverseSP);
         defineProperty(&MaxSlewNP);
+        defineProperty(&MoveSpeedNP);
         defineProperty(&MotorStepNP);
 
         getBasicData();
@@ -523,6 +526,7 @@ bool StarGoTelescope::updateProperties()
         deleteProperty(RaMotorReverseSP.name);
         deleteProperty(DecMotorReverseSP.name);
         deleteProperty(MaxSlewNP.name);
+        deleteProperty(MoveSpeedNP.name);
         deleteProperty(MotorStepNP.name);
     }
 
@@ -536,15 +540,19 @@ bool StarGoTelescope::Handshake()
 {
     LOG_DEBUG(__FUNCTION__);
     char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
+
+// Use GetScopeAlignmentStatus as a basic form of Handshake.
+// Checks that the mount responds to the GW command
     char mountType;
     bool isTracking;
     int alignmentPoints;
-
     if(!getScopeAlignmentStatus(&mountType, &isTracking, &alignmentPoints))
     {
         LOG_ERROR("Error communication with telescope.");
         return false;
     }
+
+// Handshake commands used in the StarGo ASCOM driver. 
     char cmdsync[AVALON_COMMAND_BUFFER_LENGTH] = {0};
     char cmdlst[AVALON_COMMAND_BUFFER_LENGTH] = {0};
     char cmddate[AVALON_COMMAND_BUFFER_LENGTH] = {0};
@@ -585,21 +593,181 @@ bool StarGoTelescope::Handshake()
             continue;
         }
     }
-    int raSpeed, decSpeed;
-    if(getGuidingSpeeds(&raSpeed, &decSpeed))
-    {
-        GuidingSpeedN[0].value =  raSpeed/100.0;
-        GuidingSpeedN[1].value =  decSpeed/100.0;
-        GuidingSpeedNP.s = IPS_OK;
-    }
-    else
-    {
-        LOG_ERROR("Unable to get guiding speed");
-        GuidingSpeedNP.s = IPS_ALERT;
-    }
-    IDSetNumber(&GuidingSpeedNP, nullptr);   
+
+        MountFirmwareInfoT[0].text = new char[64];
+        MountFirmwareInfoT[1].text = new char[64];
+        MountFirmwareInfoT[2].text = new char[64];
+        if (!getFirmwareInfo(MountFirmwareInfoT[0].text,
+                MountFirmwareInfoT[1].text,
+                MountFirmwareInfoT[2].text ))
+            LOG_ERROR("Failed to get firmware from device.");
+        else
+            IDSetText(&MountFirmwareInfoTP, nullptr);
 
     return true;
+}
+
+/**************************************************************************************
+**getBasicData is called from updateProperties whenever a client connects to the driver
+* It could instead be called from Handshake whenever the driver connects to the mount
+***************************************************************************************/
+void StarGoTelescope::getBasicData()
+{
+    LOG_DEBUG(__FUNCTION__);
+
+    if (!isSimulation())
+    {
+/*        MountFirmwareInfoT[0].text = new char[64];
+        MountFirmwareInfoT[1].text = new char[64];
+        MountFirmwareInfoT[2].text = new char[64];
+        if (!getFirmwareInfo(MountFirmwareInfoT[0].text,
+                MountFirmwareInfoT[1].text,
+                MountFirmwareInfoT[2].text ))
+            LOG_ERROR("Failed to get firmware from device.");
+        else
+            IDSetText(&MountFirmwareInfoTP, nullptr);
+*/
+        char parkHomeStatus[2] = {'\0','\0'};
+        if (getParkHomeStatus(parkHomeStatus))
+        {
+            SetParked(strcmp(parkHomeStatus, "2") == 0);
+            if (strcmp(parkHomeStatus, "1") == 0)
+            {
+//                SyncHomeS[0].s = ISS_ON;
+                SyncHomeSP.s = IPS_OK;
+                IDSetSwitch(&SyncHomeSP, nullptr);
+            }
+        }
+        bool isEnabled;
+        if (getST4Status(&isEnabled))
+        {
+            ST4StatusS[INDI_ENABLED].s = isEnabled ? ISS_ON : ISS_OFF;
+            ST4StatusS[INDI_DISABLED].s = isEnabled ? ISS_OFF : ISS_ON;
+            ST4StatusSP.s = IPS_OK;
+        }
+        else
+        {
+            ST4StatusSP.s = IPS_ALERT;
+        }
+        IDSetSwitch(&ST4StatusSP, nullptr);
+
+        if (getKeypadStatus(&isEnabled))
+        {
+            KeypadStatusS[INDI_ENABLED].s = isEnabled ? ISS_ON : ISS_OFF;
+            KeypadStatusS[INDI_DISABLED].s = isEnabled ? ISS_OFF : ISS_ON;
+            KeypadStatusSP.s = IPS_OK;
+        }
+        else
+        {
+            KeypadStatusSP.s = IPS_ALERT;
+        }
+        IDSetSwitch(&KeypadStatusSP, nullptr);
+
+        int index;
+        if (GetMeridianFlipMode(&index))
+        {
+                IUResetSwitch(&MeridianFlipModeSP);
+                MeridianFlipModeS[index].s = ISS_ON;
+                MeridianFlipModeSP.s   = IPS_OK;
+        }
+        else
+        {
+            MeridianFlipModeSP.s = IPS_ALERT;
+        }
+        IDSetSwitch(&MeridianFlipModeSP, nullptr);
+
+// Get the guiding speed
+        int raSpeed, decSpeed;
+        if(getGuidingSpeeds(&raSpeed, &decSpeed))
+        {
+            GuidingSpeedN[0].value =  raSpeed/100.0;
+            GuidingSpeedN[1].value =  decSpeed/100.0;
+            GuidingSpeedNP.s = IPS_OK;
+        }
+        else
+        {
+            LOG_ERROR("Unable to get guiding speed");
+            GuidingSpeedNP.s = IPS_ALERT;
+        }
+        IDSetNumber(&GuidingSpeedNP, nullptr);   
+
+        double raCorrection;
+        if (getTrackingAdjustment(&raCorrection))
+        {
+            TrackAdjustN[0].value = raCorrection;
+            TrackAdjustNP.s      = IPS_OK;
+        }
+        else
+        {
+            TrackAdjustNP.s = IPS_ALERT;
+        }
+        IDSetNumber(&TrackAdjustNP, nullptr);
+
+        int raRatio, decRatio;
+        if (getGearRatios(&raRatio, &decRatio))
+        {
+            GearRatioN[0].value = static_cast<double>(raRatio);
+            GearRatioN[1].value = static_cast<double>(decRatio);
+            GearRatioNP.s = IPS_OK;
+        }
+        else
+        {
+            GearRatioNP.s = IPS_ALERT;
+        }
+        IDSetNumber(&GearRatioNP, nullptr);
+
+        int torque;
+        if(getTorque(&torque))
+        {
+            TorqueN[0].value =  static_cast<double>(torque);
+            TorqueNP.s = IPS_OK;
+        }
+        else
+        {
+            LOG_ERROR("Unable to get torque");
+            TorqueNP.s = IPS_ALERT;
+        }
+        IDSetNumber(&TorqueNP, nullptr);   
+
+        bool raDir, decDir;
+        if (getMotorReverse(&raDir, &decDir))
+        {
+            RaMotorReverseS[INDI_ENABLED].s = raDir ? ISS_ON : ISS_OFF;
+            RaMotorReverseS[INDI_DISABLED].s = raDir ? ISS_OFF : ISS_ON;
+            RaMotorReverseSP.s = IPS_OK;
+            DecMotorReverseS[INDI_ENABLED].s = decDir ? ISS_ON : ISS_OFF;
+            DecMotorReverseS[INDI_DISABLED].s = decDir ? ISS_OFF : ISS_ON;
+            DecMotorReverseSP.s = IPS_OK;
+        }
+        else
+        {
+            RaMotorReverseSP.s = IPS_ALERT;
+            DecMotorReverseSP.s = IPS_ALERT;
+        }
+        IDSetSwitch(&RaMotorReverseSP, nullptr);
+        IDSetSwitch(&DecMotorReverseSP, nullptr);
+
+        int raSlew, decSlew;
+        if (getMaxSlews(&raSlew, &decSlew))
+        {
+            MaxSlewN[0].value = static_cast<double>(raSlew);
+            MaxSlewN[1].value = static_cast<double>(decSlew);
+            MaxSlewNP.s = IPS_OK;
+        }
+        else
+        {
+            MaxSlewNP.s = IPS_ALERT;
+        }
+        IDSetNumber(&MaxSlewNP, nullptr);
+    }
+    if (getLocationOnStartup && (GetTelescopeCapability() & TELESCOPE_HAS_LOCATION))
+        getScopeLocation();
+
+    if (getTimeOnStartup && (GetTelescopeCapability() & TELESCOPE_HAS_TIME))
+        getScopeTime();
+
+    usePulseCommand = true;
+
 }
 
 /*******************************************************************************
@@ -722,6 +890,8 @@ bool StarGoTelescope::ReadScopeStatus()
     }
     IDSetNumber(&MotorStepNP, nullptr);
 
+/* 
+*Not changed very often. Better to confirm the value after setting
     double raCorrection;
     if (getTrackingAdjustment(&raCorrection))
     {
@@ -733,7 +903,7 @@ bool StarGoTelescope::ReadScopeStatus()
         TrackAdjustNP.s = IPS_ALERT;
     }
     IDSetNumber(&TrackAdjustNP, nullptr);
-
+*/
     double r, d;
     if(!getEqCoordinates(&r, &d))
     {
@@ -2172,9 +2342,9 @@ bool StarGoTelescope::setTorque(int torque)
 }
 
 /*******************************************************************************
-**sendScopeLocation called from getBasicData i.e. when a client connects
+** getScopeLocation called from getBasicData i.e. when a client connects
 *******************************************************************************/
-bool StarGoTelescope::sendScopeLocation()
+bool StarGoTelescope::getScopeLocation()
 {
     LOG_DEBUG(__FUNCTION__);
     if (isSimulation())
@@ -2528,7 +2698,7 @@ bool StarGoTelescope::getUTCOffset(double *offset)
 /*******************************************************************************
 **
 *******************************************************************************/
-bool StarGoTelescope::sendScopeTime()
+bool StarGoTelescope::getScopeTime()
 {
     LOG_DEBUG(__FUNCTION__);
     char cdate[MAXINDINAME]={0};
@@ -2689,156 +2859,6 @@ bool StarGoTelescope::GetMeridianFlipMode(int* index)
     }
 
     return true;
-}
-
-/**************************************************************************************
-**getBasicData is called whenever a client connects to the driver
-***************************************************************************************/
-void StarGoTelescope::getBasicData()
-{
-    LOG_DEBUG(__FUNCTION__);
-    if (!isSimulation())
-    {
-        MountFirmwareInfoT[0].text = new char[64];
-        MountFirmwareInfoT[1].text = new char[64];
-        MountFirmwareInfoT[2].text = new char[64];
-        if (!getFirmwareInfo(MountFirmwareInfoT[0].text,
-                MountFirmwareInfoT[1].text,
-                MountFirmwareInfoT[2].text ))
-            LOG_ERROR("Failed to get firmware from device.");
-        else
-            IDSetText(&MountFirmwareInfoTP, nullptr);
-
-        char parkHomeStatus[2] = {'\0','\0'};
-        if (getParkHomeStatus(parkHomeStatus))
-        {
-            SetParked(strcmp(parkHomeStatus, "2") == 0);
-            if (strcmp(parkHomeStatus, "1") == 0)
-            {
-//                SyncHomeS[0].s = ISS_ON;
-                SyncHomeSP.s = IPS_OK;
-                IDSetSwitch(&SyncHomeSP, nullptr);
-            }
-        }
-        bool isEnabled;
-        if (getST4Status(&isEnabled))
-        {
-            ST4StatusS[INDI_ENABLED].s = isEnabled ? ISS_ON : ISS_OFF;
-            ST4StatusS[INDI_DISABLED].s = isEnabled ? ISS_OFF : ISS_ON;
-            ST4StatusSP.s = IPS_OK;
-        }
-        else
-        {
-            ST4StatusSP.s = IPS_ALERT;
-        }
-        IDSetSwitch(&ST4StatusSP, nullptr);
-
-        if (getKeypadStatus(&isEnabled))
-        {
-            KeypadStatusS[INDI_ENABLED].s = isEnabled ? ISS_ON : ISS_OFF;
-            KeypadStatusS[INDI_DISABLED].s = isEnabled ? ISS_OFF : ISS_ON;
-            KeypadStatusSP.s = IPS_OK;
-        }
-        else
-        {
-            KeypadStatusSP.s = IPS_ALERT;
-        }
-        IDSetSwitch(&KeypadStatusSP, nullptr);
-
-        int index;
-        if (GetMeridianFlipMode(&index))
-        {
-                IUResetSwitch(&MeridianFlipModeSP);
-                MeridianFlipModeS[index].s = ISS_ON;
-                MeridianFlipModeSP.s   = IPS_OK;
-        }
-        else
-        {
-            MeridianFlipModeSP.s = IPS_ALERT;
-        }
-        IDSetSwitch(&MeridianFlipModeSP, nullptr);
-
-        double raCorrection;
-        if (getTrackingAdjustment(&raCorrection))
-        {
-            TrackAdjustN[0].value = raCorrection;
-            TrackAdjustNP.s      = IPS_OK;
-        }
-        else
-        {
-            TrackAdjustNP.s = IPS_ALERT;
-        }
-        IDSetNumber(&TrackAdjustNP, nullptr);
-
-        int raRatio, decRatio;
-        if (getGearRatios(&raRatio, &decRatio))
-        {
-            GearRatioN[0].value = static_cast<double>(raRatio);
-            GearRatioN[1].value = static_cast<double>(decRatio);
-            GearRatioNP.s = IPS_OK;
-        }
-        else
-        {
-            GearRatioNP.s = IPS_ALERT;
-        }
-        IDSetNumber(&GearRatioNP, nullptr);
-
-        int torque;
-        if(getTorque(&torque))
-        {
-            TorqueN[0].value =  static_cast<double>(torque);
-            TorqueNP.s = IPS_OK;
-        }
-        else
-        {
-            LOG_ERROR("Unable to get torque");
-            TorqueNP.s = IPS_ALERT;
-        }
-        IDSetNumber(&TorqueNP, nullptr);   
-
-        bool raDir, decDir;
-        if (getMotorReverse(&raDir, &decDir))
-        {
-            RaMotorReverseS[INDI_ENABLED].s = raDir ? ISS_ON : ISS_OFF;
-            RaMotorReverseS[INDI_DISABLED].s = raDir ? ISS_OFF : ISS_ON;
-            RaMotorReverseSP.s = IPS_OK;
-            DecMotorReverseS[INDI_ENABLED].s = decDir ? ISS_ON : ISS_OFF;
-            DecMotorReverseS[INDI_DISABLED].s = decDir ? ISS_OFF : ISS_ON;
-            DecMotorReverseSP.s = IPS_OK;
-        }
-        else
-        {
-            RaMotorReverseSP.s = IPS_ALERT;
-            DecMotorReverseSP.s = IPS_ALERT;
-        }
-        IDSetSwitch(&RaMotorReverseSP, nullptr);
-        IDSetSwitch(&DecMotorReverseSP, nullptr);
-
-        int raSlew, decSlew;
-        if (getMaxSlews(&raSlew, &decSlew))
-        {
-            MaxSlewN[0].value = static_cast<double>(raSlew);
-            MaxSlewN[1].value = static_cast<double>(decSlew);
-            MaxSlewNP.s = IPS_OK;
-        }
-        else
-        {
-            MaxSlewNP.s = IPS_ALERT;
-        }
-        IDSetNumber(&MaxSlewNP, nullptr);
-    }
-//    LOGF_DEBUG("sendLocation %s && %s", sendLocationOnStartup?"T":"F",
-//            (GetTelescopeCapability() & TELESCOPE_HAS_LOCATION)?"T":"F");
-    if (sendLocationOnStartup && (GetTelescopeCapability() & TELESCOPE_HAS_LOCATION))
-        sendScopeLocation();
-
-//    LOGF_DEBUG("sendTime %s && %s", sendTimeOnStartup?"T":"F",
-//            (GetTelescopeCapability() & TELESCOPE_HAS_TIME)?"T":"F");
-    if (sendTimeOnStartup && (GetTelescopeCapability() & TELESCOPE_HAS_TIME))
-        sendScopeTime();
-
-    usePulseCommand = true;
-
 }
 
 /*******************************************************************************

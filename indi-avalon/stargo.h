@@ -54,7 +54,7 @@ enum TDirection
 };
 
 // StarGo specific tabs
-extern const char *RA_DEC_TAB;
+extern const char *ADVANCED_TAB;
 
 class StarGoTelescope : public INDI::Telescope, public INDI::GuiderInterface
 {
@@ -176,7 +176,7 @@ protected:
 //    ISwitch UsePulseCmdS[2];
     bool usePulseCommand { true };
 
-    bool sendTimeOnStartup=true, sendLocationOnStartup=true;
+    bool getTimeOnStartup=true, getLocationOnStartup=true;
     uint8_t DBG_SCOPE;
 
     double targetRA, targetDEC;
@@ -253,7 +253,7 @@ protected:
     bool setTorque(int torque);  //Not implemented
 
     // location
-    bool sendScopeLocation();
+    bool getScopeLocation();
     bool getSiteLatitude(double *siteLat);
     bool getSiteLongitude(double *siteLong);
     bool setSiteLatitude(double Lat);
@@ -267,7 +267,7 @@ protected:
     bool getLocalDate(char *dateString) ;
     bool getLocalTime(char *timeString) ;
     bool getUTCOffset(double *offset) ;
-    bool sendScopeTime();
+    bool getScopeTime();
 
     // meridian flip
     bool SetMeridianFlipMode(int index);
