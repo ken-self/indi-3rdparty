@@ -174,9 +174,9 @@ bool StarGoTelescope::ISNewNumber(const char *dev, const char *name, double valu
         {
             int torque  = static_cast<int>(values[0]);
             bool result  = setTorque(torque);
-
             if(result)
             {
+                result = getTorque(&torque);  // Get the value set in the mount
                 TorqueN[0].value = torque;
                 TorqueNP.s = IPS_OK;
             }
@@ -505,7 +505,7 @@ bool StarGoTelescope::updateProperties()
         defineProperty(&MoveSpeedNP);
         defineProperty(&MotorStepNP);
 
-        getBasicData();
+//        getBasicData(); // Call from Handshake()
     }
     else
     {
@@ -534,7 +534,7 @@ bool StarGoTelescope::updateProperties()
 }
 
 /*******************************************************************************
-** Handshake is called when the driver first connects to the mount
+** Handshake is called when the driver first connects (physically) to the mount
 *******************************************************************************/
 bool StarGoTelescope::Handshake()
 {
@@ -594,15 +594,7 @@ bool StarGoTelescope::Handshake()
         }
     }
 
-        MountFirmwareInfoT[0].text = new char[64];
-        MountFirmwareInfoT[1].text = new char[64];
-        MountFirmwareInfoT[2].text = new char[64];
-        if (!getFirmwareInfo(MountFirmwareInfoT[0].text,
-                MountFirmwareInfoT[1].text,
-                MountFirmwareInfoT[2].text ))
-            LOG_ERROR("Failed to get firmware from device.");
-        else
-            IDSetText(&MountFirmwareInfoTP, nullptr);
+    getBasicData();
 
     return true;
 }
@@ -617,7 +609,7 @@ void StarGoTelescope::getBasicData()
 
     if (!isSimulation())
     {
-/*        MountFirmwareInfoT[0].text = new char[64];
+        MountFirmwareInfoT[0].text = new char[64];
         MountFirmwareInfoT[1].text = new char[64];
         MountFirmwareInfoT[2].text = new char[64];
         if (!getFirmwareInfo(MountFirmwareInfoT[0].text,
@@ -626,7 +618,7 @@ void StarGoTelescope::getBasicData()
             LOG_ERROR("Failed to get firmware from device.");
         else
             IDSetText(&MountFirmwareInfoTP, nullptr);
-*/
+
         char parkHomeStatus[2] = {'\0','\0'};
         if (getParkHomeStatus(parkHomeStatus))
         {
@@ -759,6 +751,20 @@ void StarGoTelescope::getBasicData()
             MaxSlewNP.s = IPS_ALERT;
         }
         IDSetNumber(&MaxSlewNP, nullptr);
+
+        int centerSpeed, findSpeed;
+        if (getMoveSpeed(&centerSpeed, &findSpeed ))
+        {
+            MoveSpeedN[0].value = static_cast<double>(centerSpeed);
+            MoveSpeedN[1].value = static_cast<double>(findSpeed);
+            MoveSpeedNP.s = IPS_OK;
+        }
+        else
+        {
+            MoveSpeedNP.s = IPS_ALERT;
+        }
+        IDSetNumber(&MoveSpeedNP, nullptr);
+
     }
     if (getLocationOnStartup && (GetTelescopeCapability() & TELESCOPE_HAS_LOCATION))
         getScopeLocation();
