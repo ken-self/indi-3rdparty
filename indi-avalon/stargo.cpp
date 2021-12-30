@@ -388,13 +388,16 @@ bool StarGoTelescope::initProperties()
 
     setDriverInterface(getDriverInterface() | GUIDER_INTERFACE);
 
+// This is called before the driver connects to the device so an error occurs
+// Should happen either during Handshake or UpdateProperties
+/*
     double longitude=0.0, latitude=90.0;
     // Get value from config file if it exists.
     IUGetConfigNumber(getDeviceName(), "GEOGRAPHIC_COORD", "LONG", &longitude);
     currentRA  = get_local_sidereal_time(longitude);
     IUGetConfigNumber(getDeviceName(), "GEOGRAPHIC_COORD", "LAT", &latitude);
     currentDEC = latitude > 0.0 ? 90.0 : -90.0;
-
+*/
     IUFillSwitch(&MountGotoHomeS[0], "MOUNT_GOTO_HOME_VALUE", "Goto Home", ISS_OFF);
     IUFillSwitchVector(&MountGotoHomeSP, MountGotoHomeS, 1, getDeviceName(), "MOUNT_GOTO_HOME", "Goto Home", MAIN_CONTROL_TAB, IP_RW, ISR_ATMOST1, 60, IPS_OK);
 
@@ -551,6 +554,14 @@ bool StarGoTelescope::Handshake()
         LOG_ERROR("Error communication with telescope.");
         return false;
     }
+    
+// Moved from InitProperties
+    double longitude=0.0, latitude=90.0;
+    // Get value from config file if it exists.
+    IUGetConfigNumber(getDeviceName(), "GEOGRAPHIC_COORD", "LONG", &longitude);
+    currentRA  = get_local_sidereal_time(longitude);
+    IUGetConfigNumber(getDeviceName(), "GEOGRAPHIC_COORD", "LAT", &latitude);
+    currentDEC = latitude > 0.0 ? 90.0 : -90.0;
 
 // Handshake commands used in the StarGo ASCOM driver. 
     char cmdsync[AVALON_COMMAND_BUFFER_LENGTH] = {0};
