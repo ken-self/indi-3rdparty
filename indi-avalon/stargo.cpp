@@ -416,16 +416,16 @@ bool StarGoTelescope::initProperties()
 
     // Torque
     IUFillNumber(&TorqueN[0], "TORQUE_RA", "Motor Torque", "%.0f", 0.0, 100.0, 1, 0);
-    IUFillNumberVector(&TorqueNP, TorqueN, 2, getDeviceName(), "Torque","Torque", INFO_TAB, IP_RO, 60, IPS_IDLE);
+    IUFillNumberVector(&TorqueNP, TorqueN, 1, getDeviceName(), "Torque","Torque", INFO_TAB, IP_RO, 60, IPS_IDLE);
 
     // RA and Dec motor direction
-    IUFillSwitch(&RaMotorReverseS[INDI_ENABLED], "INDI_ENABLED", "Normal", ISS_OFF);
-    IUFillSwitch(&RaMotorReverseS[INDI_DISABLED], "INDI_DISABLED", "Reverse", ISS_OFF);
-    IUFillSwitchVector(&RaMotorReverseSP, RaMotorReverseS, 2, getDeviceName(), "RA_DIR", "RA dir", RA_DEC_TAB, IP_RW, ISR_ATMOST1, 60, IPS_IDLE);
+    IUFillSwitch(&RaMotorReverseS[INDI_ENABLED], "INDI_ENABLED", "Reverse", ISS_OFF);
+    IUFillSwitch(&RaMotorReverseS[INDI_DISABLED], "INDI_DISABLED", "Normal", ISS_OFF);
+    IUFillSwitchVector(&RaMotorReverseSP, RaMotorReverseS, 2, getDeviceName(), "RA_REVERSE", "RA Reverse", RA_DEC_TAB, IP_RW, ISR_ATMOST1, 60, IPS_IDLE);
 
-    IUFillSwitch(&DecMotorReverseS[INDI_ENABLED], "INDI_ENABLED", "Normal", ISS_OFF);
-    IUFillSwitch(&DecMotorReverseS[INDI_DISABLED], "INDI_DISABLED", "Reverse", ISS_OFF);
-    IUFillSwitchVector(&DecMotorReverseSP, DecMotorReverseS, 2, getDeviceName(), "DEC_DIR", "Dec dir", RA_DEC_TAB, IP_RW, ISR_ATMOST1, 60, IPS_IDLE);
+    IUFillSwitch(&DecMotorReverseS[INDI_ENABLED], "INDI_ENABLED", "Reverse", ISS_OFF);
+    IUFillSwitch(&DecMotorReverseS[INDI_DISABLED], "INDI_DISABLED", "Normal", ISS_OFF);
+    IUFillSwitchVector(&DecMotorReverseSP, DecMotorReverseS, 2, getDeviceName(), "DEC_REVERSE", "Dec Reverse", RA_DEC_TAB, IP_RW, ISR_ATMOST1, 60, IPS_IDLE);
 
     // Max Slew Speeds
     IUFillNumber(&MaxSlewN[0], "MAX_SLEW_RA", "RA Max Slew", "%.2f", 0.0, 100.0, 1, 0);
