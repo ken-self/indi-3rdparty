@@ -125,11 +125,11 @@ protected:
     INumberVectorProperty TorqueNP;
     INumber TorqueN[1];
 
-    // MotorReverseection
+    // MotorReverse section
     ISwitchVectorProperty RaMotorReverseSP;
-    ISwitch RaMotorReverseS[1];
+    ISwitch RaMotorReverseS[2];
     ISwitchVectorProperty DecMotorReverseSP;
-    ISwitch DecMotorReverseS[1];
+    ISwitch DecMotorReverseS[2];
 
     // Max slew speed
     INumberVectorProperty MaxSlewNP;
