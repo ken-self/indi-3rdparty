@@ -64,7 +64,7 @@ enum TFormat
 // StarGo specific tabs
 extern const char *RA_DEC_TAB;
 
-class LX200StarGo : public LX200Telescope
+class StarGoTelescope : public LX200Telescope
 {
     public:
         enum TrackMode
@@ -84,7 +84,7 @@ class LX200StarGo : public LX200Telescope
         MotorsState CurrentMotorsState {MOTORS_OFF};
         TelescopeSlewRate CurrentSlewRate {SLEW_MAX};
 
-        LX200StarGo();
+        StarGoTelescope();
 
         virtual const char *getDefaultName() override;
         virtual bool Handshake() override;
@@ -256,11 +256,11 @@ class LX200StarGo : public LX200Telescope
         bool activateFocuserAux1(bool activate);
 
 };
-inline bool LX200StarGo::sendQuery(const char* cmd, char* response, int wait)
+inline bool StarGoTelescope::sendQuery(const char* cmd, char* response, int wait)
 {
     return sendQuery(cmd, response, '#', wait);
 }
-inline bool LX200StarGo::receive(char* buffer, int* bytes, int wait)
+inline bool StarGoTelescope::receive(char* buffer, int* bytes, int wait)
 {
     return receive(buffer, bytes, '#', wait);
 }

@@ -1,5 +1,5 @@
-#ifndef LX200STARGOFOCUSER_H
-#define LX200STARGOFOCUSER_H
+#ifndef STARGOFOCUSER_H
+#define STARGOFOCUSER_H
 
 /*
     Avalon Star GO Focuser
@@ -28,11 +28,11 @@
 #include "defaultdevice.h"
 
 
-class LX200StarGoFocuser : public INDI::DefaultDevice, public INDI::FocuserInterface
+class StarGoFocuser : public INDI::DefaultDevice, public INDI::FocuserInterface
 {
 public:
-    LX200StarGoFocuser(LX200StarGo* defaultDevice, const char* name);
-    virtual ~LX200StarGoFocuser() override = default;
+    StarGoFocuser(StarGoTelescope* defaultDevice, const char* name);
+    virtual ~StarGoFocuser() override = default;
 
     using INDI::DefaultDevice::initProperties;
     void initProperties(const char *groupName);
@@ -98,10 +98,10 @@ protected:
     uint32_t getAbsoluteFocuserPositionFromRelative(int relativePosition);
 
 private:
-    LX200StarGo* baseDevice;
+    StarGoTelescope* baseDevice;
     const char* deviceName;
 
 
 };
 
-#endif // LX200STARGOFOCUSER_H
+#endif // STARGOFOCUSER_H

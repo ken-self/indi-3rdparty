@@ -40,18 +40,18 @@ const char *RA_DEC_TAB = "RA / DEC";
 static class Loader
 {
     private:
-        std::unique_ptr<LX200StarGo> telescope;
-        std::unique_ptr<LX200StarGoFocuser> focuserAux1;
+        std::unique_ptr<StarGoTelescope> telescope;
+        std::unique_ptr<StarGoFocuser> focuserAux1;
 
     public:
         Loader()
         {
-            telescope.reset(new LX200StarGo());
+            telescope.reset(new StarGoTelescope());
             // Hint: focuserAux1 is intentionally NOT initialized, since it is a sub device
-            //       of LX200StarGo and can be activated and deactivated from the mount controls.
+            //       of StarGoTelescope and can be activated and deactivated from the mount controls.
         }
 
-        LX200StarGoFocuser *getFocuserAux1()
+        StarGoFocuser *getFocuserAux1()
         {
             activateFocuserAux1(true);
             return focuserAux1.get();
@@ -60,7 +60,7 @@ static class Loader
         void activateFocuserAux1(bool activate)
         {
             if (activate == true && focuserAux1.get() == nullptr)
-                focuserAux1.reset(new LX200StarGoFocuser(telescope.get(), "AUX1 Focuser"));
+                focuserAux1.reset(new StarGoFocuser(telescope.get(), "AUX1 Focuser"));
             else if (activate == false)
                 focuserAux1.reset();
         }
@@ -75,7 +75,7 @@ static class Loader
 *** LX200 Generic Implementation
 ***************************************************/
 
-LX200StarGo::LX200StarGo()
+StarGoTelescope::StarGoTelescope()
 {
     LOG_DEBUG(__FUNCTION__);
     setVersion(AVALON_VERSION_MAJOR, AVALON_VERSION_MINOR);
@@ -115,7 +115,7 @@ LX200StarGo::LX200StarGo()
 /**************************************************************************************
 **
 ***************************************************************************************/
-const char *LX200StarGo::getDefaultName()
+const char *StarGoTelescope::getDefaultName()
 {
     return "Avalon StarGo";
 }
@@ -124,7 +124,7 @@ const char *LX200StarGo::getDefaultName()
 /**************************************************************************************
 **
 ***************************************************************************************/
-bool LX200StarGo::Handshake()
+bool StarGoTelescope::Handshake()
 {
     char mountType;
     bool isTracking;
@@ -143,7 +143,7 @@ bool LX200StarGo::Handshake()
 /**************************************************************************************
 **
 ***************************************************************************************/
-bool LX200StarGo::ISNewSwitch(const char *dev, const char *name, ISState *states, char *names[], int n)
+bool StarGoTelescope::ISNewSwitch(const char *dev, const char *name, ISState *states, char *names[], int n)
 {
     if (dev != nullptr && strcmp(dev, getDeviceName()) == 0)
     {
@@ -304,7 +304,7 @@ bool LX200StarGo::ISNewSwitch(const char *dev, const char *name, ISState *states
     return result;
 }
 
-bool LX200StarGo::ISNewNumber(const char *dev, const char *name, double values[], char *names[], int n)
+bool StarGoTelescope::ISNewNumber(const char *dev, const char *name, double values[], char *names[], int n)
 {
     if (dev != nullptr && strcmp(dev, getDeviceName()) == 0)
     {
@@ -372,7 +372,7 @@ bool LX200StarGo::ISNewNumber(const char *dev, const char *name, double values[]
 /**************************************************************************************
 **
 ***************************************************************************************/
-bool LX200StarGo::initProperties()
+bool StarGoTelescope::initProperties()
 {
     /* Make sure to init parent properties first */
     if (!LX200Telescope::initProperties()) return false;
@@ -446,7 +446,7 @@ bool LX200StarGo::initProperties()
 /**************************************************************************************
 **
 ***************************************************************************************/
-bool LX200StarGo::updateProperties()
+bool StarGoTelescope::updateProperties()
 {
     if (! LX200Telescope::updateProperties()) return false;
     if (isConnected())
@@ -487,7 +487,7 @@ bool LX200StarGo::updateProperties()
 /**************************************************************************************
 **
 ***************************************************************************************/
-bool LX200StarGo::Connect()
+bool StarGoTelescope::Connect()
 {
     if (! DefaultDevice::Connect())
         return false;
@@ -496,7 +496,7 @@ bool LX200StarGo::Connect()
     return activateFocuserAux1((IUFindOnSwitchIndex(&Aux1FocuserSP) == DefaultDevice::INDI_ENABLED));
 }
 
-bool LX200StarGo::Disconnect()
+bool StarGoTelescope::Disconnect()
 {
     bool result = DefaultDevice::Disconnect();
     result &= activateFocuserAux1(false);
@@ -506,7 +506,7 @@ bool LX200StarGo::Disconnect()
 /**************************************************************************************
 **
 ***************************************************************************************/
-bool LX200StarGo::ReadScopeStatus()
+bool StarGoTelescope::ReadScopeStatus()
 {
     if (!isConnected())
         return false;
@@ -615,7 +615,7 @@ bool LX200StarGo::ReadScopeStatus()
 **
 ***************************************************************************************/
 
-bool LX200StarGo::syncHomePosition()
+bool StarGoTelescope::syncHomePosition()
 {
     LOG_DEBUG(__FUNCTION__);
     char input[AVALON_RESPONSE_BUFFER_LENGTH - 5];
@@ -645,7 +645,7 @@ bool LX200StarGo::syncHomePosition()
     return true;
 }
 
-bool LX200StarGo::getEqCoordinates (double *ra, double *dec)
+bool StarGoTelescope::getEqCoordinates (double *ra, double *dec)
 {
     LOG_DEBUG(__FUNCTION__);
     // Use X590 for RA DEC
@@ -672,7 +672,7 @@ bool LX200StarGo::getEqCoordinates (double *ra, double *dec)
 * @author CanisUrsa
 ***************************************************************************************/
 
-bool LX200StarGo::slewToHome(ISState* states, char* names[], int n)
+bool StarGoTelescope::slewToHome(ISState* states, char* names[], int n)
 {
     LOG_DEBUG(__FUNCTION__);
     IUUpdateSwitch(&MountGotoHomeSP, states, names, n);
@@ -693,7 +693,7 @@ bool LX200StarGo::slewToHome(ISState* states, char* names[], int n)
 }
 
 
-bool LX200StarGo::setParkPosition(ISState* states, char* names[], int n)
+bool StarGoTelescope::setParkPosition(ISState* states, char* names[], int n)
 {
     LOG_DEBUG(__FUNCTION__);
     IUUpdateSwitch(&MountSetParkSP, states, names, n);
@@ -707,7 +707,7 @@ bool LX200StarGo::setParkPosition(ISState* states, char* names[], int n)
 **
 ***************************************************************************************/
 
-void LX200StarGo::getBasicData()
+void StarGoTelescope::getBasicData()
 {
     LOG_DEBUG(__FUNCTION__);
     if (!isSimulation())
@@ -727,7 +727,7 @@ void LX200StarGo::getBasicData()
     }
 }
 
-void LX200StarGo::getStarGoBasicData()
+void StarGoTelescope::getStarGoBasicData()
 {
     LOG_DEBUG(__FUNCTION__);
     if (!isSimulation())
@@ -840,7 +840,7 @@ void LX200StarGo::getStarGoBasicData()
         usePulseCommand = true;
 }
 
-bool LX200StarGo::activateFocuserAux1(bool activate)
+bool StarGoTelescope::activateFocuserAux1(bool activate)
 {
     if (activate == true)
     {
@@ -860,7 +860,7 @@ bool LX200StarGo::activateFocuserAux1(bool activate)
 /**************************************************************************************
 * @author CanisUrsa
 ***************************************************************************************/
-bool LX200StarGo::setMountGotoHome()
+bool StarGoTelescope::setMountGotoHome()
 {
     LOG_DEBUG(__FUNCTION__);
     // Command  - :X361#
@@ -886,7 +886,7 @@ bool LX200StarGo::setMountGotoHome()
 /**************************************************************************************
 **
 ***************************************************************************************/
-bool LX200StarGo::sendScopeLocation()
+bool StarGoTelescope::sendScopeLocation()
 {
     LOG_DEBUG(__FUNCTION__);
     if (isSimulation())
@@ -925,7 +925,7 @@ bool LX200StarGo::sendScopeLocation()
 **
 ***************************************************************************************/
 
-bool LX200StarGo::updateLocation(double latitude, double longitude, double elevation)
+bool StarGoTelescope::updateLocation(double latitude, double longitude, double elevation)
 {
     LOGF_DEBUG("%s Lat:%.3lf Lon:%.3lf", __FUNCTION__, latitude, longitude);
     INDI_UNUSED(elevation);
@@ -959,7 +959,7 @@ bool LX200StarGo::updateLocation(double latitude, double longitude, double eleva
     return true;
 }
 
-bool LX200StarGo::setLocalSiderealTime(double longitude)
+bool StarGoTelescope::setLocalSiderealTime(double longitude)
 {
     double lst = get_local_sidereal_time(longitude);
     LOGF_DEBUG("Current local sidereal time = %lf", lst);
@@ -986,7 +986,7 @@ bool LX200StarGo::setLocalSiderealTime(double longitude)
  * StarGo returns the location in arc seconds precision.
  */
 
-bool LX200StarGo::getSiteLatitude(double *siteLat)
+bool StarGoTelescope::getSiteLatitude(double *siteLat)
 {
     LOG_DEBUG(__FUNCTION__);
     char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
@@ -1008,7 +1008,7 @@ bool LX200StarGo::getSiteLatitude(double *siteLat)
  * StarGo returns the location in arc seconds precision.
  */
 
-bool LX200StarGo::getSiteLongitude(double *siteLong)
+bool StarGoTelescope::getSiteLongitude(double *siteLong)
 {
     LOG_DEBUG(__FUNCTION__);
     char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
@@ -1030,7 +1030,7 @@ bool LX200StarGo::getSiteLongitude(double *siteLong)
 **
 ***************************************************************************************/
 
-bool LX200StarGo::Park()
+bool StarGoTelescope::Park()
 {
     LOG_DEBUG(__FUNCTION__);
     // in: :X362#
@@ -1056,13 +1056,13 @@ bool LX200StarGo::Park()
  * @param isparked true iff the scope has been parked
  * @return
  */
-void LX200StarGo::SetParked(bool isparked)
+void StarGoTelescope::SetParked(bool isparked)
 {
     LOGF_DEBUG("%s %s", __FUNCTION__, isparked ? "PARKED" : "UNPARKED");
     INDI::Telescope::SetParked(isparked);
 }
 
-bool LX200StarGo::UnPark()
+bool StarGoTelescope::UnPark()
 {
     LOG_DEBUG(__FUNCTION__);
     // in: :X370#
@@ -1102,7 +1102,7 @@ bool LX200StarGo::UnPark()
  * @return LST value for the current scope locateion
  */
 
-bool LX200StarGo::getLST_String(char* input)
+bool StarGoTelescope::getLST_String(char* input)
 {
     LOG_DEBUG(__FUNCTION__);
     double siteLong;
@@ -1129,7 +1129,7 @@ bool LX200StarGo::getLST_String(char* input)
  * config file
  *********************************************************************************/
 
-bool LX200StarGo::saveConfigItems(FILE *fp)
+bool StarGoTelescope::saveConfigItems(FILE *fp)
 {
     LOG_DEBUG(__FUNCTION__);
     IUSaveConfigText(fp, &SiteNameTP);
@@ -1153,7 +1153,7 @@ bool LX200StarGo::saveConfigItems(FILE *fp)
  * @param response answer
  * @return true if the command succeeded, false otherwise
  */
-bool LX200StarGo::sendQuery(const char* cmd, char* response, char end, int wait)
+bool StarGoTelescope::sendQuery(const char* cmd, char* response, char end, int wait)
 {
     LOGF_DEBUG("%s %s End:%c Wait:%ds", __FUNCTION__, cmd, end, wait);
     response[0] = '\0';
@@ -1198,7 +1198,7 @@ bool LX200StarGo::sendQuery(const char* cmd, char* response, char end, int wait)
     return true;
 }
 
-bool LX200StarGo::ParseMotionState(char* state)
+bool StarGoTelescope::ParseMotionState(char* state)
 {
     LOGF_DEBUG("%s %s", __FUNCTION__, state);
     int lmotor, lmode, lslew;
@@ -1271,7 +1271,7 @@ bool LX200StarGo::ParseMotionState(char* state)
         return false;
     }
 }
-bool LX200StarGo::setMountParkPosition()
+bool StarGoTelescope::setMountParkPosition()
 {
     LOG_DEBUG(__FUNCTION__);
     // Command  - :X352#
@@ -1294,7 +1294,7 @@ bool LX200StarGo::setMountParkPosition()
  * Determine the site longitude. In contrast to a standard LX200 implementation,
  * StarGo returns the location in arc seconds precision.
  */
-bool LX200StarGo::setSiteLongitude(double longitude)
+bool StarGoTelescope::setSiteLongitude(double longitude)
 {
     LOG_DEBUG(__FUNCTION__);
     int d, m, s;
@@ -1331,7 +1331,7 @@ bool LX200StarGo::setSiteLongitude(double longitude)
  * @param latitude value
  * @return true iff the command succeeded
  */
-bool LX200StarGo::setSiteLatitude(double Lat)
+bool StarGoTelescope::setSiteLatitude(double Lat)
 {
     LOG_DEBUG(__FUNCTION__);
     int d, m, s;
@@ -1347,7 +1347,7 @@ bool LX200StarGo::setSiteLatitude(double Lat)
     return (sendQuery(command, response));
 }
 
-bool LX200StarGo::getScopeAlignmentStatus(char *mountType, bool *isTracking, int *alignmentPoints)
+bool StarGoTelescope::getScopeAlignmentStatus(char *mountType, bool *isTracking, int *alignmentPoints)
 {
     // Standard LX200 query
     // Returns: <mount><tracking><alignment># where:
@@ -1376,7 +1376,7 @@ bool LX200StarGo::getScopeAlignmentStatus(char *mountType, bool *isTracking, int
     return true;
 }
 
-bool LX200StarGo::getMotorStatus(int *xSpeed, int *ySpeed)
+bool StarGoTelescope::getMotorStatus(int *xSpeed, int *ySpeed)
 {
     // Command  - :X34#
     // the StarGo replies mxy# where x is the RA / AZ motor status and y
@@ -1414,7 +1414,7 @@ bool LX200StarGo::getMotorStatus(int *xSpeed, int *ySpeed)
  *               A=slewing home, B=slewing to park position
  * @return true if the command succeeded, false otherwise
  */
-bool LX200StarGo::getParkHomeStatus (char* status)
+bool StarGoTelescope::getParkHomeStatus (char* status)
 {
     LOG_DEBUG(__FUNCTION__);
     // Command   - :X38#
@@ -1448,7 +1448,7 @@ bool LX200StarGo::getParkHomeStatus (char* status)
  * @param isEnabled - true iff the ST4 port is enabled
  * @return
  */
-bool LX200StarGo::getST4Status (bool *isEnabled)
+bool StarGoTelescope::getST4Status (bool *isEnabled)
 {
     LOG_DEBUG(__FUNCTION__);
     // Command query ST4 status  - :TTGFh#
@@ -1478,7 +1478,7 @@ bool LX200StarGo::getST4Status (bool *isEnabled)
  * @param isEnabled - true iff the Keypad port is enabled
  * @return
  */
-bool LX200StarGo::getKeypadStatus (bool *isEnabled)
+bool StarGoTelescope::getKeypadStatus (bool *isEnabled)
 {
     LOG_DEBUG(__FUNCTION__);
     // Command query Keypad status  - :TTGFr#
@@ -1508,7 +1508,7 @@ bool LX200StarGo::getKeypadStatus (bool *isEnabled)
  * @param index - low=0, medium=1, fast=2, high=3
  * @return true iff request succeeded
  */
-bool LX200StarGo::getSystemSlewSpeedMode (int *index)
+bool StarGoTelescope::getSystemSlewSpeedMode (int *index)
 {
     LOG_DEBUG(__FUNCTION__);
     // Command query Keypad status  - :TTGFr#
@@ -1550,7 +1550,7 @@ bool LX200StarGo::getSystemSlewSpeedMode (int *index)
     return true;
 }
 
-bool LX200StarGo::setSystemSlewSpeedMode(int index)
+bool StarGoTelescope::setSystemSlewSpeedMode(int index)
 {
 
     std::string cmd = ":TTMX";
@@ -1592,7 +1592,7 @@ bool LX200StarGo::setSystemSlewSpeedMode(int index)
  * @param decSpeed percenage for DEC axis
  * @return
  */
-bool LX200StarGo::getGuidingSpeeds (int *raSpeed, int *decSpeed)
+bool StarGoTelescope::getGuidingSpeeds (int *raSpeed, int *decSpeed)
 {
     LOG_DEBUG(__FUNCTION__);
     // Command query guiding speeds  - :X22#
@@ -1621,7 +1621,7 @@ bool LX200StarGo::getGuidingSpeeds (int *raSpeed, int *decSpeed)
  * @param decSpeed percenage for DEC axis
  * @return
  */
-bool LX200StarGo::setGuidingSpeeds (int raSpeed, int decSpeed)
+bool StarGoTelescope::setGuidingSpeeds (int raSpeed, int decSpeed)
 {
     LOG_DEBUG(__FUNCTION__);
     // in RA guiding speed  -  :X20rr#
@@ -1663,7 +1663,7 @@ bool LX200StarGo::setGuidingSpeeds (int raSpeed, int decSpeed)
  * @return
  */
 
-bool LX200StarGo::setST4Enabled(bool enabled)
+bool StarGoTelescope::setST4Enabled(bool enabled)
 {
     LOG_DEBUG(__FUNCTION__);
 
@@ -1681,7 +1681,7 @@ bool LX200StarGo::setST4Enabled(bool enabled)
     }
 }
 
-bool LX200StarGo::setKeyPadEnabled(bool enabled)
+bool StarGoTelescope::setKeyPadEnabled(bool enabled)
 {
 
     const char *cmd = enabled ? ":TTRFr#" : ":TTSFr#";
@@ -1703,7 +1703,7 @@ bool LX200StarGo::setKeyPadEnabled(bool enabled)
  * @brief Retrieve pier side of the mount and sync it back to the client
  * @return true iff synching succeeds
  */
-bool LX200StarGo::syncSideOfPier()
+bool StarGoTelescope::syncSideOfPier()
 {
     LOG_DEBUG(__FUNCTION__);
     // Command query side of pier - :X39#
@@ -1751,7 +1751,7 @@ bool LX200StarGo::syncSideOfPier()
  * @param firmwareInfo - firmware description
  * @return
  */
-bool LX200StarGo::getFirmwareInfo (char* firmwareInfo)
+bool StarGoTelescope::getFirmwareInfo (char* firmwareInfo)
 {
     LOG_DEBUG(__FUNCTION__);
     std::string infoStr;
@@ -1801,7 +1801,7 @@ bool LX200StarGo::getFirmwareInfo (char* firmwareInfo)
  * @author CanisUrsa
  * @return true if communication succeeded, false otherwise
  */
-bool LX200StarGo::receive(char* buffer, int* bytes, char end, int wait)
+bool StarGoTelescope::receive(char* buffer, int* bytes, char end, int wait)
 {
     //    LOGF_DEBUG("%s timeout=%ds",__FUNCTION__, wait);
     int timeout = wait; //? AVALON_TIMEOUT: 0;
@@ -1826,13 +1826,13 @@ bool LX200StarGo::receive(char* buffer, int* bytes, char end, int wait)
  * @brief Flush the communication port.
  * @author CanisUrsa
  */
-void LX200StarGo::flush()
+void StarGoTelescope::flush()
 {
     //    LOG_DEBUG(__FUNCTION__);
     //    tcflush(PortFD, TCIOFLUSH);
 }
 
-bool LX200StarGo::transmit(const char* buffer)
+bool StarGoTelescope::transmit(const char* buffer)
 {
     //    LOG_DEBUG(__FUNCTION__);
     int bytesWritten = 0;
@@ -1849,7 +1849,7 @@ bool LX200StarGo::transmit(const char* buffer)
     return true;
 }
 
-bool LX200StarGo::SetTrackMode(uint8_t mode)
+bool StarGoTelescope::SetTrackMode(uint8_t mode)
 {
     LOGF_DEBUG("%s: Set Track Mode %d", __FUNCTION__, mode);
     if (isSimulation())
@@ -1890,7 +1890,7 @@ bool LX200StarGo::SetTrackMode(uint8_t mode)
     return true;
 }
 
-bool LX200StarGo::checkLX200EquatorialFormat()
+bool StarGoTelescope::checkLX200EquatorialFormat()
 {
     LOG_DEBUG(__FUNCTION__);
     char response[AVALON_RESPONSE_BUFFER_LENGTH];
@@ -1940,7 +1940,7 @@ bool LX200StarGo::checkLX200EquatorialFormat()
     }
 }
 
-bool LX200StarGo::SetSlewRate(int index)
+bool StarGoTelescope::SetSlewRate(int index)
 {
     LOG_DEBUG(__FUNCTION__);
     // Convert index to Meade format
@@ -1957,7 +1957,7 @@ bool LX200StarGo::SetSlewRate(int index)
     IDSetSwitch(&SlewRateSP, nullptr);
     return true;
 }
-bool LX200StarGo::setSlewMode(int slewMode)
+bool StarGoTelescope::setSlewMode(int slewMode)
 {
     LOG_DEBUG(__FUNCTION__);
     char cmd[AVALON_COMMAND_BUFFER_LENGTH];
@@ -1990,7 +1990,7 @@ bool LX200StarGo::setSlewMode(int slewMode)
 /*
  * Adjust RA tracking speed.
  */
-bool LX200StarGo::setTrackingAdjustment(double adjustRA)
+bool StarGoTelescope::setTrackingAdjustment(double adjustRA)
 {
     LOG_DEBUG(__FUNCTION__);
     char cmd[AVALON_COMMAND_BUFFER_LENGTH];
@@ -2030,7 +2030,7 @@ bool LX200StarGo::setTrackingAdjustment(double adjustRA)
 }
 
 
-bool LX200StarGo::getTrackingAdjustment(double *valueRA)
+bool StarGoTelescope::getTrackingAdjustment(double *valueRA)
 {
     /*
      * :X42# to read the tracking adjustment value as orsRRR#
@@ -2056,7 +2056,7 @@ bool LX200StarGo::getTrackingAdjustment(double *valueRA)
 
 
 
-bool LX200StarGo::SetMeridianFlipMode(int index)
+bool StarGoTelescope::SetMeridianFlipMode(int index)
 {
     // 0: Auto mode: Enabled and not Forced
     // 1: Disabled mode: Disabled and not Forced
@@ -2098,7 +2098,7 @@ bool LX200StarGo::SetMeridianFlipMode(int index)
 
     return true;
 }
-bool LX200StarGo::GetMeridianFlipMode(int* index)
+bool StarGoTelescope::GetMeridianFlipMode(int* index)
 {
     LOG_DEBUG(__FUNCTION__);
 
@@ -2147,7 +2147,7 @@ bool LX200StarGo::GetMeridianFlipMode(int* index)
 
 }
 
-IPState LX200StarGo::GuideNorth(uint32_t ms)
+IPState StarGoTelescope::GuideNorth(uint32_t ms)
 {
     LOGF_DEBUG("%s %dms %d", __FUNCTION__, ms, usePulseCommand);
     if (usePulseCommand && (MovementNSSP.s == IPS_BUSY || MovementWESP.s == IPS_BUSY))
@@ -2196,7 +2196,7 @@ IPState LX200StarGo::GuideNorth(uint32_t ms)
     return IPS_BUSY;
 }
 
-IPState LX200StarGo::GuideSouth(uint32_t ms)
+IPState StarGoTelescope::GuideSouth(uint32_t ms)
 {
     LOGF_DEBUG("%s %dms %d", __FUNCTION__, ms, usePulseCommand);
     if (usePulseCommand && (MovementNSSP.s == IPS_BUSY || MovementWESP.s == IPS_BUSY))
@@ -2245,7 +2245,7 @@ IPState LX200StarGo::GuideSouth(uint32_t ms)
     return IPS_BUSY;
 }
 
-IPState LX200StarGo::GuideEast(uint32_t ms)
+IPState StarGoTelescope::GuideEast(uint32_t ms)
 {
     LOGF_DEBUG("%s %dms %d", __FUNCTION__, ms, usePulseCommand);
     if (usePulseCommand && (MovementNSSP.s == IPS_BUSY || MovementWESP.s == IPS_BUSY))
@@ -2294,7 +2294,7 @@ IPState LX200StarGo::GuideEast(uint32_t ms)
     return IPS_BUSY;
 }
 
-IPState LX200StarGo::GuideWest(uint32_t ms)
+IPState StarGoTelescope::GuideWest(uint32_t ms)
 {
     LOGF_DEBUG("%s %dms %d", __FUNCTION__, ms, usePulseCommand);
     if (usePulseCommand && (MovementNSSP.s == IPS_BUSY || MovementWESP.s == IPS_BUSY))
@@ -2343,7 +2343,7 @@ IPState LX200StarGo::GuideWest(uint32_t ms)
     return IPS_BUSY;
 }
 
-int LX200StarGo::SendPulseCmd(int8_t direction, uint32_t duration_msec)
+int StarGoTelescope::SendPulseCmd(int8_t direction, uint32_t duration_msec)
 {
     LOGF_DEBUG("%s dir=%d dur=%d ms", __FUNCTION__, direction, duration_msec );
 
@@ -2377,7 +2377,7 @@ int LX200StarGo::SendPulseCmd(int8_t direction, uint32_t duration_msec)
     return success;
 }
 
-bool LX200StarGo::SetTrackEnabled(bool enabled)
+bool StarGoTelescope::SetTrackEnabled(bool enabled)
 {
     LOGF_INFO("Tracking %s.", enabled ? "enabled" : "disabled");
     // Command tracking on  - :X122#
@@ -2392,7 +2392,7 @@ bool LX200StarGo::SetTrackEnabled(bool enabled)
     return true;
 }
 
-bool LX200StarGo::SetTrackRate(double raRate, double deRate)
+bool StarGoTelescope::SetTrackRate(double raRate, double deRate)
 {
     LOG_DEBUG(__FUNCTION__);
     INDI_UNUSED(deRate);
@@ -2408,7 +2408,7 @@ bool LX200StarGo::SetTrackRate(double raRate, double deRate)
     return true;
 }
 
-void LX200StarGo::ISGetProperties(const char *dev)
+void StarGoTelescope::ISGetProperties(const char *dev)
 {
     if (dev != nullptr && strcmp(dev, getDeviceName()) != 0)
         return;
@@ -2454,7 +2454,7 @@ void LX200StarGo::ISGetProperties(const char *dev)
         */
 }
 
-bool LX200StarGo::Goto(double ra, double dec)
+bool StarGoTelescope::Goto(double ra, double dec)
 {
     LOG_DEBUG(__FUNCTION__);
     const struct timespec timeout = {0, 100000000L};
@@ -2520,7 +2520,7 @@ bool LX200StarGo::Goto(double ra, double dec)
     return true;
 }
 
-bool LX200StarGo::MoveNS(INDI_DIR_NS dir, TelescopeMotionCommand command)
+bool StarGoTelescope::MoveNS(INDI_DIR_NS dir, TelescopeMotionCommand command)
 {
     LOG_DEBUG(__FUNCTION__);
     char cmd[AVALON_COMMAND_BUFFER_LENGTH];
@@ -2536,7 +2536,7 @@ bool LX200StarGo::MoveNS(INDI_DIR_NS dir, TelescopeMotionCommand command)
     return true;
 }
 
-bool LX200StarGo::MoveWE(INDI_DIR_WE dir, TelescopeMotionCommand command)
+bool StarGoTelescope::MoveWE(INDI_DIR_WE dir, TelescopeMotionCommand command)
 {
     LOG_DEBUG(__FUNCTION__);
     char cmd[AVALON_COMMAND_BUFFER_LENGTH];
@@ -2553,7 +2553,7 @@ bool LX200StarGo::MoveWE(INDI_DIR_WE dir, TelescopeMotionCommand command)
     return true;
 }
 
-bool LX200StarGo::Abort()
+bool StarGoTelescope::Abort()
 {
     LOG_DEBUG(__FUNCTION__);
     //   char cmd[AVALON_COMMAND_BUFFER_LENGTH];
@@ -2592,7 +2592,7 @@ bool LX200StarGo::Abort()
     return true;
 }
 
-bool LX200StarGo::Sync(double ra, double dec)
+bool StarGoTelescope::Sync(double ra, double dec)
 {
     LOG_DEBUG(__FUNCTION__);
     //   char syncString[256]={0};
@@ -2623,7 +2623,7 @@ bool LX200StarGo::Sync(double ra, double dec)
     return true;
 }
 
-bool LX200StarGo::setObjectCoords(double ra, double dec)
+bool StarGoTelescope::setObjectCoords(double ra, double dec)
 {
     LOG_DEBUG(__FUNCTION__);
 
@@ -2650,7 +2650,7 @@ bool LX200StarGo::setObjectCoords(double ra, double dec)
     return true;
 }
 
-bool LX200StarGo::setLocalDate(uint8_t days, uint8_t months, uint16_t years)
+bool StarGoTelescope::setLocalDate(uint8_t days, uint8_t months, uint16_t years)
 {
     LOG_DEBUG(__FUNCTION__);
     char cmd[RB_MAX_LEN] = {0};
@@ -2669,7 +2669,7 @@ bool LX200StarGo::setLocalDate(uint8_t days, uint8_t months, uint16_t years)
     return true;
 }
 
-bool LX200StarGo::setLocalTime24(uint8_t hour, uint8_t minute, uint8_t second)
+bool StarGoTelescope::setLocalTime24(uint8_t hour, uint8_t minute, uint8_t second)
 {
     LOG_DEBUG(__FUNCTION__);
     char cmd[RB_MAX_LEN] = {0};
@@ -2680,7 +2680,7 @@ bool LX200StarGo::setLocalTime24(uint8_t hour, uint8_t minute, uint8_t second)
     return (sendQuery(cmd, response, 0));
 }
 
-bool LX200StarGo::setUTCOffset(double offset)
+bool StarGoTelescope::setUTCOffset(double offset)
 {
     LOG_DEBUG(__FUNCTION__);
     char cmd[RB_MAX_LEN] = {0};
@@ -2692,7 +2692,7 @@ bool LX200StarGo::setUTCOffset(double offset)
     return (sendQuery(cmd, response, 0));
 }
 
-bool LX200StarGo::getLocalTime(char *timeString)
+bool StarGoTelescope::getLocalTime(char *timeString)
 {
     LOG_DEBUG(__FUNCTION__);
     if (isSimulation())
@@ -2722,7 +2722,7 @@ bool LX200StarGo::getLocalTime(char *timeString)
     return true;
 }
 
-bool LX200StarGo::getLocalDate(char *dateString)
+bool StarGoTelescope::getLocalDate(char *dateString)
 {
     LOG_DEBUG(__FUNCTION__);
     if (isSimulation())
@@ -2757,7 +2757,7 @@ bool LX200StarGo::getLocalDate(char *dateString)
     return true;
 }
 
-bool LX200StarGo::getUTFOffset(double *offset)
+bool StarGoTelescope::getUTFOffset(double *offset)
 {
     LOG_DEBUG(__FUNCTION__);
     if (isSimulation())
@@ -2789,7 +2789,7 @@ bool LX200StarGo::getUTFOffset(double *offset)
     return true;
 }
 
-bool LX200StarGo::getTrackFrequency(double *value)
+bool StarGoTelescope::getTrackFrequency(double *value)
 {
     LOG_DEBUG(__FUNCTION__);
     float Freq;
