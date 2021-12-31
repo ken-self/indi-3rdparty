@@ -2242,7 +2242,9 @@ int StarGoTelescope::SendPulseCmd(int8_t direction, uint32_t duration_msec)
         return false;
     }
 // Assume the guide pulse was issued and acted upon.
-    if((direction == STARGO_EAST || direction == STARGO_WEST) && RaAutoAdjustS[INDI_ENABLED].s == ISS_ON)
+    bool adjEnabled = (IUFindOnSwitchIndex(&RaAutoAdjustSP) == DefaultDevice::INDI_ENABLED);
+
+    if((direction == STARGO_EAST || direction == STARGO_WEST) && adjEnabled)
     {
         autoRa->setRaAdjust(direction, duration_msec);
     }
