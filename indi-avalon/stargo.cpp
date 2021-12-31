@@ -20,16 +20,7 @@
 */
 /*
 Unimplemented commands
-
-   SET/GET Reverse RA/DEC
- * Reverse RA X1A0; DEC X1A1
- * Get X1B => wrd where r=RA; d=DEC
- *
  GET Center find speed
- SET/GET Torque
- Get: TTGT
- Set: 
- GET Tracking rate adjust
 */
 #include "stargo.h"
 
@@ -60,6 +51,8 @@ StarGoTelescope::StarGoTelescope()
     SetTelescopeCapability(TELESCOPE_CAN_PARK | TELESCOPE_CAN_SYNC | TELESCOPE_CAN_GOTO | TELESCOPE_CAN_ABORT |
                            TELESCOPE_HAS_TRACK_MODE | TELESCOPE_HAS_LOCATION | TELESCOPE_CAN_CONTROL_TRACK |
                            TELESCOPE_HAS_PIER_SIDE, 4);
+
+    autoRa = new AutoAdjust(this);
 }
 
 /*******************************************************************************
@@ -253,14 +246,11 @@ bool StarGoTelescope::ISNewSwitch(const char *dev, const char *name, ISState *st
         }
         else if (!strcmp(name, ST4StatusSP.name))
         {
-//            bool enabled = (states[0] == ISS_OFF);
             bool enabled = !strcmp(IUFindOnSwitchName(states, names, n), ST4StatusS[INDI_ENABLED].name);
             bool result = setST4Enabled(enabled);
 
             if(result)
             {
-//                ST4StatusS[0].s = enabled ? ISS_OFF : ISS_ON;
-//                ST4StatusS[1].s = enabled ? ISS_ON : ISS_OFF;
                 ST4StatusS[INDI_ENABLED].s = enabled ? ISS_ON : ISS_OFF;
                 ST4StatusS[INDI_DISABLED].s = enabled ? ISS_OFF : ISS_ON;
                 ST4StatusSP.s = IPS_OK;
@@ -274,14 +264,11 @@ bool StarGoTelescope::ISNewSwitch(const char *dev, const char *name, ISState *st
         }
         else if (!strcmp(name, KeypadStatusSP.name))
         {
-//            bool enabled = (states[0] == ISS_OFF);
             bool enabled = !strcmp(IUFindOnSwitchName(states, names, n), KeypadStatusS[INDI_ENABLED].name);
             bool result = setKeyPadEnabled(enabled);
 
             if(result)
             {
-//                KeypadStatusS[0].s = enabled ? ISS_OFF : ISS_ON;
-//                KeypadStatusS[1].s = enabled ? ISS_ON : ISS_OFF;
                 KeypadStatusS[INDI_ENABLED].s = enabled ? ISS_ON : ISS_OFF;
                 KeypadStatusS[INDI_DISABLED].s = enabled ? ISS_OFF : ISS_ON;
                 KeypadStatusSP.s = IPS_OK;
@@ -342,6 +329,24 @@ bool StarGoTelescope::ISNewSwitch(const char *dev, const char *name, ISState *st
                 DecMotorReverseSP.s = IPS_OK;
             IDSetSwitch(&DecMotorReverseSP, nullptr);
             return true;
+        }
+        else if (!strcmp(name, RaAutoAdjustSP.name))
+        {
+            bool enabled = !strcmp(IUFindOnSwitchName(states, names, n), RaAutoAdjustS[INDI_ENABLED].name);
+            bool result = autoRa->setEnabled(enabled);
+
+            if(result)
+            {
+                RaAutoAdjustS[INDI_ENABLED].s = enabled ? ISS_ON : ISS_OFF;
+                RaAutoAdjustS[INDI_DISABLED].s = enabled ? ISS_OFF : ISS_ON;
+                RaAutoAdjustSP.s = IPS_OK;
+            }
+            else
+            {
+                RaAutoAdjustSP.s = IPS_ALERT;
+            }
+            IDSetSwitch(&RaAutoAdjustSP, nullptr);
+            return result;
         }
     }
 
@@ -455,7 +460,12 @@ bool StarGoTelescope::initProperties()
     // Tracking Adjustment
     IUFillNumber(&TrackAdjustN[0], "RA_TRACK_ADJ", "RA Tracking Adjust (%)", "%.2f", -5.0, 5.0, 0.01, 0);
     IUFillNumberVector(&TrackAdjustNP, TrackAdjustN, 1, getDeviceName(), "Track Adjust","Tracking", ADVANCED_TAB, IP_RW, 60, IPS_IDLE);
-//    IUFillNumberVector(&TrackAdjustNP, TrackAdjustN, 1, getDeviceName(), "Track Adjust","Tracking", INFO_TAB, IP_RO, 60, IPS_IDLE);
+
+    // Auto Tracking Adjustment
+    IUFillSwitch(&RaAutoAdjustS[INDI_ENABLED], "INDI_ENABLED", "Enabled", ISS_ON);
+    IUFillSwitch(&RaAutoAdjustS[INDI_DISABLED], "INDI_DISABLED", "Disabled", ISS_OFF);
+    IUFillSwitchVector(&RaAutoAdjustSP, RaAutoAdjustS, 2, getDeviceName(), "RA_AUTO_ADJ", "RA Auto Adjust", ADVANCED_TAB, IP_RW, ISR_1OFMANY, 60, IPS_IDLE);
+
 
     IUFillSwitch(&ST4StatusS[INDI_ENABLED], "INDI_ENABLED", "Enabled", ISS_OFF);
     IUFillSwitch(&ST4StatusS[INDI_DISABLED], "INDI_DISABLED", "Disabled", ISS_OFF);
@@ -500,6 +510,7 @@ bool StarGoTelescope::updateProperties()
         defineProperty(&MountRequestDelayNP);
         defineProperty(&MountFirmwareInfoTP);
         defineProperty(&TrackAdjustNP);
+        defineProperty(&RaAutoAdjustSP);
         defineProperty(&GearRatioNP);
         defineProperty(&TorqueNP);
         defineProperty(&RaMotorReverseSP);
@@ -524,6 +535,7 @@ bool StarGoTelescope::updateProperties()
         deleteProperty(MountRequestDelayNP.name);
         deleteProperty(MountFirmwareInfoTP.name);
         deleteProperty(TrackAdjustNP.name);
+        deleteProperty(RaAutoAdjustSP.name);
         deleteProperty(GearRatioNP.name);
         deleteProperty(TorqueNP.name);
         deleteProperty(RaMotorReverseSP.name);
@@ -613,6 +625,7 @@ bool StarGoTelescope::Handshake()
 /**************************************************************************************
 **getBasicData is called from updateProperties whenever a client connects to the driver
 * It could instead be called from Handshake whenever the driver connects to the mount
+* It initialises driver properties from the mount before they are updated from the config file
 ***************************************************************************************/
 void StarGoTelescope::getBasicData()
 {
@@ -636,7 +649,6 @@ void StarGoTelescope::getBasicData()
             SetParked(strcmp(parkHomeStatus, "2") == 0);
             if (strcmp(parkHomeStatus, "1") == 0)
             {
-//                SyncHomeS[0].s = ISS_ON;
                 SyncHomeSP.s = IPS_OK;
                 IDSetSwitch(&SyncHomeSP, nullptr);
             }
@@ -1238,7 +1250,7 @@ bool StarGoTelescope::setTrackingAdjustment(double adjustRA)
     /*
      * :X41sRRR# to adjust the RA tracking speed where s is the sign + or -  and RRR are three digits whose meaning is parts per 10000 of  RA correction .
      * :X43sDDD# to fix the cf DEC offset
-     X41 command only applies whole number percentages i.e +/- 100, 200, 300, 400, 500. Does not appear to work with 000
+     X41 command only applies whole number percentages i.e +/- 100, 200, 300, 400, 500.
      
      :X1Ennnn # where nnnn is between 0500 and 1500. 1000 represents no adjustment and 0500 is -5% and 1500 is +5%
      Ascertained from the StarGo ASCOM driver
@@ -2230,6 +2242,10 @@ int StarGoTelescope::SendPulseCmd(int8_t direction, uint32_t duration_msec)
         return false;
     }
 // Assume the guide pulse was issued and acted upon.
+    if((direction == STARGO_EAST || direction == STARGO_WEST) && RaAutoAdjustS[INDI_ENABLED].s == ISS_ON)
+    {
+        autoRa->setRaAdjust(direction, duration_msec);
+    }
     return true;
 }
 
@@ -3197,7 +3213,8 @@ bool StarGoTelescope::ParseMotionState(char* state)
 {
     LOGF_DEBUG("%s %s", __FUNCTION__, state);
     int lmotor, lmode, lslew;
-    if(sscanf(state, ":Z1%01d%01d%01d", &lmotor, &lmode, &lslew)==3)
+    if(sscanf(state, ":Z1%01d%01d%01d", &lmotor, &lmode, &lslew)==3
+        || sscanf(state, ":Z%01d%01d%01d", &lmotor, &lmode, &lslew)==3) // Starting to see :Znnn responses
     {
         LOGF_DEBUG("Motion state %s=>Motors: %d, Track: %d, SlewSpeed: %d", state, lmotor, lmode, lslew);
         // m = 0 both motors are OFF (no power)
@@ -3328,4 +3345,134 @@ bool StarGoTelescope::transmit(const char* buffer)
         return false;
     }
     return true;
+}
+/*******************************************************************************
+**
+*******************************************************************************/
+StarGoTelescope::AutoAdjust::AutoAdjust(StarGoTelescope *ptr)
+{
+    p = ptr;
+    xmin = 20000;   // Minimum duration of set in milliseconds
+    xmax = 30000;   // Maximum gap between samples
+    nmin = 5;       // Minimum number of samples
+    reset();
+}
+/*******************************************************************************
+**
+*******************************************************************************/
+bool StarGoTelescope::AutoAdjust::setEnabled(bool isenabled)
+{
+    LOGF_DEBUG("%s enabled=%d",__FUNCTION__, enabled);
+    enabled = isenabled;
+    LOGF_INFO("RA Auto Adjust %s.", enabled?"enabled":"disabled");
+    return true;
+}
+
+/*******************************************************************************
+**
+*******************************************************************************/
+void StarGoTelescope::AutoAdjust::reset()
+{
+    LOG_DEBUG(__FUNCTION__);
+    sumx=sumy=sumxy=sumx2=0;
+    x.clear();
+    y.clear();
+    start = std::chrono::system_clock::now();
+    p->setTrackingAdjustment(0.0);
+}
+/*******************************************************************************
+**
+*******************************************************************************/
+bool StarGoTelescope::AutoAdjust::setRaAdjust(int8_t direction, uint32_t duration_msec)
+{
+    LOG_DEBUG(__FUNCTION__);
+    if (!enabled)
+    {
+        LOG_ERROR("Auto tracking adjustment is currently DISABLED");
+        return false;
+    }
+
+// Get the guiding speed
+    double guidingSpeed = p->GuidingSpeedN[0].value;
+    
+    int raSpeed, decSpeed;
+    if(p->getGuidingSpeeds(&raSpeed, &decSpeed))
+    {
+        guidingSpeed =  raSpeed/100.0;
+    }
+    else
+    {
+        LOG_ERROR("Unable to get guiding speed");
+        return false;
+    }
+
+//    get trackrate = 1 + adj/100
+    double trackAdjust = 1.0 + p->TrackAdjustN[0].value/100.0;
+    
+    double raCorrection;
+    if (p->getTrackingAdjustment(&raCorrection))
+    {
+        trackAdjust = 1.0 + raCorrection/100;
+    }
+    else
+    {
+        LOG_ERROR("Unable to get tracking adjustment ");
+        return false;
+    }
+    
+// Calculate number of milliseconds since the driver was started
+    double xnewest = std::chrono::duration<double,std::milli>(std::chrono::system_clock::now() - start).count();
+    double ddir = 0.0;
+    if (direction == STARGO_EAST)
+    {
+        ddir = -1.0;
+    }
+    else if (direction == STARGO_WEST)
+    {
+        ddir = -1.0;
+    }
+    else
+    {
+        LOG_ERROR("Invalid direction.");
+        return false;
+    }
+    
+    // Reset if the gap to the last reading is too large
+    if( !x.empty() && (xnewest - x.back()) > xmax)
+    {
+        LOG_INFO("Reset RA auto adjust after hiatus");
+        reset();
+    }
+    
+    // Calculate the cumulative corrections so far in milliseconds normalised to sidereal rate
+    double ynewest = ddir * static_cast<double>(duration_msec) * guidingSpeed * trackAdjust + (y.empty() ? 0.0: y.back());
+    while (xnewest - x[1] > xmin && x.size() > 2) // enough samples. lose the excess
+    {
+        sumx  -= x.front();
+        sumy  -= y.front();
+        sumxy -= x.front()*y.front();
+        sumx2 -= x.front()*x.front();
+        x.pop_front();
+        y.pop_front();
+    }
+    x.push_back(xnewest);
+    y.push_back(ynewest);
+    sumx  += xnewest;
+    sumy  += ynewest;
+    sumxy += xnewest*ynewest;
+    sumx2 += xnewest*xnewest;
+    
+    if(x.size() < nmin)
+    {
+        LOG_INFO("RA auto adjust needs more samples");
+        return true; // not enough samples
+    }
+
+    uint32_t n = x.size();
+    double slope = (n*sumxy - sumx*sumy)/(n*sumx2 - sumy*sumy);
+    double adjustRA = slope*100.0;  // Convert to a percentage of Sidereal rate
+    p->setTrackingAdjustment(adjustRA);
+    LOGF_INFO("RA auto adjust rate to %.2f", adjustRA);
+    return true;
+
 }
