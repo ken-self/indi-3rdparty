@@ -15,8 +15,8 @@ include_directories(${NOVA_INCLUDE_DIR})
 
 include(CMakeCommon)
 
-set(AVALON_VERSION_MAJOR 1)
-set(AVALON_VERSION_MINOR 11)
+set(AVALON_VERSION_MAJOR 2)
+set(AVALON_VERSION_MINOR 00)
 
 set(INDI_DATA_DIR "${CMAKE_INSTALL_PREFIX}/share/indi")
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/config.h.cmake ${CMAKE_CURRENT_BINARY_DIR}/config.h )
@@ -27,14 +27,14 @@ IF ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VER
 ENDIF ()
 
 ########### LX200 StarGO ###########
-SET(lx200stargo_SRCS
-    ${CMAKE_CURRENT_SOURCE_DIR}/lx200stargofocuser.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/lx200stargo.cpp
+SET(stargo_SRCS
+    ${CMAKE_CURRENT_SOURCE_DIR}/stargofocuser.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/stargo.cpp
     )
 
-add_executable(indi_lx200stargo ${lx200stargo_SRCS})
-target_link_libraries(indi_lx200stargo ${INDI_LIBRARIES} ${NOVA_LIBRARIES})
+add_executable(indi_stargo ${stargo_SRCS})
+target_link_libraries(indi_stargo ${INDI_LIBRARIES} ${NOVA_LIBRARIES})
 
-install(TARGETS indi_lx200stargo RUNTIME DESTINATION bin )
+install(TARGETS indi_stargo RUNTIME DESTINATION bin )
 
 install( FILES ${CMAKE_CURRENT_BINARY_DIR}/indi_avalon.xml DESTINATION ${INDI_DATA_DIR})
