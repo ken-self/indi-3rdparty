@@ -1505,135 +1505,6 @@ bool StarGoTelescope::getLST_String(char* input)
  *********************************************************************************/
 
 /*******************************************************************************
- * @brief Send a STARGO query to the communication port and read the result.
- * @param cmd STARGO query
- * @param response answer
- * @return true if the command succeeded, false otherwise
-*******************************************************************************/
-bool StarGoTelescope::sendQuery(const char* cmd, char* response, char end, int wait)
-{
-    LOGF_DEBUG("%s %s End:%c Wait:%ds", __FUNCTION__, cmd, end, wait);
-    response[0] = '\0';
-    char lresponse[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
-    int lbytes = 0;
-    lresponse [0] = '\0';
-    while (receive(lresponse, &lbytes, '#', 0))
-    {
-        lbytes = 0;
-        ParseMotionState(lresponse);
-        lresponse [0] = '\0';
-    }
-    flush();
-    if(!transmit(cmd))
-    {
-        LOGF_ERROR("Command <%s> failed.", cmd);
-        // sleep for 50 mseconds to avoid flooding the mount with commands
-        nanosleep(&mount_request_delay, nullptr);
-        return false;
-    }
-    lresponse[0] = '\0';
-    int lwait = wait;
-    bool found = false;
-    while (receive(lresponse, &lbytes, end, lwait))
-    {
-        //        LOGF_DEBUG("Found response after %ds %s", lwait, lresponse);
-        lbytes = 0;
-        if(! ParseMotionState(lresponse))
-        {
-            // Take the first response that is no motion state
-            if (!found)
-                strcpy(response, lresponse);
-            found = true;
-            lwait = 0;
-        }
-    }
-    flush();
-
-    // sleep for 50 mseconds to avoid flooding the mount with commands
-    nanosleep(&mount_request_delay, nullptr);
-
-    return true;
-}
-
-/*******************************************************************************
-**
-*******************************************************************************/
-bool StarGoTelescope::ParseMotionState(char* state)
-{
-    LOGF_DEBUG("%s %s", __FUNCTION__, state);
-    int lmotor, lmode, lslew;
-    if(sscanf(state, ":Z1%01d%01d%01d", &lmotor, &lmode, &lslew)==3
-        || sscanf(state, ":Z%01d%01d%01d", &lmotor, &lmode, &lslew)==3) // Starting to see :Znnn responses
-    {
-        LOGF_DEBUG("Motion state %s=>Motors: %d, Track: %d, SlewSpeed: %d", state, lmotor, lmode, lslew);
-        // m = 0 both motors are OFF (no power)
-        // m = 1 RA motor OFF DEC motor ON
-        // m = 2 RA motor ON DEC motor OFF
-        // m = 3 both motors are ON
-        switch(lmotor)
-        {
-            case 0:
-                CurrentMotorsState = MOTORS_OFF;
-                break;
-            case 1:
-                CurrentMotorsState = MOTORS_DEC_ONLY;
-                break;
-            case 2:
-                CurrentMotorsState = MOTORS_RA_ONLY;
-                break;
-            case 3:
-                CurrentMotorsState = MOTORS_ON;
-                break;
-        };
-        // Tracking modes
-        // t = 0 no tracking at all
-        // t = 1 tracking at moon speed
-        // t = 2 tracking at sun speed
-        // t = 3 tracking at stars speed (sidereal speed)
-        switch(lmode)
-        {
-            case 0:
-                // TRACK_NONE removed, do nothing
-                break;
-            case 1:
-                CurrentTrackMode = TRACK_LUNAR;
-                break;
-            case 2:
-                CurrentTrackMode = TRACK_SOLAR;
-                break;
-            case 3:
-                CurrentTrackMode = TRACK_SIDEREAL;
-                break;
-        };
-        // Slew speed index
-        // s = 0 GUIDE speed
-        // s = 1 CENTERING speed
-        // s = 2 FINDING speed
-        // s = 3 MAX speed
-        switch(lslew)
-        {
-            case 0:
-                CurrentSlewRate = SLEW_GUIDE;
-                break;
-            case 1:
-                CurrentSlewRate = SLEW_CENTERING;
-                break;
-            case 2:
-                CurrentSlewRate = SLEW_FIND;
-                break;
-            case 3:
-                CurrentSlewRate = SLEW_MAX;
-                break;
-        };
-        return true;
-    }
-    else
-    {
-        return false;
-    }
-}
-
-/*******************************************************************************
 **
 *******************************************************************************/
 bool StarGoTelescope::setMountParkPosition()
@@ -2722,6 +2593,135 @@ void StarGoTelescope::mountSim()
 /*********************************************************************************
  * Helper functions
  *********************************************************************************/
+
+/*******************************************************************************
+ * @brief Send a STARGO query to the communication port and read the result.
+ * @param cmd STARGO query
+ * @param response answer
+ * @return true if the command succeeded, false otherwise
+*******************************************************************************/
+bool StarGoTelescope::sendQuery(const char* cmd, char* response, char end, int wait)
+{
+    LOGF_DEBUG("%s %s End:%c Wait:%ds", __FUNCTION__, cmd, end, wait);
+    response[0] = '\0';
+    char lresponse[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
+    int lbytes = 0;
+    lresponse [0] = '\0';
+    while (receive(lresponse, &lbytes, '#', 0))
+    {
+        lbytes = 0;
+        ParseMotionState(lresponse);
+        lresponse [0] = '\0';
+    }
+    flush();
+    if(!transmit(cmd))
+    {
+        LOGF_ERROR("Command <%s> failed.", cmd);
+        // sleep for 50 mseconds to avoid flooding the mount with commands
+        nanosleep(&mount_request_delay, nullptr);
+        return false;
+    }
+    lresponse[0] = '\0';
+    int lwait = wait;
+    bool found = false;
+    while (receive(lresponse, &lbytes, end, lwait))
+    {
+        //        LOGF_DEBUG("Found response after %ds %s", lwait, lresponse);
+        lbytes = 0;
+        if(! ParseMotionState(lresponse))
+        {
+            // Take the first response that is no motion state
+            if (!found)
+                strcpy(response, lresponse);
+            found = true;
+            lwait = 0;
+        }
+    }
+    flush();
+
+    // sleep for 50 mseconds to avoid flooding the mount with commands
+    nanosleep(&mount_request_delay, nullptr);
+
+    return true;
+}
+
+/*******************************************************************************
+**
+*******************************************************************************/
+bool StarGoTelescope::ParseMotionState(char* state)
+{
+    LOGF_DEBUG("%s %s", __FUNCTION__, state);
+    int lmotor, lmode, lslew;
+    if(sscanf(state, ":Z1%01d%01d%01d", &lmotor, &lmode, &lslew)==3
+        || sscanf(state, ":Z%01d%01d%01d", &lmotor, &lmode, &lslew)==3) // Starting to see :Znnn responses
+    {
+        LOGF_DEBUG("Motion state %s=>Motors: %d, Track: %d, SlewSpeed: %d", state, lmotor, lmode, lslew);
+        // m = 0 both motors are OFF (no power)
+        // m = 1 RA motor OFF DEC motor ON
+        // m = 2 RA motor ON DEC motor OFF
+        // m = 3 both motors are ON
+        switch(lmotor)
+        {
+            case 0:
+                CurrentMotorsState = MOTORS_OFF;
+                break;
+            case 1:
+                CurrentMotorsState = MOTORS_DEC_ONLY;
+                break;
+            case 2:
+                CurrentMotorsState = MOTORS_RA_ONLY;
+                break;
+            case 3:
+                CurrentMotorsState = MOTORS_ON;
+                break;
+        };
+        // Tracking modes
+        // t = 0 no tracking at all
+        // t = 1 tracking at moon speed
+        // t = 2 tracking at sun speed
+        // t = 3 tracking at stars speed (sidereal speed)
+        switch(lmode)
+        {
+            case 0:
+                // TRACK_NONE removed, do nothing
+                break;
+            case 1:
+                CurrentTrackMode = TRACK_LUNAR;
+                break;
+            case 2:
+                CurrentTrackMode = TRACK_SOLAR;
+                break;
+            case 3:
+                CurrentTrackMode = TRACK_SIDEREAL;
+                break;
+        };
+        // Slew speed index
+        // s = 0 GUIDE speed
+        // s = 1 CENTERING speed
+        // s = 2 FINDING speed
+        // s = 3 MAX speed
+        switch(lslew)
+        {
+            case 0:
+                CurrentSlewRate = SLEW_GUIDE;
+                break;
+            case 1:
+                CurrentSlewRate = SLEW_CENTERING;
+                break;
+            case 2:
+                CurrentSlewRate = SLEW_FIND;
+                break;
+            case 3:
+                CurrentSlewRate = SLEW_MAX;
+                break;
+        };
+        return true;
+    }
+    else
+    {
+        return false;
+    }
+}
 
 /*******************************************************************************
  * @brief Receive answer from the communication port.

@@ -135,7 +135,8 @@ class StarGoTelescope : public INDI::Telescope, public INDI::GuiderInterface
 
         // override LX200Generic
         bool usePulseCommand { true };
-    
+        struct timespec mount_request_delay = {0, 50000000L};
+
         bool sendTimeOnStartup=true, sendLocationOnStartup=true;
         uint8_t DBG_SCOPE;
     
@@ -180,19 +181,10 @@ class StarGoTelescope : public INDI::Telescope, public INDI::GuiderInterface
         bool getSystemSlewSpeedMode (int *index);
         bool setSystemSlewSpeedMode(int index);
 
-        struct timespec mount_request_delay = {0, 50000000L};
-        void setMountRequestDelay(int secs, long nanosecs)
-        {
-            mount_request_delay.tv_sec = secs;
-            mount_request_delay.tv_nsec = nanosecs;
-        };
 
         // autoguiding
         bool isGuiding();
         bool setGuidingSpeeds(int raSpeed, int decSpeed);
-
-        // scope status
-        bool ParseMotionState(char* state);
 
         // location
         bool sendScopeLocation();
@@ -204,10 +196,6 @@ class StarGoTelescope : public INDI::Telescope, public INDI::GuiderInterface
         bool getEqCoordinates(double *ra, double *dec);
         bool getScopeTime();
 
-        // queries to the scope interface. Wait for specified end character
-        bool sendQuery(const char* cmd, char* response, char end, int wait = AVALON_TIMEOUT);
-        // Wait for default "#' character
-        bool sendQuery(const char* cmd, char* response, int wait = AVALON_TIMEOUT);
         bool getFirmwareInfo(char *version);
         bool setSiteLatitude(double Lat);
         bool setSiteLongitude(double Long);
@@ -250,6 +238,10 @@ class StarGoTelescope : public INDI::Telescope, public INDI::GuiderInterface
         void mountSim();
 
         // helper functions
+        bool sendQuery(const char* cmd, char* response, char end, int wait = AVALON_TIMEOUT);
+        bool sendQuery(const char* cmd, char* response, int wait = AVALON_TIMEOUT);
+        bool ParseMotionState(char* state);
+        void setMountRequestDelay(int secs, long nanosecs);
         bool receive(char* buffer, int* bytes, int wait = AVALON_TIMEOUT);
         bool receive(char* buffer, int* bytes, char end, int wait = AVALON_TIMEOUT);
         void flush();
@@ -263,6 +255,13 @@ inline bool StarGoTelescope::sendQuery(const char* cmd, char* response, int wait
 {
     return sendQuery(cmd, response, '#', wait);
 }
+
+inline void StarGoTelescope::setMountRequestDelay(int secs, long nanosecs)
+{
+    mount_request_delay.tv_sec = secs;
+    mount_request_delay.tv_nsec = nanosecs;
+};
+
 inline bool StarGoTelescope::receive(char* buffer, int* bytes, int wait)
 {
     return receive(buffer, bytes, '#', wait);
