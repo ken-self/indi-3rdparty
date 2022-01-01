@@ -98,8 +98,8 @@ class StarGoTelescope : public INDI::Telescope, public INDI::GuiderInterface
         void flush();
         bool transmit(const char* buffer);
         virtual bool SetTrackMode(uint8_t mode) override;
-    protected:
 
+    protected:
         // Sync Home Position
         ISwitchVectorProperty SyncHomeSP;
         ISwitch SyncHomeS[1];
@@ -107,12 +107,6 @@ class StarGoTelescope : public INDI::Telescope, public INDI::GuiderInterface
         // firmware info
         ITextVectorProperty MountFirmwareInfoTP;
         IText MountFirmwareInfoT[1] = {};
-
-/*
-        // AUX focusers control
-        ISwitchVectorProperty Aux1FocuserSP;
-        ISwitch Aux1FocuserS[2];
-*/
 
         // goto home
         ISwitchVectorProperty MountGotoHomeSP;
@@ -162,10 +156,7 @@ class StarGoTelescope : public INDI::Telescope, public INDI::GuiderInterface
         virtual bool UnPark() override;
         virtual bool saveConfigItems(FILE *fp) override;
         virtual bool Goto(double ra, double dec) override;
-/*
-        virtual bool Connect() override;
-        virtual bool Disconnect() override;
-*/
+
         // StarGo stuff
         void WaitParkOptionReady();
         bool syncHomePosition();
@@ -261,10 +252,6 @@ class StarGoTelescope : public INDI::Telescope, public INDI::GuiderInterface
 // Simulate Mount in simulation mode
         void mountSim();
 
-/*
-        // AUX1 focuser
-        bool activateFocuserAux1(bool activate);
-*/
 };
 inline bool StarGoTelescope::isGuiding()
 {
