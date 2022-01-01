@@ -1468,6 +1468,127 @@ bool StarGoTelescope::setUTCOffset(double offset)
 }
 
 /*******************************************************************************
+ * @brief Check whether the mount is synched or parked.
+ * @param status 0=unparked, 1=at home position, 2=parked
+ *               A=slewing home, B=slewing to park position
+ * @return true if the command succeeded, false otherwise
+*******************************************************************************/
+bool StarGoTelescope::getParkHomeStatus (char* status)
+{
+    LOG_DEBUG(__FUNCTION__);
+    // Command   - :X38#
+    // Answers:
+    // p0 - unparked
+    // p1 - at home position
+    // p2 - parked
+    // pA - slewing home
+    // pB - slewing to park position
+
+    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
+    if (!sendQuery(":X38#", response))
+    {
+        LOG_ERROR("Failed to send get parking status request.");
+        return false;
+    }
+
+    LOGF_DEBUG("%s: response: %s", __FUNCTION__, response);
+
+    if (! sscanf(response, "p%32s[012AB]", status))
+    {
+        LOGF_ERROR("Unexpected park home status response '%s'.", response);
+        return false;
+    }
+
+    return true;
+}
+
+/**************************************************************************************
+**
+***************************************************************************************/
+bool StarGoTelescope::syncHomePosition()
+{
+    LOG_DEBUG(__FUNCTION__);
+    char input[AVALON_RESPONSE_BUFFER_LENGTH - 5] = {0};
+    char cmd[AVALON_COMMAND_BUFFER_LENGTH] = {0};
+    if (!getLST_String(input))
+    {
+        LOG_WARN("Synching home get LST failed.");
+        SyncHomeSP.s = IPS_ALERT;
+        SyncHomeS[0].s = ISS_OFF;
+        IDSetSwitch(&SyncHomeSP, nullptr);
+        return false;
+    }
+
+    sprintf(cmd, ":X31%s#", input);
+    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
+
+    if (sendQuery(cmd, response))
+    {
+        LOG_INFO("Synching home position succeeded.");
+        SyncHomeSP.s = IPS_OK;
+    }
+    else
+    {
+        LOG_WARN("Synching home position failed.");
+        SyncHomeSP.s = IPS_ALERT;
+        SyncHomeS[0].s = ISS_OFF;
+        IDSetSwitch(&SyncHomeSP, nullptr);
+        return false;
+    }
+    SyncHomeS[0].s = ISS_OFF;
+    IDSetSwitch(&SyncHomeSP, nullptr);
+    return true;
+}
+
+/*******************************************************************************
+**
+*******************************************************************************/
+bool StarGoTelescope::setMountParkPosition()
+{
+    LOG_DEBUG(__FUNCTION__);
+    // Command  - :X352#
+    // Response - 0#
+    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
+    if (!sendQuery(":X352#", response))
+    {
+        LOG_ERROR("Failed to send mount set park position command.");
+        return false;
+    }
+    if (response[0] != '0')
+    {
+        LOGF_ERROR("Invalid mount set park position response '%s'.", response);
+        return false;
+    }
+    return true;
+}
+
+/**************************************************************************************
+* @author CanisUrsa
+***************************************************************************************/
+bool StarGoTelescope::setMountGotoHome()
+{
+    LOG_DEBUG(__FUNCTION__);
+    // Command  - :X361#
+    // Response - pA#
+    //            :Z1303#
+    //            p0#
+    //            :Z1003#
+    //            p0#
+    char response[AVALON_COMMAND_BUFFER_LENGTH] = {0};
+    if (!sendQuery(":X361#", response))
+    {
+        LOG_ERROR("Failed to send mount goto home command.");
+        return false;
+    }
+    if (strcmp(response, "pA") != 0)
+    {
+        LOGF_ERROR("Invalid send mount goto home response '%s'.", response);
+        return false;
+    }
+    return true;
+}
+
+/*******************************************************************************
 **
 *******************************************************************************/
 void StarGoTelescope::WaitParkOptionReady()
@@ -1507,44 +1628,6 @@ void StarGoTelescope::WaitParkOptionReady()
     IDSetSwitch(&ParkOptionSP, nullptr);
     ParkOptionBusy = false;
     return;
-}
-
-/**************************************************************************************
-**
-***************************************************************************************/
-bool StarGoTelescope::syncHomePosition()
-{
-    LOG_DEBUG(__FUNCTION__);
-    char input[AVALON_RESPONSE_BUFFER_LENGTH - 5] = {0};
-    char cmd[AVALON_COMMAND_BUFFER_LENGTH] = {0};
-    if (!getLST_String(input))
-    {
-        LOG_WARN("Synching home get LST failed.");
-        SyncHomeSP.s = IPS_ALERT;
-        SyncHomeS[0].s = ISS_OFF;
-        IDSetSwitch(&SyncHomeSP, nullptr);
-        return false;
-    }
-
-    sprintf(cmd, ":X31%s#", input);
-    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
-
-    if (sendQuery(cmd, response))
-    {
-        LOG_INFO("Synching home position succeeded.");
-        SyncHomeSP.s = IPS_OK;
-    }
-    else
-    {
-        LOG_WARN("Synching home position failed.");
-        SyncHomeSP.s = IPS_ALERT;
-        SyncHomeS[0].s = ISS_OFF;
-        IDSetSwitch(&SyncHomeSP, nullptr);
-        return false;
-    }
-    SyncHomeS[0].s = ISS_OFF;
-    IDSetSwitch(&SyncHomeSP, nullptr);
-    return true;
 }
 
 /*******************************************************************************
@@ -1687,57 +1770,9 @@ void StarGoTelescope::getBasicData()
     usePulseCommand = true;
 }
 
-/**************************************************************************************
-* @author CanisUrsa
-***************************************************************************************/
-bool StarGoTelescope::setMountGotoHome()
-{
-    LOG_DEBUG(__FUNCTION__);
-    // Command  - :X361#
-    // Response - pA#
-    //            :Z1303#
-    //            p0#
-    //            :Z1003#
-    //            p0#
-    char response[AVALON_COMMAND_BUFFER_LENGTH] = {0};
-    if (!sendQuery(":X361#", response))
-    {
-        LOG_ERROR("Failed to send mount goto home command.");
-        return false;
-    }
-    if (strcmp(response, "pA") != 0)
-    {
-        LOGF_ERROR("Invalid send mount goto home response '%s'.", response);
-        return false;
-    }
-    return true;
-}
-
 /*********************************************************************************
  * Queries
  *********************************************************************************/
-
-/*******************************************************************************
-**
-*******************************************************************************/
-bool StarGoTelescope::setMountParkPosition()
-{
-    LOG_DEBUG(__FUNCTION__);
-    // Command  - :X352#
-    // Response - 0#
-    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
-    if (!sendQuery(":X352#", response))
-    {
-        LOG_ERROR("Failed to send mount set park position command.");
-        return false;
-    }
-    if (response[0] != '0')
-    {
-        LOGF_ERROR("Invalid mount set park position response '%s'.", response);
-        return false;
-    }
-    return true;
-}
 
 /*******************************************************************************
 *
@@ -1804,41 +1839,6 @@ bool StarGoTelescope::getMotorStatus(int *xSpeed, int *ySpeed)
     *xSpeed = x;
     *ySpeed = y;
     LOGF_DEBUG("Motor state = (%d, %d)", *xSpeed, *ySpeed);
-    return true;
-}
-
-/*******************************************************************************
- * @brief Check whether the mount is synched or parked.
- * @param status 0=unparked, 1=at home position, 2=parked
- *               A=slewing home, B=slewing to park position
- * @return true if the command succeeded, false otherwise
-*******************************************************************************/
-bool StarGoTelescope::getParkHomeStatus (char* status)
-{
-    LOG_DEBUG(__FUNCTION__);
-    // Command   - :X38#
-    // Answers:
-    // p0 - unparked
-    // p1 - at home position
-    // p2 - parked
-    // pA - slewing home
-    // pB - slewing to park position
-
-    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
-    if (!sendQuery(":X38#", response))
-    {
-        LOG_ERROR("Failed to send get parking status request.");
-        return false;
-    }
-
-    LOGF_DEBUG("%s: response: %s", __FUNCTION__, response);
-
-    if (! sscanf(response, "p%32s[012AB]", status))
-    {
-        LOGF_ERROR("Unexpected park home status response '%s'.", response);
-        return false;
-    }
-
     return true;
 }
 

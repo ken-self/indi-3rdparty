@@ -185,13 +185,17 @@ class StarGoTelescope : public INDI::Telescope, public INDI::GuiderInterface
         bool getUTCOffset(double *offset);
         bool setUTCOffset(double offset);
 
+        // Park, Home, Sync functions
+        bool getParkHomeStatus (char* status);
+        bool syncHomePosition();
+        bool setMountParkPosition();
+        bool setMountGotoHome();
+        void WaitParkOptionReady();
+//        bool setParkPosition(ISState *states, char *names[], int n);
+
         void getBasicData();
 
         // StarGo stuff
-        void WaitParkOptionReady();
-        bool syncHomePosition();
-
-        bool setParkPosition(ISState *states, char *names[], int n);
         bool getKeypadStatus (bool *isEnabled);
         bool setKeyPadEnabled(bool enabled);
         bool getSystemSlewSpeedMode (int *index);
@@ -208,9 +212,6 @@ class StarGoTelescope : public INDI::Telescope, public INDI::GuiderInterface
         bool getFirmwareInfo(char *version);
         bool getScopeAlignmentStatus(char *mountType, bool *isTracking, int *alignmentPoints);
         bool getMotorStatus(int *xSpeed, int *ySpeed);
-        bool getParkHomeStatus (char* status);
-        bool setMountGotoHome();
-        bool setMountParkPosition();
 
         // guiding
         bool getST4Status(bool *isEnabled);
