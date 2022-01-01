@@ -20,50 +20,66 @@
 */
 
 #include "stargofocuser.h"
-
 #include <cstring>
 
 #define AVALON_FOCUSER_POSITION_OFFSET                  500000
 
-/**
+/***************************************************************************
  * @brief Constructor
  * @param defaultDevice the telescope
  * @param name device name
- */
-StarGoFocuser::StarGoFocuser(StarGoTelescope* defaultDevice, const char *name) : INDI::FocuserInterface(defaultDevice)
+ ***************************************************************************/
+//StarGoFocuser::StarGoFocuser(StarGoTelescope* defaultDevice, const char *name) : INDI::FocuserInterface(defaultDevice)
+StarGoFocuser::StarGoFocuser(StarGoSystem *dev) : FI(dev), m_device(dev)
 {
+/*
     baseDevice = defaultDevice;
     deviceName = name;
     focuserActivated = false;
+*/
 }
 
-/**
+/***************************************************************************
  * @brief Initialize the focuser UI controls
  * @param groupName tab where the UI controls are grouped
- */
-void StarGoFocuser::initProperties(const char *groupName)
+  ***************************************************************************/
+//void StarGoFocuser::initProperties(const char *groupName)
+bool StarGoFocuser::initProperties()
 {
-    INDI::FocuserInterface::initProperties(groupName);
+//    INDI::FocuserInterface::initProperties(groupName);
+    FI::initProperties(FOCUS_TAB);
+
+    FI::SetCapability(
+        FOCUSER_CAN_ABS_MOVE        | /*!< Can the focuser move by absolute position? */
+        FOCUSER_CAN_REL_MOVE        | /*!< Can the focuser move by relative position? */
+        FOCUSER_CAN_ABORT           | /*!< Is it possible to abort focuser motion? */
+        FOCUSER_CAN_REVERSE         | /*!< Is it possible to reverse focuser motion? */
+        FOCUSER_CAN_SYNC            | /*!< Can the focuser sync to a custom position */
+        FOCUSER_HAS_VARIABLE_SPEED    /*!< Can the focuser move in different configurable speeds? */
+    );
+
     // set default values
     FocusAbsPosN[0].min = 0.0;
     FocusAbsPosN[0].max = 100000.0;
     FocusAbsPosN[0].step = 1000.0;
     FocusRelPosN[0].step = 1000.0;
     FocusSyncN[0].step = 1000.0;
+    
     FocusSpeedN[0].min = 0.0;
     FocusSpeedN[0].max = 10.0;
+    FocusSpeedN[0].step  = 1.0;
     FocusSpeedN[0].value = 1.0;
 
+    return true;
 }
 
-/**
+/***************************************************************************
  * @brief Fill the UI controls with current values
  * @return true iff everything went fine
- */
-
+ ***************************************************************************/
 bool StarGoFocuser::updateProperties()
 {
-    if (isConnected()) {
+/*    if (isConnected()) {
         baseDevice->defineProperty(&FocusSpeedNP);
         baseDevice->defineProperty(&FocusMotionSP);
         baseDevice->defineProperty(&FocusTimerNP);
@@ -83,15 +99,14 @@ bool StarGoFocuser::updateProperties()
         baseDevice->deleteProperty(FocusSyncNP.name);
         baseDevice->deleteProperty(FocusReverseSP.name);
     }
+*/
+    FI::updateProperties();
     return true;
 
 }
 
-
 /***************************************************************************
- * Reaction to UI commands
- ***************************************************************************/
-
+ *
 bool StarGoFocuser::ISNewSwitch(const char *dev, const char *name, ISState *states, char *names[], int n)
 {
     INDI_UNUSED(states);
@@ -118,8 +133,10 @@ bool StarGoFocuser::ISNewSwitch(const char *dev, const char *name, ISState *stat
 
     return true;
 }
+ ***************************************************************************/
 
-
+/***************************************************************************
+ * 
 bool StarGoFocuser::ISNewNumber(const char *dev, const char *name, double values[], char *names[], int n)
 {
     INDI_UNUSED(values);
@@ -149,11 +166,10 @@ bool StarGoFocuser::ISNewNumber(const char *dev, const char *name, double values
 
     return true;
 }
+ ***************************************************************************/
 
 /***************************************************************************
  *
- ***************************************************************************/
-
 bool StarGoFocuser::changeFocusTimer(double values[], char* names[], int n) {
     int time = static_cast<int>(values[0]);
     if (validateFocusTimer(time)) {
@@ -164,16 +180,21 @@ bool StarGoFocuser::changeFocusTimer(double values[], char* names[], int n) {
     }
     return true;
 }
+ ***************************************************************************/
 
 
+/***************************************************************************
+ * 
 bool StarGoFocuser::changeFocusMotion(ISState* states, char* names[], int n) {
     IUUpdateSwitch(&FocusMotionSP, states, names, n);
     FocusMotionSP.s = IPS_OK;
     IDSetSwitch(&FocusMotionSP, nullptr);
     return true;
 }
+ ***************************************************************************/
 
-
+/***************************************************************************
+ * 
 bool StarGoFocuser::changeFocusAbsPos(double values[], char* names[], int n) {
     uint32_t absolutePosition = static_cast<uint32_t>(values[0]);
     if (validateFocusAbsPos(absolutePosition)) {
@@ -188,7 +209,10 @@ bool StarGoFocuser::changeFocusAbsPos(double values[], char* names[], int n) {
     }
     return true;
 }
+ ***************************************************************************/
 
+/***************************************************************************
+ * 
 bool StarGoFocuser::changeFocusRelPos(double values[], char* names[], int n) {
     int relativePosition = static_cast<int>(values[0]);
     if (validateFocusRelPos(relativePosition)) {
@@ -201,7 +225,10 @@ bool StarGoFocuser::changeFocusRelPos(double values[], char* names[], int n) {
     }
     return true;
 }
+ ***************************************************************************/
 
+/***************************************************************************
+ * 
 bool StarGoFocuser::changeFocusSpeed(double values[], char* names[], int n) {
     int speed = static_cast<int>(values[0]);
     if (validateFocusSpeed(speed)) {
@@ -212,7 +239,10 @@ bool StarGoFocuser::changeFocusSpeed(double values[], char* names[], int n) {
     }
     return true;
 }
+ ***************************************************************************/
 
+/***************************************************************************
+ * 
 bool StarGoFocuser::setFocuserDirection(ISState* states, char* names[], int n) {
 
     if (IUUpdateSwitch(&FocusReverseSP, states, names, n) < 0)
@@ -225,8 +255,11 @@ bool StarGoFocuser::setFocuserDirection(ISState* states, char* names[], int n) {
 
     return true;
 }
+ ***************************************************************************/
 
 
+/***************************************************************************
+ * 
 bool StarGoFocuser::changeFocusAbort(ISState* states, char* names[], int n) {
     INDI_UNUSED(states);
     INDI_UNUSED(names);
@@ -240,8 +273,10 @@ bool StarGoFocuser::changeFocusAbort(ISState* states, char* names[], int n) {
     IDSetSwitch(&FocusAbortSP, nullptr);
     return true;
 }
+ ***************************************************************************/
 
-
+/***************************************************************************
+ * 
 bool StarGoFocuser::changeFocusSyncPos(double values[], char* names[], int n) {
     int absolutePosition = static_cast<int>(values[0]);
     if (validateFocusSyncPos(absolutePosition)) {
@@ -251,7 +286,10 @@ bool StarGoFocuser::changeFocusSyncPos(double values[], char* names[], int n) {
     }
     return true;
 }
+ ***************************************************************************/
 
+/***************************************************************************
+ * 
 bool StarGoFocuser::validateFocusSpeed(int speed) {
     int minSpeed = static_cast<int>(FocusSpeedN[0].min);
     int maxSpeed = static_cast<int>(FocusSpeedN[0].max);
@@ -261,7 +299,10 @@ bool StarGoFocuser::validateFocusSpeed(int speed) {
     }
     return true;
 }
+ ***************************************************************************/
 
+/***************************************************************************
+ * 
 bool StarGoFocuser::validateFocusTimer(int time) {
     int minTime = static_cast<int>(FocusTimerN[0].min);
     int maxTime = static_cast<int>(FocusTimerN[0].max);
@@ -271,7 +312,10 @@ bool StarGoFocuser::validateFocusTimer(int time) {
     }
     return true;
 }
+ ***************************************************************************/
 
+/***************************************************************************
+ * 
 bool StarGoFocuser::validateFocusAbsPos(uint32_t absolutePosition) {
     uint32_t minPosition = static_cast<uint32_t>(FocusAbsPosN[0].min);
     uint32_t maxPosition = static_cast<uint32_t>(FocusAbsPosN[0].max);
@@ -281,7 +325,10 @@ bool StarGoFocuser::validateFocusAbsPos(uint32_t absolutePosition) {
     }
     return true;
 }
+ ***************************************************************************/
 
+/***************************************************************************
+ * 
 bool StarGoFocuser::validateFocusRelPos(int relativePosition) {
     int minRelativePosition = static_cast<int>(FocusRelPosN[0].min);
     int maxRelativePosition = static_cast<int>(FocusRelPosN[0].max);
@@ -292,7 +339,10 @@ bool StarGoFocuser::validateFocusRelPos(int relativePosition) {
     uint32_t absolutePosition = getAbsoluteFocuserPositionFromRelative(relativePosition);
     return validateFocusAbsPos(absolutePosition);
 }
+ ***************************************************************************/
 
+/***************************************************************************
+ * 
 bool StarGoFocuser::validateFocusSyncPos(int absolutePosition) {
     int minPosition = static_cast<int>(FocusAbsPosN[0].min);
     int maxPosition = static_cast<int>(FocusAbsPosN[0].max);
@@ -302,7 +352,10 @@ bool StarGoFocuser::validateFocusSyncPos(int absolutePosition) {
     }
     return true;
 }
+ ***************************************************************************/
 
+/***************************************************************************
+ * 
 uint32_t StarGoFocuser::getAbsoluteFocuserPositionFromRelative(int relativePosition) {
     bool inward = FocusMotionS[0].s == ISS_ON;
     if (inward) {
@@ -310,8 +363,10 @@ uint32_t StarGoFocuser::getAbsoluteFocuserPositionFromRelative(int relativePosit
     }
     return static_cast<uint32_t>(FocusAbsPosN[0].value + relativePosition);
 }
+ ***************************************************************************/
 
-
+/***************************************************************************
+ * 
 bool StarGoFocuser::ReadFocuserStatus() {
     // do nothing if not active
     if (!isConnected())
@@ -334,13 +389,45 @@ bool StarGoFocuser::ReadFocuserStatus() {
 
     return true;
 }
+ ***************************************************************************/
 
-bool StarGoFocuser::SetFocuserSpeed(int speed) {
-    return sendNewFocuserSpeed(speed);
+/***************************************************************************
+ * 
+ ***************************************************************************/
+bool StarGoFocuser::SetFocuserSpeed(int speed)
+{
+//    return sendNewFocuserSpeed(speed);
+    // Command  - :X1Caaaa*bb#
+    // Response - 0#
+    bool valid = false;
+    unsigned int param[10][2] = 
+    {
+        {9000,1},
+        {6000,1},
+        {4000,1},
+        {2500,1},
+        {1000,5},
+        {750,10},
+        {500,20},
+        {250,30},
+        {100,40},
+        {60,50}
+    };
+    char cmd[AVALON_COMMAND_BUFFER_LENGTH] = {0};
+    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
+
+    sprintf(cmd, ":X1C%4d*%2d#", param[speed-1][0],param[speed-1][1]);
+    if (!sendQuery(cmd, response))
+    {
+        LOGF_ERROR("Failed to send new focuser speed command %s", cmd);
+        return false;
+    }
+    return valid;
 }
 
-
-
+/***************************************************************************
+ * 
+ ***************************************************************************/
 IPState StarGoFocuser::MoveFocuser(FocusDirection dir, int speed, uint16_t duration) {
     INDI_UNUSED(speed);
     if (duration == 0) {
@@ -351,63 +438,133 @@ IPState StarGoFocuser::MoveFocuser(FocusDirection dir, int speed, uint16_t durat
         position = static_cast<uint32_t>(FocusAbsPosN[0].max);
     }
     moveFocuserDurationRemaining = duration;
+    
+/*
     bool result = sendMoveFocuserToPosition(position);
     if (!result) {
         return IPS_ALERT;
     }
     return IPS_BUSY;
+*/
+    return MoveAbsFocuser(position);
 }
 
-IPState StarGoFocuser::MoveAbsFocuser(uint32_t absolutePosition) {
+/***************************************************************************
+ * 
+ ***************************************************************************/
+IPState StarGoFocuser::MoveAbsFocuser(uint32_t position)
+{
+/*
     bool result = sendMoveFocuserToPosition(absolutePosition);
     if (!result) {
         return IPS_ALERT;
     }
     return IPS_BUSY;
+*/
+    // Command  - :X16pppppp#
+    // Response - Nothing
+    bool result = true;
+    targetFocuserPosition = position;
+    char command[AVALON_COMMAND_BUFFER_LENGTH] = {0};
+    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
+    sprintf(command, ":X16%06d#", AVALON_FOCUSER_POSITION_OFFSET + targetFocuserPosition);
+    if ((result = sendQuery(command, response,0)) )
+    {
+        LOGF_ERROR("Failed to send AUX1 goto command $s", command);
+    }
+    return result? IPS_BUSY: IPS_ALERT;
 }
 
+/***************************************************************************
+ * 
+ ***************************************************************************/
+/*
 IPState StarGoFocuser::moveFocuserRelative(int relativePosition) {
     if (relativePosition == 0) {
         return IPS_OK;
     }
     uint32_t absolutePosition = getAbsoluteFocuserPositionFromRelative(relativePosition);
     return MoveAbsFocuser(absolutePosition);
+*/
+IPState StarGoFocuser::MoveRelFocuser(FocusDirection dir, uint32_t relativePosition)
+{
+    uint32_t absolutePosition = relativePosition * (dir==FOCUS_INWARD?-1:+1);
+    return MoveAbsFocuser(absolutePosition);
 }
 
-
-
-bool StarGoFocuser::AbortFocuser() {
-    return sendAbortFocuser();
+/***************************************************************************
+ * 
+ ***************************************************************************/
+bool StarGoFocuser::AbortFocuser()
+{
+//    return sendAbortFocuser();
+    // Command  - :X0AAUX1ST#
+    // Response - Nothing
+    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
+    if (!sendQuery(":X0AAUX1ST#", response, 0)) 
+    {
+        LOG_ERROR("Failed to send AUX1 stop command." );
+        return false;
+    }
+    return true;
 }
 
-IPState StarGoFocuser::syncFocuser(int absolutePosition) {
+/***************************************************************************
+ *
+ ***************************************************************************/
+/*
+IPState StarGoFocuser::syncFocuser(int absolutePosition) 
+{
     bool result = sendSyncFocuserToPosition(absolutePosition);
     if (!result) {
         return IPS_ALERT;
     }
     return IPS_OK;
 }
-
+*/
 
 /***************************************************************************
- *
+ * 
  ***************************************************************************/
-
+bool StarGoFocuser::ReadStatus()
+{
+    int position;
+    if(! getFocuserPosition(&position) )
+    {
+        return false;
+    }
+    FocusAbsPosN[0].value = position;
+    IDSetNumber(&FocusSpeedNP, nullptr);
+    return true;
+}
+/***************************************************************************
+ *
 bool StarGoFocuser::isConnected() {
     if (baseDevice == nullptr) return false;
     return focuserActivated;
 }
+ ***************************************************************************/
 
+/***************************************************************************
+ * 
+ ***************************************************************************/
 const char *StarGoFocuser::getDeviceName() {
-    if (baseDevice == nullptr) return "";
-    return baseDevice->getDeviceName();
+//    if (baseDevice == nullptr) return "";
+//    return baseDevice->getDeviceName();
+    if (m_device == nullptr) return "";
+    return m_device->getDeviceName();
 }
 
+/***************************************************************************
+ * 
 const char *StarGoFocuser::getDefaultName()
 {
     return deviceName;
 }
+ ***************************************************************************/
 
+/***************************************************************************
+ * 
 bool StarGoFocuser::activate(bool activate)
 {
     bool result = true;
@@ -424,7 +581,10 @@ bool StarGoFocuser::activate(bool activate)
     }
     return result;
 }
+ ***************************************************************************/
 
+/***************************************************************************
+ * 
 bool StarGoFocuser::saveConfigItems(FILE *fp)
 {
     if (focuserActivated)
@@ -435,13 +595,14 @@ bool StarGoFocuser::saveConfigItems(FILE *fp)
 
     return true;
 }
-
+ ***************************************************************************/
 
 /***************************************************************************
  * LX200 queries, sent to baseDevice
  ***************************************************************************/
 
-
+/***************************************************************************
+ *
 bool StarGoFocuser::sendNewFocuserSpeed(int speed) {
     // Command  - :X1Caaaa*bb#
     // Response - Unknown
@@ -465,45 +626,54 @@ bool StarGoFocuser::sendNewFocuserSpeed(int speed) {
     }
     return valid;
 }
+ ***************************************************************************/
 
-
-
-bool StarGoFocuser::sendSyncFocuserToPosition(int position) {
+/***************************************************************************
+ *
+ ***************************************************************************/
+//bool StarGoFocuser::sendSyncFocuserToPosition(int position) {
+bool StarGoFocuser::SyncFocuser(uint32_t  position)
+{
     // Command  - :X0Cpppppp#
     // Response - Nothing
+    char response[AVALON_RESPONSE_BUFFER_LENGTH]={0};
     char command[AVALON_COMMAND_BUFFER_LENGTH] = {0};
-    sprintf(command, ":X0C%06d#", AVALON_FOCUSER_POSITION_OFFSET + ((focuserReversed == INDI_DISABLED) ? position : -position));
-    if (!baseDevice->transmit(command)) {
-        DEBUGF(INDI::Logger::DBG_ERROR, "%s: Failed to send AUX1 sync command.", getDeviceName());
+    sprintf(command, ":X0C%06d#", AVALON_FOCUSER_POSITION_OFFSET + position);
+    if (!sendQuery(command, response,0)) 
+    {
+        LOG_ERROR("Failed to send AUX1 sync command.");
         return false;
     }
     return true;
 }
 
-bool StarGoFocuser::sendQueryFocuserPosition(int* position) {
+/***************************************************************************
+ *
+ ***************************************************************************/
+//bool StarGoFocuser::sendQueryFocuserPosition(int* position) {
+bool StarGoFocuser::getFocuserPosition(int* position) 
+{
     // Command  - :X0BAUX1AS#
-    // Response - AX1=ppppppp#
-    baseDevice->flush();
-    if(!baseDevice->transmit(":X0BAUX1AS#")) {
-        DEBUGF(INDI::Logger::DBG_ERROR, "%s: Failed to send AUX1 position request.", getDeviceName());
-        return false;
-    }
+    // Response - AX1=ppppppp #
     char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
-    int bytesReceived = 0;
-    if (!baseDevice->receive(response, &bytesReceived)) {
-        DEBUGF(INDI::Logger::DBG_ERROR, "%s: Failed to receive AUX1 position response.", getDeviceName());
+    if(!sendQuery(":X0BAUX1AS#", response)) 
+    {
+        LOG_ERROR("Failed to get AUX1 position request.");
         return false;
     }
     int tempPosition = 0;
     int returnCode = sscanf(response, "%*c%*c%*c%*c%07d", &tempPosition);
-    if (returnCode <= 0) {
-        DEBUGF(INDI::Logger::DBG_ERROR, "%s: Failed to parse AUX1 position response '%s'.", getDeviceName(), response);
+    if (returnCode <= 0) 
+    {
+        LOGF_ERROR("Failed to parse AUX1 position response '%s'.", response);
         return false;
     }
     (*position) = (tempPosition - AVALON_FOCUSER_POSITION_OFFSET);
     return true;
 }
 
+/***************************************************************************
+ *
 bool StarGoFocuser::sendMoveFocuserToPosition(uint32_t position) {
     // Command  - :X16pppppp#
     // Response - Nothing
@@ -516,7 +686,10 @@ bool StarGoFocuser::sendMoveFocuserToPosition(uint32_t position) {
     }
     return true;
 }
+ ***************************************************************************/
 
+/***************************************************************************
+ *
 bool StarGoFocuser::sendAbortFocuser() {
     // Command  - :X0AAUX1ST#
     // Response - Nothing
@@ -526,19 +699,30 @@ bool StarGoFocuser::sendAbortFocuser() {
     }
     return true;
 }
-
+ ***************************************************************************/
 
 /************************************************************************
  * helper functions
  ************************************************************************/
 
+/***************************************************************************
+ *
 bool StarGoFocuser::isFocuserMoving() {
     return FocusAbsPosNP.s == IPS_BUSY || FocusRelPosNP.s == IPS_BUSY;
 }
+ ***************************************************************************/
 
+/***************************************************************************
+ *
 bool StarGoFocuser::atFocuserTargetPosition() {
     return static_cast<uint32_t>(FocusAbsPosN[0].value) == (focuserReversed == INDI_DISABLED) ? targetFocuserPosition : -targetFocuserPosition;
 }
+ ***************************************************************************/
 
-
-
+/************************************************************************
+ * 
+ ************************************************************************/
+bool StarGoFocuser::sendQuery(const char* cmd, char* response, char end, int wait)
+{
+    return m_device->sendQuery(cmd, response, end, wait);
+}

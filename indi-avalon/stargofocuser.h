@@ -22,26 +22,33 @@
 
 */
 
-#include "stargo.h"
+//#include "stargo.h"
+
+class StarGoSystem;
+#include "stargosystem.h"
 
 #include "indifocuserinterface.h"
 #include "defaultdevice.h"
 
 
-class StarGoFocuser : public INDI::DefaultDevice, public INDI::FocuserInterface
+//class StarGoFocuser : public INDI::DefaultDevice, public INDI::FocuserInterface
+class StarGoFocuser : public INDI::FocuserInterface
 {
+    friend class StarGoSystem;
 public:
-    StarGoFocuser(StarGoTelescope* defaultDevice, const char* name);
+//    StarGoFocuser(StarGoTelescope* defaultDevice, const char* name);
+    StarGoFocuser(StarGoSystem* dev);
     virtual ~StarGoFocuser() override = default;
 
-    using INDI::DefaultDevice::initProperties;
-    void initProperties(const char *groupName);
-    bool updateProperties() override;
-    bool ReadFocuserStatus();
+//    using INDI::DefaultDevice::initProperties;
+//    void initProperties(const char *groupName);
+    bool initProperties();
+    bool updateProperties();
+//    bool ReadFocuserStatus();
 
-    bool ISNewSwitch(const char *dev, const char *name, ISState *states, char *names[], int n) override;
-    bool ISNewNumber(const char *dev, const char *name, double values[], char *names[], int n) override;
-
+//    bool ISNewSwitch(const char *dev, const char *name, ISState *states, char *names[], int n) override;
+//    bool ISNewNumber(const char *dev, const char *name, double values[], char *names[], int n) override;
+/*
     const char *getDeviceName();
     const char *getDefaultName() override;
 
@@ -50,9 +57,11 @@ public:
     bool activate(bool activate);
 
     bool saveConfigItems(FILE *fp) override;
-
+*/
 protected:
+    StarGoSystem* m_device;
 
+/*
     // Avalon specifics
     bool changeFocusSpeed(double values[], char* names[], int n);
     bool changeFocusMotion(ISState* states, char* names[], int n);
@@ -62,22 +71,32 @@ protected:
     bool changeFocusAbort(ISState* states, char* names[], int n);
     bool changeFocusSyncPos(double values[], char* names[], int n);
     bool setFocuserDirection(ISState *states, char *names[], int n);
-
+*/
     bool SetFocuserSpeed(int speed) override;
     IPState MoveFocuser(FocusDirection dir, int speed, uint16_t duration) override;
     IPState MoveAbsFocuser(uint32_t absolutePosition) override;
-    IPState moveFocuserRelative(int relativePosition);
+    IPState MoveRelFocuser(FocusDirection dir, uint32_t ticks) override;
+//    IPState moveFocuserRelative(int relativePosition);
     bool AbortFocuser() override;
-    IPState syncFocuser(int absolutePosition);
+//    IPState syncFocuser(int absolutePosition);
+    bool SyncFocuser(uint32_t ticks) override;
 
     uint32_t targetFocuserPosition;
     bool startMovingFocuserInward;
     bool startMovingFocuserOutward;
     uint32_t moveFocuserDurationRemaining;
-    bool focuserActivated;
-    int focuserReversed = INDI_DISABLED;
+//    bool focuserActivated;
+//    int focuserReversed = INDI_DISABLED;
 
+    // Stargo commands
+    bool getFocuserPosition(int* position);
 
+    bool sendQuery(const char* cmd, char* response, char end, int wait=AVALON_TIMEOUT);
+    bool sendQuery(const char* cmd, char* response, int wait=AVALON_TIMEOUT);
+    const char* getDeviceName(); 
+    bool ReadStatus();
+
+/*
     // LX200 commands
     bool sendNewFocuserSpeed(int speed);
     bool sendMoveFocuserToPosition(uint32_t position);
@@ -101,7 +120,12 @@ private:
     StarGoTelescope* baseDevice;
     const char* deviceName;
 
-
+*/
 };
+
+inline bool StarGoFocuser::sendQuery(const char* cmd, char* response, int wait)
+{
+    return sendQuery(cmd, response, '#', wait);
+}
 
 #endif // STARGOFOCUSER_H

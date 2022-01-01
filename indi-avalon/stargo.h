@@ -24,7 +24,6 @@
 
 #pragma once
 
-//#include <mounts/lx200telescope.h>
 #include <indiguiderinterface.h>
 #include <inditelescope.h>
 #include <indicom.h>
@@ -50,25 +49,10 @@ enum TDirection
     STARGO_SOUTH,
     STARGO_ALL
 };
-/*
-enum TSlew
-{
-    LX200_SLEW_MAX,
-    LX200_SLEW_FIND,
-    LX200_SLEW_CENTER,
-    LX200_SLEW_GUIDE
-};
-enum TFormat
-{
-    LX200_SHORT_FORMAT,
-    LX200_LONG_FORMAT,
-    LX200_LONGER_FORMAT
-};
-*/
+
 // StarGo specific tabs
 extern const char *RA_DEC_TAB;
 
-//class StarGoTelescope : public LX200Telescope
 class StarGoTelescope : public INDI::Telescope, public INDI::GuiderInterface
 {
     public:
@@ -124,20 +108,16 @@ class StarGoTelescope : public INDI::Telescope, public INDI::GuiderInterface
         ITextVectorProperty MountFirmwareInfoTP;
         IText MountFirmwareInfoT[1] = {};
 
+/*
         // AUX focusers control
         ISwitchVectorProperty Aux1FocuserSP;
         ISwitch Aux1FocuserS[2];
+*/
 
         // goto home
         ISwitchVectorProperty MountGotoHomeSP;
         ISwitch MountGotoHomeS[1];
 
-/*
-* Use IndiTelescope
-        // parking position
-        ISwitchVectorProperty MountSetParkSP;
-        ISwitch MountSetParkS[1];
-*/
         // guiding
         INumberVectorProperty GuidingSpeedNP;
         INumber GuidingSpeedN[2];
@@ -165,8 +145,6 @@ class StarGoTelescope : public INDI::Telescope, public INDI::GuiderInterface
         INumberVectorProperty MountRequestDelayNP;
         INumber MountRequestDelayN[1];
 
-//        int controller_format { LX200_LONG_FORMAT };
-
         // override LX200Generic
         bool usePulseCommand { true };
     
@@ -181,18 +159,16 @@ class StarGoTelescope : public INDI::Telescope, public INDI::GuiderInterface
         void getBasicData();
         virtual bool ReadScopeStatus() override;
         virtual bool Park() override;
-//        virtual void SetParked(bool isparked) override;
         virtual bool UnPark() override;
         virtual bool saveConfigItems(FILE *fp) override;
         virtual bool Goto(double ra, double dec) override;
+/*
         virtual bool Connect() override;
         virtual bool Disconnect() override;
-
+*/
         // StarGo stuff
-//        virtual void getStarGoBasicData();
         void WaitParkOptionReady();
         bool syncHomePosition();
-//        bool slewToHome(ISState *states, char *names[], int n); //Embedded in ISNewSwitch
         virtual bool SetParkPosition(double Axis1Value, double Axis2Value) override;
         virtual bool SetCurrentPark() override;
         virtual bool SetDefaultPark() override;
@@ -248,7 +224,6 @@ class StarGoTelescope : public INDI::Telescope, public INDI::GuiderInterface
 
         // meridian flip
         bool syncSideOfPier();
-//        bool checkLX200EquatorialFormat();
 
         // Guide Commands
         virtual IPState GuideNorth(uint32_t ms) override;
@@ -286,9 +261,10 @@ class StarGoTelescope : public INDI::Telescope, public INDI::GuiderInterface
 // Simulate Mount in simulation mode
         void mountSim();
 
+/*
         // AUX1 focuser
         bool activateFocuserAux1(bool activate);
-
+*/
 };
 inline bool StarGoTelescope::isGuiding()
 {

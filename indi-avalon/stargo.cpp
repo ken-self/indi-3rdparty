@@ -37,6 +37,7 @@
 
 const char *RA_DEC_TAB = "RA / DEC";
 
+/* Move to stargosystem
 static class Loader
 {
     private:
@@ -70,6 +71,7 @@ static class Loader
             return (focuserAux1.get() != nullptr);
         }
 } loader;
+*/
 
 /**************************************************
 *** LX200 Generic Implementation
@@ -81,31 +83,6 @@ StarGoTelescope::StarGoTelescope()
     setVersion(AVALON_VERSION_MAJOR, AVALON_VERSION_MINOR);
 
     DBG_SCOPE = INDI::Logger::DBG_DEBUG;
-
-    /* missing capabilities
-     * TELESCOPE_HAS_TIME:
-     *    missing commands - values can be set but not read
-     *      :GG# (Get UTC offset time)
-     *      :GL# (Get Local Time in 24 hour format)
-     *
-     * LX200_HAS_ALIGNMENT_TYPE
-     *     missing commands
-     *        ACK - Alignment Query or GW
-     *
-     * LX200_HAS_SITES
-     *    Makes no sense in combination with KStars?
-     *     missing commands
-     *        :GM# (Get Site 1 Name)
-     *
-     * LX200_HAS_TRACKING_FREQ
-     *     missing commands
-     *        :GT# (Get tracking rate) - doesn't work with StarGo
-     *
-     * untested, hence disabled:
-     * LX200_HAS_FOCUS
-     */
-
-//    setLX200Capability(LX200_HAS_PULSE_GUIDING );
 
     SetTelescopeCapability(TELESCOPE_CAN_PARK | TELESCOPE_CAN_SYNC | TELESCOPE_CAN_GOTO | TELESCOPE_CAN_ABORT |
                            TELESCOPE_HAS_TRACK_MODE | TELESCOPE_HAS_LOCATION | TELESCOPE_CAN_CONTROL_TRACK |
@@ -173,14 +150,7 @@ bool StarGoTelescope::ISNewSwitch(const char *dev, const char *name, ISState *st
            LOG_INFO("Slewing to home position...");
            return true;
         }
-        // parking position
-/*
-Use IndiTelescope
-        else if (!strcmp(name, MountSetParkSP.name))
-        {
-            return setParkPosition(states, names, n);
-        }
-*/
+
         // tracking mode
         else if (!strcmp(name, TrackModeSP.name))
         {
@@ -293,6 +263,7 @@ Use IndiTelescope
             IDSetSwitch(&MeridianFlipModeSP, nullptr);
             return true;
         }
+/*
         else if (!strcmp(name, Aux1FocuserSP.name))
         {
             if (IUUpdateSwitch(&Aux1FocuserSP, states, names, n) < 0)
@@ -311,13 +282,15 @@ Use IndiTelescope
                 return false;
             }
         }
+*/
     }
 
     bool result = true;
+/*
     // check if the focuser can process the switch
     if (loader.isFocuserAux1Activated())
         result = loader.getFocuserAux1()->ISNewSwitch(dev, name, states, names, n);
-
+*/
     //  Pass it to the parent
     result &= INDI::Telescope::ISNewSwitch(dev, name, states, names, n);
     return result;
@@ -382,10 +355,11 @@ bool StarGoTelescope::ISNewNumber(const char *dev, const char *name, double valu
     }
 
     bool result = true;
+/*
     // check if the focuser can process the switch
     if (loader.isFocuserAux1Activated())
         result = loader.getFocuserAux1()->ISNewNumber(dev, name, values, names, n);
-
+*/
     //  Pass it to the parent
     result &= INDI::Telescope::ISNewNumber(dev, name, values, names, n);
     return result;
@@ -400,7 +374,6 @@ bool StarGoTelescope::initProperties()
 {
     /* Make sure to init parent properties first */
     if (!INDI::Telescope::initProperties()) return false;
-// Embedded from LX200Telescope::initProperties()
     AddTrackMode("TRACK_SIDEREAL", "Sidereal", true);
     AddTrackMode("TRACK_SOLAR", "Solar");
     AddTrackMode("TRACK_LUNAR", "Lunar");
@@ -409,7 +382,7 @@ bool StarGoTelescope::initProperties()
 
     initGuiderProperties(getDeviceName(), GUIDE_TAB);
 
-    /* Add debug/simulation/config controls so we may debug driver if necessary */
+    // Add debug/simulation/config controls so we may debug driver if necessary
     addAuxControls();
 
     setDriverInterface(getDriverInterface() | GUIDER_INTERFACE);
@@ -421,22 +394,17 @@ bool StarGoTelescope::initProperties()
     IUGetConfigNumber(getDeviceName(), "GEOGRAPHIC_COORD", "LAT", &latitude);
     currentDEC = latitude > 0.0 ? 90.0 : -90.0;
 
+/*
     IUFillSwitch(&Aux1FocuserS[DefaultDevice::INDI_ENABLED], "INDI_ENABLED", "Enabled", ISS_OFF);
     IUFillSwitch(&Aux1FocuserS[DefaultDevice::INDI_DISABLED], "INDI_DISABLED", "Disabled", ISS_ON);
     IUFillSwitchVector(&Aux1FocuserSP, Aux1FocuserS, 2, getDeviceName(), "AUX1_FOCUSER_CONTROL", "AUX1 Focuser",
                        MAIN_CONTROL_TAB, IP_RW, ISR_ATMOST1, 60, IPS_IDLE);
-
+*/
     IUFillSwitch(&MountGotoHomeS[0], "MOUNT_GOTO_HOME_VALUE", "Goto Home", ISS_OFF);
     IUFillSwitchVector(&MountGotoHomeSP, MountGotoHomeS, 1, getDeviceName(), "MOUNT_GOTO_HOME", "Goto Home", MAIN_CONTROL_TAB,
                        IP_RW, ISR_ATMOST1, 60, IPS_OK);
     SetParkDataType(PARK_HA_DEC);
 
-/*
-* Use INDI::Telescope
-    IUFillSwitch(&MountSetParkS[0], "MOUNT_SET_PARK_VALUE", "Set Park", ISS_OFF);
-    IUFillSwitchVector(&MountSetParkSP, MountSetParkS, 1, getDeviceName(), "MOUNT_SET_PARK", "Set Park", MAIN_CONTROL_TAB,
-                       IP_RW, ISR_ATMOST1, 60, IPS_OK);
-*/
     IUFillSwitch(&SyncHomeS[0], "SYNC_HOME", "Sync Home", ISS_OFF);
     IUFillSwitchVector(&SyncHomeSP, SyncHomeS, 1, getDeviceName(), "TELESCOPE_SYNC_HOME", "Home Position", MAIN_CONTROL_TAB,
                        IP_RW, ISR_ATMOST1, 60, IPS_IDLE);
@@ -498,12 +466,11 @@ bool StarGoTelescope::updateProperties()
     if (! INDI::Telescope::updateProperties()) return false;
     if (isConnected())
     {
-        defineProperty(&Aux1FocuserSP);
+//        defineProperty(&Aux1FocuserSP);
         defineProperty(&GuideNSNP);
         defineProperty(&GuideWENP);
         defineProperty(&SyncHomeSP);
         defineProperty(&MountGotoHomeSP);
-//        defineProperty(&MountSetParkSP);
         defineProperty(&GuidingSpeedNP);
         defineProperty(&ST4StatusSP);
         defineProperty(&KeypadStatusSP);
@@ -516,12 +483,11 @@ bool StarGoTelescope::updateProperties()
     }
     else
     {
-        deleteProperty(Aux1FocuserSP.name);
+//        deleteProperty(Aux1FocuserSP.name);
         deleteProperty(GuideNSNP.name);
         deleteProperty(GuideWENP.name);
         deleteProperty(SyncHomeSP.name);
         deleteProperty(MountGotoHomeSP.name);
-//        deleteProperty(MountSetParkSP.name);
         deleteProperty(GuidingSpeedNP.name);
         deleteProperty(ST4StatusSP.name);
         deleteProperty(KeypadStatusSP.name);
@@ -538,6 +504,7 @@ bool StarGoTelescope::updateProperties()
 /**************************************************************************************
 **
 ***************************************************************************************/
+/*
 bool StarGoTelescope::Connect()
 {
     if (! DefaultDevice::Connect())
@@ -553,7 +520,7 @@ bool StarGoTelescope::Disconnect()
     result &= activateFocuserAux1(false);
     return result;
 }
-
+*/
 /**************************************************************************************
 **
 ***************************************************************************************/
@@ -695,11 +662,12 @@ bool StarGoTelescope::ReadScopeStatus()
     }
 
     LOG_DEBUG("################################ ReadScopeStatus (finish) ###############################");
-
+/*
     if (loader.isFocuserAux1Activated() && TrackState != SCOPE_SLEWING)
         return loader.getFocuserAux1()->ReadFocuserStatus();
     else
-        return true;
+*/
+    return true;
 }
 
 /*******************************************************************************
@@ -931,73 +899,10 @@ bool StarGoTelescope::getScopeTime()
 }
 
 /**************************************************************************************
-* @author CanisUrsa
-***************************************************************************************/
-/*
-* Embedded in ISNewSwitch
-bool StarGoTelescope::slewToHome(ISState* states, char* names[], int n)
-{
-    LOG_DEBUG(__FUNCTION__);
-    IUUpdateSwitch(&MountGotoHomeSP, states, names, n);
-    if (setMountGotoHome())
-    {
-        MountGotoHomeSP.s = IPS_BUSY;
-        TrackState = SCOPE_SLEWING;
-    }
-    else
-    {
-        MountGotoHomeSP.s = IPS_ALERT;
-    }
-    MountGotoHomeS[0].s = ISS_OFF;
-    IDSetSwitch(&MountGotoHomeSP, nullptr);
-
-    LOG_INFO("Slewing to home position...");
-    return true;
-}
-*/
-
-/**************************************************************************************
-**
-***************************************************************************************/
-/*
-bool StarGoTelescope::setParkPosition(ISState* states, char* names[], int n)
-{
-    LOG_DEBUG(__FUNCTION__);
-    IUUpdateSwitch(&MountSetParkSP, states, names, n);
-    MountSetParkSP.s = setMountParkPosition() ? IPS_OK : IPS_ALERT;
-    MountSetParkS[0].s = ISS_OFF;
-    IDSetSwitch(&MountSetParkSP, nullptr);
-    return true;
-}
-*/
-/**************************************************************************************
 **
 ***************************************************************************************/
 void StarGoTelescope::getBasicData()
 {
-/*
-    LOG_DEBUG(__FUNCTION__);
-
-    if (!isSimulation())
-    {
-        checkLX200EquatorialFormat();
-
-        if (genericCapability & LX200_HAS_ALIGNMENT_TYPE)
-            getAlignment();
-
-        if (genericCapability & LX200_HAS_TRACKING_FREQ)
-        {
-            if (! getTrackFrequency(&TrackFreqN[0].value))
-                LOG_ERROR("Failed to get tracking frequency from device.");
-            else
-                IDSetNumber(&TrackFreqNP, nullptr);
-        }
-    }
-}
-
-void StarGoTelescope::getStarGoBasicData()
-{
-*/
     LOG_DEBUG(__FUNCTION__);
     if (!isSimulation())
     {
@@ -1112,6 +1017,7 @@ void StarGoTelescope::getStarGoBasicData()
 /**************************************************************************************
 * @author CanisUrsa
 ***************************************************************************************/
+/*
 bool StarGoTelescope::activateFocuserAux1(bool activate)
 {
     if (activate == true)
@@ -1128,6 +1034,7 @@ bool StarGoTelescope::activateFocuserAux1(bool activate)
         return result;
     }
 }
+*/
 
 /**************************************************************************************
 * @author CanisUrsa
@@ -1163,7 +1070,6 @@ bool StarGoTelescope::sendScopeLocation()
     LOG_DEBUG(__FUNCTION__);
     if (isSimulation())
     {
-//        return LX200Telescope::sendScopeLocation();
         LocationNP.np[LOCATION_LATITUDE].value = 29.5;
         LocationNP.np[LOCATION_LONGITUDE].value = 48.0;
         LocationNP.np[LOCATION_ELEVATION].value = 10;
@@ -1303,7 +1209,6 @@ bool StarGoTelescope::getSiteLongitude(double *siteLong)
     return true;
 }
 
-
 /**************************************************************************************
 **
 ***************************************************************************************/
@@ -1327,19 +1232,6 @@ bool StarGoTelescope::Park()
     }
 }
 
-/**************************************************************************************
- * @brief Set parking state to "parked" and reflect the state
- *        in the UI.
- * @param isparked true iff the scope has been parked
- * @return
-***************************************************************************************/
-/*
-void StarGoTelescope::SetParked(bool isparked)
-{
-    LOGF_DEBUG("%s %s", __FUNCTION__, isparked ? "PARKED" : "UNPARKED");
-    INDI::Telescope::SetParked(isparked);
-}
-*/
 /*******************************************************************************
 **
 *******************************************************************************/
@@ -1410,13 +1302,14 @@ bool StarGoTelescope::getLST_String(char* input)
 bool StarGoTelescope::saveConfigItems(FILE *fp)
 {
     LOG_DEBUG(__FUNCTION__);
-//    IUSaveConfigText(fp, &SiteNameTP);
+/*
     IUSaveConfigSwitch(fp, &Aux1FocuserSP);
+*/
     IUSaveConfigNumber(fp, &MountRequestDelayNP);
-
+/*
     if (loader.isFocuserAux1Activated())
         loader.getFocuserAux1()->saveConfigItems(fp);
-
+*/
     return INDI::Telescope::saveConfigItems(fp);
 }
 
@@ -2182,16 +2075,6 @@ bool StarGoTelescope::SetTrackMode(uint8_t mode)
         return false;
     LOGF_INFO("Tracking mode set to %s.", s_mode );
 
-/*
-* Missing LX200 capability does not work in StarGo
-    // Only update tracking frequency if it is defined and not deleted by child classes
-    if (genericCapability & LX200_HAS_TRACKING_FREQ)
-    {
-        LOGF_DEBUG("%s: Get Tracking Freq", __FUNCTION__);
-        getTrackFrequency(&TrackFreqN[0].value);
-        IDSetNumber(&TrackFreqNP, nullptr);
-    }
-*/
     return true;
 }
 
