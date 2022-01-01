@@ -1047,6 +1047,426 @@ bool StarGoTelescope::MoveWE(INDI_DIR_WE dir, TelescopeMotionCommand command)
     return true;
 }
 
+/**************************************************************************************
+**
+***************************************************************************************/
+bool StarGoTelescope::sendScopeLocation()
+{
+    LOG_DEBUG(__FUNCTION__);
+    if (isSimulation())
+    {
+        LocationNP.np[LOCATION_LATITUDE].value = 29.5;
+        LocationNP.np[LOCATION_LONGITUDE].value = 48.0;
+        LocationNP.np[LOCATION_ELEVATION].value = 10;
+        LocationNP.s           = IPS_OK;
+        IDSetNumber(&LocationNP, nullptr);
+        return true;
+    }
+
+    double siteLat = 0.0, siteLong = 0.0;
+    if (!getSiteLatitude(&siteLat))
+    {
+        LOG_WARN("Failed to get site latitude from device.");
+        return false;
+    }
+    if (!getSiteLongitude(&siteLong))
+    {
+        LOG_WARN("Failed to get site longitude from device.");
+        return false;
+    }
+    LocationNP.np[LOCATION_LATITUDE].value = siteLat;
+    LocationNP.np[LOCATION_LONGITUDE].value = siteLong;
+
+    LOGF_DEBUG("Mount Controller Latitude: %lg Longitude: %lg", LocationN[LOCATION_LATITUDE].value,
+               LocationN[LOCATION_LONGITUDE].value);
+
+    IDSetNumber(&LocationNP, nullptr);
+    if(!setLocalSiderealTime(siteLong))
+    {
+        LOG_ERROR("Error setting local sidereal time");
+        return false;
+    }
+
+    return true;
+}
+
+/**************************************************************************************
+ * Determine the site latitude. In contrast to a standard LX200 implementation,
+ * StarGo returns the location in arc seconds precision.
+***************************************************************************************/
+bool StarGoTelescope::getSiteLatitude(double *siteLat)
+{
+    LOG_DEBUG(__FUNCTION__);
+    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
+    if (!sendQuery(":Gt#", response))
+    {
+        LOG_ERROR("Failed to send query get Site Latitude command.");
+        return false;
+    }
+    if (f_scansexa(response, siteLat))
+    {
+        LOGF_ERROR("Unable to parse get Site Latitude response %s", response);
+        return false;
+    }
+    return true;
+}
+
+/*******************************************************************************
+ * @brief Set the site latitude
+ * @param latitude value
+ * @return true iff the command succeeded
+*******************************************************************************/
+bool StarGoTelescope::setSiteLatitude(double Lat)
+{
+    LOG_DEBUG(__FUNCTION__);
+    int d, m, s;
+    char command[32];
+
+    getSexComponents(Lat, &d, &m, &s);
+
+    snprintf(command, sizeof(command), ":St%+03d*%02d:%02d#", d, m, s);
+
+    LOGF_DEBUG("Sending set site latitude request '%s'", command);
+
+    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
+    return (sendQuery(command, response));
+}
+
+/**************************************************************************************
+ * Determine the site longitude. In contrast to a standard LX200 implementation,
+ * StarGo returns the location in arc seconds precision.
+***************************************************************************************/
+bool StarGoTelescope::getSiteLongitude(double *siteLong)
+{
+    LOG_DEBUG(__FUNCTION__);
+    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
+    if (!sendQuery(":Gg#", response))
+    {
+        LOG_ERROR("Failed to send query get Site Longitude command.");
+        return false;
+    }
+    if (f_scansexa(response, siteLong))
+    {
+        LOG_ERROR("Unable to parse get Site Longitude response.");
+        return false;
+    }
+    return true;
+}
+
+/*******************************************************************************
+ * Determine the site longitude. In contrast to a standard LX200 implementation,
+ * StarGo returns the location in arc seconds precision.
+*******************************************************************************/
+bool StarGoTelescope::setSiteLongitude(double longitude)
+{
+    LOG_DEBUG(__FUNCTION__);
+    int d, m, s;
+    char command[32] = {0};
+    if (longitude > 180) longitude = longitude - 360;
+    if (longitude < -180) longitude = 360 + longitude;
+
+    getSexComponents(longitude, &d, &m, &s);
+
+    //    const char* format = ":Sg+%03d*%02d:%02d#";
+    //    if (d < 0 || m < 0 || s < 0) format = ":Sg%04d*%02u:%02u#";
+
+    //    snprintf(command, sizeof(command), format, d, m, s);
+
+    if (d < 0 || m < 0 || s < 0)
+        snprintf(command, sizeof(command), ":Sg%04d*%02u:%02u#",
+                 d,
+                 static_cast<uint32_t>(std::abs(m)),
+                 static_cast<uint32_t>(std::abs(s)));
+    else
+        snprintf(command, sizeof(command), ":Sg+%03d*%02d:%02d#", d, m, s);
+
+    LOGF_DEBUG("Sending set site longitude request '%s'", command);
+
+    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
+    bool result = sendQuery(command, response);
+
+    return (result);
+}
+
+/**************************************************************************************
+**
+***************************************************************************************/
+bool StarGoTelescope::setLocalSiderealTime(double longitude)
+{
+    double lst = get_local_sidereal_time(longitude);
+    LOGF_DEBUG("Current local sidereal time = %lf", lst);
+    int h = 0, m = 0, s = 0;
+    getSexComponents(lst, &h, &m, &s);
+
+    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
+    char cmd[AVALON_COMMAND_BUFFER_LENGTH] = {0};
+    sprintf(cmd, ":X32%02hd%02hd%02hd#",
+            static_cast<int16_t>(h),
+            static_cast<int16_t>(m),
+            static_cast<int16_t>(s));
+
+    if(!sendQuery(cmd, response))
+    {
+        LOG_ERROR("Failed to set LST");
+        return false;
+    }
+    return true;
+}
+
+/*******************************************************************************
+ * @brief Determine the LST with format HHMMSS
+ * @return LST value for the current scope locateion
+*******************************************************************************/
+bool StarGoTelescope::getLST_String(char* input)
+{
+    LOG_DEBUG(__FUNCTION__);
+    double siteLong;
+
+    // step one: determine site longitude
+    if (!getSiteLongitude(&siteLong))
+    {
+        LOG_WARN("getLST Failed to get site Longitude from device.");
+        return false;
+    }
+    // determine local sidereal time
+    double lst = get_local_sidereal_time(siteLong);
+    int h = 0, m = 0, s = 0;
+    LOGF_DEBUG("Current local sidereal time = %.8lf", lst);
+    // translate into hh:mm:ss
+    getSexComponents(lst, &h, &m, &s);
+
+    sprintf(input, "%02d%02d%02d", h, m, s);
+    return true;
+}
+
+/*******************************************************************************
+**
+*******************************************************************************/
+bool StarGoTelescope::getScopeTime()
+{
+    LOG_DEBUG(__FUNCTION__);
+    char cdate[MAXINDINAME]={0};
+    char ctime[MAXINDINAME]={0};
+    struct tm ltm;
+    struct tm utm;
+    time_t time_epoch;
+
+    double offset=0;
+    if (getUTCOffset(&offset))
+    {
+        char utcStr[8]={0};
+        snprintf(utcStr, 8, "%.2f", offset);
+        IUSaveText(&TimeT[1], utcStr);
+    }
+    else
+    {
+        LOG_WARN("Could not obtain UTC offset from mount!");
+        return false;
+    }
+
+    if (getLocalTime(ctime) == false)
+    {
+        LOG_WARN("Could not obtain local time from mount!");
+        return false;
+    }
+
+    if (getLocalDate(cdate) == false)
+    {
+        LOG_WARN("Could not obtain local date from mount!");
+        return false;
+    }
+
+    // To ISO 8601 format in LOCAL TIME!
+    char datetime[MAXINDINAME]={0};
+    snprintf(datetime, MAXINDINAME, "%sT%s", cdate, ctime);
+
+    // Now that date+time are combined, let's get tm representation of it.
+    if (strptime(datetime, "%FT%T", &ltm) == nullptr)
+    {
+        LOGF_WARN("Could not process mount date and time: %s", datetime);
+        return false;
+    }
+
+    // Get local time epoch in UNIX seconds
+    time_epoch = mktime(&ltm);
+
+    // LOCAL to UTC by subtracting offset.
+    time_epoch -= static_cast<int>(offset * 3600.0);
+
+    // Get UTC (we're using localtime_r, but since we shifted time_epoch above by UTCOffset, we should be getting the real UTC time)
+    localtime_r(&time_epoch, &utm);
+
+    // Format it into the final UTC ISO 8601
+    strftime(cdate, MAXINDINAME, "%Y-%m-%dT%H:%M:%S", &utm);
+    IUSaveText(&TimeT[0], cdate);
+
+    LOGF_DEBUG("Mount controller UTC Time: %s", TimeT[0].text);
+    LOGF_DEBUG("Mount controller UTC Offset: %s", TimeT[1].text);
+
+    // Let's send everything to the client
+    TimeTP.s = IPS_OK;
+    IDSetText(&TimeTP, nullptr);
+
+    return true;
+}
+
+/*******************************************************************************
+*
+*******************************************************************************/
+bool StarGoTelescope::getLocalDate(char *dateString)
+{
+    LOG_DEBUG(__FUNCTION__);
+    if (isSimulation())
+    {
+        time_t now = time (nullptr);
+        strftime(dateString, 32, "%F", localtime(&now));
+    }
+    else
+    {
+        char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
+        int dd, mm, yy;
+        char mell_prefix[3] = {0};
+        int vars_read = 0;
+        //FIXME GC does not work on StarGo
+        if (!sendQuery(":GC#", response))
+            return false;
+        // StarGo format is MM/DD/YY
+        vars_read = sscanf(response, "%d%*c%d%*c%d", &mm, &dd, &yy);
+        if (vars_read < 3)
+        {
+            LOGF_ERROR("Cant read date from mount %s", response);
+            return false;
+        }
+        /* We consider years 50 or more to be in the last century, anything less in the 21st century.*/
+        if (yy > 50)
+            strncpy(mell_prefix, "19", 3);
+        else
+            strncpy(mell_prefix, "20", 3);
+        /* We need to have it in YYYY-MM-DD ISO format */
+        snprintf(dateString, 32, "%s%02d-%02d-%02d", mell_prefix, yy, mm, dd);
+    }
+    return true;
+}
+
+/*******************************************************************************
+*
+*******************************************************************************/
+bool StarGoTelescope::setLocalDate(uint8_t days, uint8_t months, uint16_t years)
+{
+    LOG_DEBUG(__FUNCTION__);
+    char cmd[AVALON_COMMAND_BUFFER_LENGTH] = {0};
+    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
+
+    int yy = years % 100;
+
+    // Use X50 using DDMMYY
+    snprintf(cmd, sizeof(cmd), ":SC %02d%02d%02d#", months, days, yy);
+    if (!sendQuery(cmd, response))
+        return false;
+
+    if (response[0] == '0')
+        return false;
+
+    return true;
+}
+
+/*******************************************************************************
+*
+*******************************************************************************/
+bool StarGoTelescope::getLocalTime(char *timeString)
+{
+    LOG_DEBUG(__FUNCTION__);
+    if (isSimulation())
+    {
+        time_t now = time (nullptr);
+        strftime(timeString, 32, "%T", localtime(&now));
+    }
+    else
+    {
+        double ctime = 0;
+        int h, m, s;
+        char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
+        // FIXME GL# command does not wrk on StarGo
+        if (!sendQuery(":GL#", response))
+            return false;
+
+        if (f_scansexa(response, &ctime))
+        {
+            LOGF_DEBUG("Unable to parse local time response %s", response);
+            return false;
+        }
+
+        getSexComponents(ctime, &h, &m, &s);
+        snprintf(timeString, 32, "%02d:%02d:%02d", h, m, s);
+    }
+
+    return true;
+}
+
+/*******************************************************************************
+*
+*******************************************************************************/
+bool StarGoTelescope::setLocalTime24(uint8_t hour, uint8_t minute, uint8_t second)
+{
+    LOG_DEBUG(__FUNCTION__);
+    char cmd[AVALON_COMMAND_BUFFER_LENGTH] = {0};
+    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
+
+    snprintf(cmd, sizeof(cmd), ":SL %02d:%02d:%02d#", hour, minute, second);
+
+    return (sendQuery(cmd, response, 0));
+}
+
+/*******************************************************************************
+*
+*******************************************************************************/
+bool StarGoTelescope::getUTCOffset(double *offset)
+{
+    LOG_DEBUG(__FUNCTION__);
+    if (isSimulation())
+    {
+        *offset = 3;
+        return true;
+    }
+
+    int lx200_utc_offset = 0;
+    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
+    float temp_number;
+
+    if (!sendQuery(":GG#", response))
+        return false;
+
+    /* Float */
+    if (strchr(response, '.'))
+    {
+        if (sscanf(response, "%f", &temp_number) != 1)
+            return false;
+        lx200_utc_offset = static_cast<int>(temp_number);
+    }
+    /* Int */
+    else if (sscanf(response, "%d", &lx200_utc_offset) != 1)
+        return false;
+
+    // LX200 TimeT Offset is defined at the number of hours added to LOCAL TIME to get TimeT. This is contrary to the normal definition.
+    *offset = lx200_utc_offset * -1;
+    return true;
+}
+
+/*******************************************************************************
+*
+*******************************************************************************/
+bool StarGoTelescope::setUTCOffset(double offset)
+{
+    LOG_DEBUG(__FUNCTION__);
+    char cmd[AVALON_COMMAND_BUFFER_LENGTH] = {0};
+    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
+    int hours = static_cast<int>(offset * -1.0);
+
+    snprintf(cmd, sizeof(cmd), ":SG %+03d#", hours);
+
+    return (sendQuery(cmd, response, 0));
+}
+
 /*******************************************************************************
 **
 *******************************************************************************/
@@ -1152,77 +1572,6 @@ bool StarGoTelescope::getEqCoordinates (double *ra, double *dec)
 
     return true;
 }
-/*******************************************************************************
-**
-*******************************************************************************/
-bool StarGoTelescope::getScopeTime()
-{
-    LOG_DEBUG(__FUNCTION__);
-    char cdate[MAXINDINAME]={0};
-    char ctime[MAXINDINAME]={0};
-    struct tm ltm;
-    struct tm utm;
-    time_t time_epoch;
-
-    double offset=0;
-    if (getUTCOffset(&offset))
-    {
-        char utcStr[8]={0};
-        snprintf(utcStr, 8, "%.2f", offset);
-        IUSaveText(&TimeT[1], utcStr);
-    }
-    else
-    {
-        LOG_WARN("Could not obtain UTC offset from mount!");
-        return false;
-    }
-
-    if (getLocalTime(ctime) == false)
-    {
-        LOG_WARN("Could not obtain local time from mount!");
-        return false;
-    }
-
-    if (getLocalDate(cdate) == false)
-    {
-        LOG_WARN("Could not obtain local date from mount!");
-        return false;
-    }
-
-    // To ISO 8601 format in LOCAL TIME!
-    char datetime[MAXINDINAME]={0};
-    snprintf(datetime, MAXINDINAME, "%sT%s", cdate, ctime);
-
-    // Now that date+time are combined, let's get tm representation of it.
-    if (strptime(datetime, "%FT%T", &ltm) == nullptr)
-    {
-        LOGF_WARN("Could not process mount date and time: %s", datetime);
-        return false;
-    }
-
-    // Get local time epoch in UNIX seconds
-    time_epoch = mktime(&ltm);
-
-    // LOCAL to UTC by subtracting offset.
-    time_epoch -= static_cast<int>(offset * 3600.0);
-
-    // Get UTC (we're using localtime_r, but since we shifted time_epoch above by UTCOffset, we should be getting the real UTC time)
-    localtime_r(&time_epoch, &utm);
-
-    // Format it into the final UTC ISO 8601
-    strftime(cdate, MAXINDINAME, "%Y-%m-%dT%H:%M:%S", &utm);
-    IUSaveText(&TimeT[0], cdate);
-
-    LOGF_DEBUG("Mount controller UTC Time: %s", TimeT[0].text);
-    LOGF_DEBUG("Mount controller UTC Offset: %s", TimeT[1].text);
-
-    // Let's send everything to the client
-    TimeTP.s = IPS_OK;
-    IDSetText(&TimeTP, nullptr);
-
-    return true;
-}
-
 /**************************************************************************************
 **
 ***************************************************************************************/
@@ -1364,142 +1713,6 @@ bool StarGoTelescope::setMountGotoHome()
     return true;
 }
 
-/**************************************************************************************
-**
-***************************************************************************************/
-bool StarGoTelescope::sendScopeLocation()
-{
-    LOG_DEBUG(__FUNCTION__);
-    if (isSimulation())
-    {
-        LocationNP.np[LOCATION_LATITUDE].value = 29.5;
-        LocationNP.np[LOCATION_LONGITUDE].value = 48.0;
-        LocationNP.np[LOCATION_ELEVATION].value = 10;
-        LocationNP.s           = IPS_OK;
-        IDSetNumber(&LocationNP, nullptr);
-        return true;
-    }
-
-    double siteLat = 0.0, siteLong = 0.0;
-    if (!getSiteLatitude(&siteLat))
-    {
-        LOG_WARN("Failed to get site latitude from device.");
-        return false;
-    }
-    if (!getSiteLongitude(&siteLong))
-    {
-        LOG_WARN("Failed to get site longitude from device.");
-        return false;
-    }
-    LocationNP.np[LOCATION_LATITUDE].value = siteLat;
-    LocationNP.np[LOCATION_LONGITUDE].value = siteLong;
-
-    LOGF_DEBUG("Mount Controller Latitude: %lg Longitude: %lg", LocationN[LOCATION_LATITUDE].value,
-               LocationN[LOCATION_LONGITUDE].value);
-
-    IDSetNumber(&LocationNP, nullptr);
-    if(!setLocalSiderealTime(siteLong))
-    {
-        LOG_ERROR("Error setting local sidereal time");
-        return false;
-    }
-
-    return true;
-}
-
-/**************************************************************************************
-**
-***************************************************************************************/
-bool StarGoTelescope::setLocalSiderealTime(double longitude)
-{
-    double lst = get_local_sidereal_time(longitude);
-    LOGF_DEBUG("Current local sidereal time = %lf", lst);
-    int h = 0, m = 0, s = 0;
-    getSexComponents(lst, &h, &m, &s);
-
-    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
-    char cmd[AVALON_COMMAND_BUFFER_LENGTH] = {0};
-    sprintf(cmd, ":X32%02hd%02hd%02hd#",
-            static_cast<int16_t>(h),
-            static_cast<int16_t>(m),
-            static_cast<int16_t>(s));
-
-    if(!sendQuery(cmd, response))
-    {
-        LOG_ERROR("Failed to set LST");
-        return false;
-    }
-    return true;
-}
-
-/**************************************************************************************
- * Determine the site latitude. In contrast to a standard LX200 implementation,
- * StarGo returns the location in arc seconds precision.
-***************************************************************************************/
-bool StarGoTelescope::getSiteLatitude(double *siteLat)
-{
-    LOG_DEBUG(__FUNCTION__);
-    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
-    if (!sendQuery(":Gt#", response))
-    {
-        LOG_ERROR("Failed to send query get Site Latitude command.");
-        return false;
-    }
-    if (f_scansexa(response, siteLat))
-    {
-        LOGF_ERROR("Unable to parse get Site Latitude response %s", response);
-        return false;
-    }
-    return true;
-}
-
-/**************************************************************************************
- * Determine the site longitude. In contrast to a standard LX200 implementation,
- * StarGo returns the location in arc seconds precision.
-***************************************************************************************/
-bool StarGoTelescope::getSiteLongitude(double *siteLong)
-{
-    LOG_DEBUG(__FUNCTION__);
-    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
-    if (!sendQuery(":Gg#", response))
-    {
-        LOG_ERROR("Failed to send query get Site Longitude command.");
-        return false;
-    }
-    if (f_scansexa(response, siteLong))
-    {
-        LOG_ERROR("Unable to parse get Site Longitude response.");
-        return false;
-    }
-    return true;
-}
-
-/*******************************************************************************
- * @brief Determine the LST with format HHMMSS
- * @return LST value for the current scope locateion
-*******************************************************************************/
-bool StarGoTelescope::getLST_String(char* input)
-{
-    LOG_DEBUG(__FUNCTION__);
-    double siteLong;
-
-    // step one: determine site longitude
-    if (!getSiteLongitude(&siteLong))
-    {
-        LOG_WARN("getLST Failed to get site Longitude from device.");
-        return false;
-    }
-    // determine local sidereal time
-    double lst = get_local_sidereal_time(siteLong);
-    int h = 0, m = 0, s = 0;
-    LOGF_DEBUG("Current local sidereal time = %.8lf", lst);
-    // translate into hh:mm:ss
-    getSexComponents(lst, &h, &m, &s);
-
-    sprintf(input, "%02d%02d%02d", h, m, s);
-    return true;
-}
-
 /*********************************************************************************
  * Queries
  *********************************************************************************/
@@ -1524,62 +1737,6 @@ bool StarGoTelescope::setMountParkPosition()
         return false;
     }
     return true;
-}
-
-/*******************************************************************************
- * Determine the site longitude. In contrast to a standard LX200 implementation,
- * StarGo returns the location in arc seconds precision.
-*******************************************************************************/
-bool StarGoTelescope::setSiteLongitude(double longitude)
-{
-    LOG_DEBUG(__FUNCTION__);
-    int d, m, s;
-    char command[32] = {0};
-    if (longitude > 180) longitude = longitude - 360;
-    if (longitude < -180) longitude = 360 + longitude;
-
-    getSexComponents(longitude, &d, &m, &s);
-
-    //    const char* format = ":Sg+%03d*%02d:%02d#";
-    //    if (d < 0 || m < 0 || s < 0) format = ":Sg%04d*%02u:%02u#";
-
-    //    snprintf(command, sizeof(command), format, d, m, s);
-
-    if (d < 0 || m < 0 || s < 0)
-        snprintf(command, sizeof(command), ":Sg%04d*%02u:%02u#",
-                 d,
-                 static_cast<uint32_t>(std::abs(m)),
-                 static_cast<uint32_t>(std::abs(s)));
-    else
-        snprintf(command, sizeof(command), ":Sg+%03d*%02d:%02d#", d, m, s);
-
-    LOGF_DEBUG("Sending set site longitude request '%s'", command);
-
-    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
-    bool result = sendQuery(command, response);
-
-    return (result);
-}
-
-/*******************************************************************************
- * @brief Set the site latitude
- * @param latitude value
- * @return true iff the command succeeded
-*******************************************************************************/
-bool StarGoTelescope::setSiteLatitude(double Lat)
-{
-    LOG_DEBUG(__FUNCTION__);
-    int d, m, s;
-    char command[32];
-
-    getSexComponents(Lat, &d, &m, &s);
-
-    snprintf(command, sizeof(command), ":St%+03d*%02d:%02d#", d, m, s);
-
-    LOGF_DEBUG("Sending set site latitude request '%s'", command);
-
-    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
-    return (sendQuery(command, response));
 }
 
 /*******************************************************************************
@@ -2305,163 +2462,6 @@ bool StarGoTelescope::setObjectCoords(double ra, double dec)
         return false;
     }
 
-    return true;
-}
-
-/*******************************************************************************
-*
-*******************************************************************************/
-bool StarGoTelescope::setLocalDate(uint8_t days, uint8_t months, uint16_t years)
-{
-    LOG_DEBUG(__FUNCTION__);
-    char cmd[AVALON_COMMAND_BUFFER_LENGTH] = {0};
-    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
-
-    int yy = years % 100;
-
-    // Use X50 using DDMMYY
-    snprintf(cmd, sizeof(cmd), ":SC %02d%02d%02d#", months, days, yy);
-    if (!sendQuery(cmd, response))
-        return false;
-
-    if (response[0] == '0')
-        return false;
-
-    return true;
-}
-
-/*******************************************************************************
-*
-*******************************************************************************/
-bool StarGoTelescope::setLocalTime24(uint8_t hour, uint8_t minute, uint8_t second)
-{
-    LOG_DEBUG(__FUNCTION__);
-    char cmd[AVALON_COMMAND_BUFFER_LENGTH] = {0};
-    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
-
-    snprintf(cmd, sizeof(cmd), ":SL %02d:%02d:%02d#", hour, minute, second);
-
-    return (sendQuery(cmd, response, 0));
-}
-
-/*******************************************************************************
-*
-*******************************************************************************/
-bool StarGoTelescope::setUTCOffset(double offset)
-{
-    LOG_DEBUG(__FUNCTION__);
-    char cmd[AVALON_COMMAND_BUFFER_LENGTH] = {0};
-    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
-    int hours = static_cast<int>(offset * -1.0);
-
-    snprintf(cmd, sizeof(cmd), ":SG %+03d#", hours);
-
-    return (sendQuery(cmd, response, 0));
-}
-
-/*******************************************************************************
-*
-*******************************************************************************/
-bool StarGoTelescope::getLocalTime(char *timeString)
-{
-    LOG_DEBUG(__FUNCTION__);
-    if (isSimulation())
-    {
-        time_t now = time (nullptr);
-        strftime(timeString, 32, "%T", localtime(&now));
-    }
-    else
-    {
-        double ctime = 0;
-        int h, m, s;
-        char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
-        // FIXME GL# command does not wrk on StarGo
-        if (!sendQuery(":GL#", response))
-            return false;
-
-        if (f_scansexa(response, &ctime))
-        {
-            LOGF_DEBUG("Unable to parse local time response %s", response);
-            return false;
-        }
-
-        getSexComponents(ctime, &h, &m, &s);
-        snprintf(timeString, 32, "%02d:%02d:%02d", h, m, s);
-    }
-
-    return true;
-}
-
-/*******************************************************************************
-*
-*******************************************************************************/
-bool StarGoTelescope::getLocalDate(char *dateString)
-{
-    LOG_DEBUG(__FUNCTION__);
-    if (isSimulation())
-    {
-        time_t now = time (nullptr);
-        strftime(dateString, 32, "%F", localtime(&now));
-    }
-    else
-    {
-        char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
-        int dd, mm, yy;
-        char mell_prefix[3] = {0};
-        int vars_read = 0;
-        //FIXME GC does not work on StarGo
-        if (!sendQuery(":GC#", response))
-            return false;
-        // StarGo format is MM/DD/YY
-        vars_read = sscanf(response, "%d%*c%d%*c%d", &mm, &dd, &yy);
-        if (vars_read < 3)
-        {
-            LOGF_ERROR("Cant read date from mount %s", response);
-            return false;
-        }
-        /* We consider years 50 or more to be in the last century, anything less in the 21st century.*/
-        if (yy > 50)
-            strncpy(mell_prefix, "19", 3);
-        else
-            strncpy(mell_prefix, "20", 3);
-        /* We need to have it in YYYY-MM-DD ISO format */
-        snprintf(dateString, 32, "%s%02d-%02d-%02d", mell_prefix, yy, mm, dd);
-    }
-    return true;
-}
-
-/*******************************************************************************
-*
-*******************************************************************************/
-bool StarGoTelescope::getUTCOffset(double *offset)
-{
-    LOG_DEBUG(__FUNCTION__);
-    if (isSimulation())
-    {
-        *offset = 3;
-        return true;
-    }
-
-    int lx200_utc_offset = 0;
-    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
-    float temp_number;
-
-    if (!sendQuery(":GG#", response))
-        return false;
-
-    /* Float */
-    if (strchr(response, '.'))
-    {
-        if (sscanf(response, "%f", &temp_number) != 1)
-            return false;
-        lx200_utc_offset = static_cast<int>(temp_number);
-    }
-    /* Int */
-    else if (sscanf(response, "%d", &lx200_utc_offset) != 1)
-        return false;
-
-    // LX200 TimeT Offset is defined at the number of hours added to LOCAL TIME to get TimeT. This is contrary to the normal definition.
-    *offset = lx200_utc_offset * -1;
     return true;
 }
 

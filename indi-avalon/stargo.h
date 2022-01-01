@@ -169,6 +169,22 @@ class StarGoTelescope : public INDI::Telescope, public INDI::GuiderInterface
         virtual bool MoveNS(INDI_DIR_NS dir, TelescopeMotionCommand command) override;
         virtual bool MoveWE(INDI_DIR_WE dir, TelescopeMotionCommand command) override;
 
+        // Site related functions
+        bool sendScopeLocation();
+        bool getSiteLatitude(double *siteLat);
+        bool setSiteLatitude(double Lat);
+        bool getSiteLongitude(double *siteLong);
+        bool setSiteLongitude(double Long);
+        bool setLocalSiderealTime(double longitude);
+        bool getLST_String(char* input);
+        bool getScopeTime();
+        bool getLocalDate(char *dateString);
+        bool setLocalDate(uint8_t days, uint8_t months, uint16_t years);
+        bool getLocalTime(char *timeString);
+        bool setLocalTime24(uint8_t hour, uint8_t minute, uint8_t second);
+        bool getUTCOffset(double *offset);
+        bool setUTCOffset(double offset);
+
         void getBasicData();
 
         // StarGo stuff
@@ -181,24 +197,15 @@ class StarGoTelescope : public INDI::Telescope, public INDI::GuiderInterface
         bool getSystemSlewSpeedMode (int *index);
         bool setSystemSlewSpeedMode(int index);
 
-
         // autoguiding
         bool isGuiding();
         bool setGuidingSpeeds(int raSpeed, int decSpeed);
 
         // location
-        bool sendScopeLocation();
-        bool setLocalSiderealTime(double longitude);
-        bool getSiteLatitude(double *siteLat);
-        bool getSiteLongitude(double *siteLong);
-        bool getLST_String(char* input);
         bool getTrackFrequency(double *value);
         bool getEqCoordinates(double *ra, double *dec);
-        bool getScopeTime();
 
         bool getFirmwareInfo(char *version);
-        bool setSiteLatitude(double Lat);
-        bool setSiteLongitude(double Long);
         bool getScopeAlignmentStatus(char *mountType, bool *isTracking, int *alignmentPoints);
         bool getMotorStatus(int *xSpeed, int *ySpeed);
         bool getParkHomeStatus (char* status);
@@ -218,12 +225,6 @@ class StarGoTelescope : public INDI::Telescope, public INDI::GuiderInterface
         int SendPulseCmd(int8_t direction, uint32_t duration_msec);
         // NSWE Motion Commands
         bool setObjectCoords(double ra, double dec);
-        bool setLocalDate(uint8_t days, uint8_t months, uint16_t years);
-        bool setLocalTime24(uint8_t hour, uint8_t minute, uint8_t second);
-        bool setUTCOffset(double offset);
-        bool getLocalTime(char *timeString);
-        bool getLocalDate(char *dateString);
-        bool getUTCOffset(double *offset);
 
         // Abort ALL motion
         int MoveTo(int direction);
