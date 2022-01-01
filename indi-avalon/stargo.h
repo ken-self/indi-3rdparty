@@ -193,13 +193,21 @@ class StarGoTelescope : public INDI::Telescope, public INDI::GuiderInterface
         void WaitParkOptionReady();
 //        bool setParkPosition(ISState *states, char *names[], int n);
 
+        // Slew and Goto functions
+        bool getSystemSlewSpeedMode (int *index);
+        bool setSystemSlewSpeedMode(int index);
+        bool setSlewMode(int slewMode);
+        bool getEqCoordinates(double *ra, double *dec);
+        bool syncSideOfPier();
+        bool SetMeridianFlipMode(int index);
+        bool GetMeridianFlipMode(int *index);
+//        int MoveTo(int direction);
+
         void getBasicData();
 
         // StarGo stuff
         bool getKeypadStatus (bool *isEnabled);
         bool setKeyPadEnabled(bool enabled);
-        bool getSystemSlewSpeedMode (int *index);
-        bool setSystemSlewSpeedMode(int index);
 
         // autoguiding
         bool isGuiding();
@@ -207,7 +215,6 @@ class StarGoTelescope : public INDI::Telescope, public INDI::GuiderInterface
 
         // location
         bool getTrackFrequency(double *value);
-        bool getEqCoordinates(double *ra, double *dec);
 
         bool getFirmwareInfo(char *version);
         bool getScopeAlignmentStatus(char *mountType, bool *isTracking, int *alignmentPoints);
@@ -219,18 +226,12 @@ class StarGoTelescope : public INDI::Telescope, public INDI::GuiderInterface
         bool setST4Enabled(bool enabled);
 
         // meridian flip
-        bool syncSideOfPier();
 
-        bool SetMeridianFlipMode(int index);
-        bool GetMeridianFlipMode(int *index);
         int SendPulseCmd(int8_t direction, uint32_t duration_msec);
         // NSWE Motion Commands
         bool setObjectCoords(double ra, double dec);
 
         // Abort ALL motion
-        int MoveTo(int direction);
-
-        bool setSlewMode(int slewMode);
 
         // tracking adjustment
         bool setTrackingAdjustment(double adjustRA);

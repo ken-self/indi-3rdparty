@@ -1631,6 +1631,124 @@ void StarGoTelescope::WaitParkOptionReady()
 }
 
 /*******************************************************************************
+ * @brief Determine the system slew speed mode
+ * @param index - low=0, medium=1, fast=2, high=3
+ * @return true iff request succeeded
+*******************************************************************************/
+bool StarGoTelescope::getSystemSlewSpeedMode (int *index)
+{
+    LOG_DEBUG(__FUNCTION__);
+    // Command query Keypad status  - :TTGFr#
+    //            response enabled  - vh1
+    //                     disabled - vh0
+
+    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
+
+    if (!sendQuery(":TTGMX#", response))
+    {
+        LOG_ERROR("Failed to send query system slew speed status request.");
+        return false;
+    }
+    int xx = 0, yy = 0;
+    if (! sscanf(response, "%02da%02d", &xx, &yy))
+    {
+        LOGF_ERROR("Unexpected system slew speed status response '%s'.", response);
+        return false;
+    }
+
+    switch (xx)
+    {
+        case 6:
+            *index = 0;
+            break;
+        case 8:
+            *index = 1;
+            break;
+        case 9:
+            *index = 2;
+            break;
+        case 12:
+            *index = 3;
+            break;
+        default:
+            LOGF_ERROR("Unexpected system slew speed status response '%s'.", response);
+            return false;
+    }
+    return true;
+}
+
+/*******************************************************************************
+*
+*******************************************************************************/
+bool StarGoTelescope::setSystemSlewSpeedMode(int index)
+{
+
+    std::string cmd = ":TTMX";
+    switch (index)
+    {
+        case 0:
+            cmd.append("0606#");
+            break;
+        case 1:
+            cmd.append("0808#");
+            break;
+        case 2:
+            cmd.append("0909#");
+            break;
+        case 3:
+            cmd.append("1212#");
+            break;
+        default:
+            LOGF_ERROR("Unexpected system slew speed mode '%02d'.", index);
+            return false;
+    }
+    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
+    if (sendQuery(cmd.c_str(), response))
+    {
+        return true;
+    }
+    else
+    {
+        LOG_ERROR("Setting system slew speed mode FAILED");
+        return false;
+    }
+
+}
+
+/*******************************************************************************
+*
+*******************************************************************************/
+bool StarGoTelescope::setSlewMode(int slewMode)
+{
+    LOG_DEBUG(__FUNCTION__);
+    char cmd[AVALON_COMMAND_BUFFER_LENGTH] = {0};
+    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
+
+    switch (slewMode)
+    {
+        case SLEW_MAX:
+            strcpy(cmd, ":RS#");
+            break;
+        case SLEW_FIND:
+            strcpy(cmd, ":RM#");
+            break;
+        case SLEW_CENTERING:
+            strcpy(cmd, ":RC#");
+            break;
+        case SLEW_GUIDE:
+            strcpy(cmd, ":RG#");
+            break;
+        default:
+            return false;
+    }
+    if (!sendQuery(cmd, response, 0)) // Don't wait for response - there isn't one
+    {
+        return false;
+    }
+    return true;
+}
+
+/*******************************************************************************
 **
 *******************************************************************************/
 bool StarGoTelescope::getEqCoordinates (double *ra, double *dec)
@@ -1655,6 +1773,151 @@ bool StarGoTelescope::getEqCoordinates (double *ra, double *dec)
 
     return true;
 }
+
+/*******************************************************************************
+ * @brief Retrieve pier side of the mount and sync it back to the client
+ * @return true iff synching succeeds
+*******************************************************************************/
+bool StarGoTelescope::syncSideOfPier()
+{
+    LOG_DEBUG(__FUNCTION__);
+    // Command query side of pier - :X39#
+    //         side unknown       - PX#
+    //         east pointing west - PE#
+    //         west pointing east - PW#
+
+    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
+    if (!sendQuery(":X39#", response))
+    {
+        LOG_ERROR("Failed to send query pier side.");
+        return false;
+    }
+    char answer;
+
+    if (! sscanf(response, "P%c", &answer))
+    {
+        LOGF_ERROR("Unexpected query pier side response '%s'.", response);
+        return false;
+    }
+
+    switch (answer)
+    {
+        case 'X':
+            LOG_DEBUG("Detected pier side unknown.");
+            setPierSide(INDI::Telescope::PIER_UNKNOWN);
+            break;
+        case 'W':
+            LOG_DEBUG("Detected pier side west.");
+            setPierSide(INDI::Telescope::PIER_EAST);
+            break;
+        case 'E':
+            LOG_DEBUG("Detected pier side east.");
+            setPierSide(INDI::Telescope::PIER_WEST);
+            break;
+        default:
+            break;
+    }
+
+    return true;
+}
+
+/*******************************************************************************
+*
+*******************************************************************************/
+bool StarGoTelescope::GetMeridianFlipMode(int* index)
+{
+    LOG_DEBUG(__FUNCTION__);
+
+    // 0: Auto mode: Enabled and not Forced
+    // 1: Disabled mode: Disabled and not Forced
+    // 2: Forced mode: Enabled and Forced
+    const char* enablecmd = ":TTGFs#";
+    const char* forcecmd  = ":TTGFd#";
+    char enableresp[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
+    char forceresp[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
+    if(!sendQuery(enablecmd, enableresp) || !sendQuery(forcecmd, forceresp))
+    {
+        LOGF_ERROR("Cannot get Meridian Flip Mode %s %s", enableresp, forceresp);
+        return false;
+    }
+    int enable = 0;
+    if (! sscanf(enableresp, "vs%01d", &enable))
+    {
+        LOGF_ERROR("Invalid meridian flip enabled response '%s", enableresp);
+        return false;
+    }
+    int force = 0;
+    if (! sscanf(forceresp, "vd%01d", &force))
+    {
+        LOGF_ERROR("Invalid meridian flip forced response '%s", forceresp);
+        return false;
+    }
+
+    if( enable == 1)
+    {
+        *index = 1; // disabled
+        LOG_WARN("Meridian flip DISABLED. BE CAREFUL, THIS MAY CAUSE DAMAGE TO YOUR MOUNT!");
+    }
+    else if( force == 0)
+    {
+        *index = 0; // auto
+        LOG_INFO("Meridian flip enabled.");
+    }
+    else
+    {
+        *index = 2; // forced
+        LOG_WARN("Meridian flip FORCED. BE CAREFUL, THIS MAY CAUSE DAMAGE TO YOUR MOUNT!");
+    }
+
+    return true;
+}
+
+/*******************************************************************************
+*
+*******************************************************************************/
+bool StarGoTelescope::SetMeridianFlipMode(int index)
+{
+    // 0: Auto mode: Enabled and not Forced
+    // 1: Disabled mode: Disabled and not Forced
+    // 2: Forced mode: Enabled and Forced
+    LOG_DEBUG(__FUNCTION__);
+
+    if (isSimulation())
+    {
+        MeridianFlipModeSP.s = IPS_OK;
+        IDSetSwitch(&MeridianFlipModeSP, nullptr);
+        return true;
+    }
+    if( index > 2)
+    {
+        LOGF_ERROR("Invalid Meridian Flip Mode %d", index);
+        return false;
+    }
+    const char* enablecmd = index == 1 ? ":TTSFs#" : ":TTRFs#";
+    const char* forcecmd  = index == 2 ? ":TTSFd#" : ":TTRFd#";
+    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
+    if(!sendQuery(enablecmd, response) || !sendQuery(forcecmd, response))
+    {
+        LOGF_ERROR("Cannot set Meridian Flip Mode %d", index);
+        return false;
+    }
+
+    switch (index)
+    {
+        case 0:
+            LOG_INFO("Meridian flip enabled.");
+            break;
+        case 1:
+            LOG_WARN("Meridian flip DISABLED. BE CAREFUL, THIS MAY CAUSE DAMAGE TO YOUR MOUNT!");
+            break;
+        case 2:
+            LOG_WARN("Meridian flip FORCED. BE CAREFUL, THIS MAY CAUSE DAMAGE TO YOUR MOUNT!");
+            break;
+    }
+
+    return true;
+}
+
 /**************************************************************************************
 **
 ***************************************************************************************/
@@ -1903,91 +2166,6 @@ bool StarGoTelescope::getKeypadStatus (bool *isEnabled)
 }
 
 /*******************************************************************************
- * @brief Determine the system slew speed mode
- * @param index - low=0, medium=1, fast=2, high=3
- * @return true iff request succeeded
-*******************************************************************************/
-bool StarGoTelescope::getSystemSlewSpeedMode (int *index)
-{
-    LOG_DEBUG(__FUNCTION__);
-    // Command query Keypad status  - :TTGFr#
-    //            response enabled  - vh1
-    //                     disabled - vh0
-
-    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
-
-    if (!sendQuery(":TTGMX#", response))
-    {
-        LOG_ERROR("Failed to send query system slew speed status request.");
-        return false;
-    }
-    int xx = 0, yy = 0;
-    if (! sscanf(response, "%02da%02d", &xx, &yy))
-    {
-        LOGF_ERROR("Unexpected system slew speed status response '%s'.", response);
-        return false;
-    }
-
-    switch (xx)
-    {
-        case 6:
-            *index = 0;
-            break;
-        case 8:
-            *index = 1;
-            break;
-        case 9:
-            *index = 2;
-            break;
-        case 12:
-            *index = 3;
-            break;
-        default:
-            LOGF_ERROR("Unexpected system slew speed status response '%s'.", response);
-            return false;
-    }
-    return true;
-}
-
-/*******************************************************************************
-*
-*******************************************************************************/
-bool StarGoTelescope::setSystemSlewSpeedMode(int index)
-{
-
-    std::string cmd = ":TTMX";
-    switch (index)
-    {
-        case 0:
-            cmd.append("0606#");
-            break;
-        case 1:
-            cmd.append("0808#");
-            break;
-        case 2:
-            cmd.append("0909#");
-            break;
-        case 3:
-            cmd.append("1212#");
-            break;
-        default:
-            LOGF_ERROR("Unexpected system slew speed mode '%02d'.", index);
-            return false;
-    }
-    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
-    if (sendQuery(cmd.c_str(), response))
-    {
-        return true;
-    }
-    else
-    {
-        LOG_ERROR("Setting system slew speed mode FAILED");
-        return false;
-    }
-
-}
-
-/*******************************************************************************
  * @brief Determine the guiding speeds for RA and DEC axis
  * @param raSpeed percentage for RA axis
  * @param decSpeed percenage for DEC axis
@@ -2103,53 +2281,6 @@ bool StarGoTelescope::setKeyPadEnabled(bool enabled)
 }
 
 /*******************************************************************************
- * @brief Retrieve pier side of the mount and sync it back to the client
- * @return true iff synching succeeds
-*******************************************************************************/
-bool StarGoTelescope::syncSideOfPier()
-{
-    LOG_DEBUG(__FUNCTION__);
-    // Command query side of pier - :X39#
-    //         side unknown       - PX#
-    //         east pointing west - PE#
-    //         west pointing east - PW#
-
-    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
-    if (!sendQuery(":X39#", response))
-    {
-        LOG_ERROR("Failed to send query pier side.");
-        return false;
-    }
-    char answer;
-
-    if (! sscanf(response, "P%c", &answer))
-    {
-        LOGF_ERROR("Unexpected query pier side response '%s'.", response);
-        return false;
-    }
-
-    switch (answer)
-    {
-        case 'X':
-            LOG_DEBUG("Detected pier side unknown.");
-            setPierSide(INDI::Telescope::PIER_UNKNOWN);
-            break;
-        case 'W':
-            LOG_DEBUG("Detected pier side west.");
-            setPierSide(INDI::Telescope::PIER_EAST);
-            break;
-        case 'E':
-            LOG_DEBUG("Detected pier side east.");
-            setPierSide(INDI::Telescope::PIER_WEST);
-            break;
-        default:
-            break;
-    }
-
-    return true;
-}
-
-/*******************************************************************************
  * @brief Retrieve the firmware info from the mount
  * @param firmwareInfo - firmware description
  * @return
@@ -2189,39 +2320,6 @@ bool StarGoTelescope::getFirmwareInfo (char* firmwareInfo)
 
     strcpy(firmwareInfo, infoStr.c_str());
 
-    return true;
-}
-
-/*******************************************************************************
-*
-*******************************************************************************/
-bool StarGoTelescope::setSlewMode(int slewMode)
-{
-    LOG_DEBUG(__FUNCTION__);
-    char cmd[AVALON_COMMAND_BUFFER_LENGTH] = {0};
-    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
-
-    switch (slewMode)
-    {
-        case SLEW_MAX:
-            strcpy(cmd, ":RS#");
-            break;
-        case SLEW_FIND:
-            strcpy(cmd, ":RM#");
-            break;
-        case SLEW_CENTERING:
-            strcpy(cmd, ":RC#");
-            break;
-        case SLEW_GUIDE:
-            strcpy(cmd, ":RG#");
-            break;
-        default:
-            return false;
-    }
-    if (!sendQuery(cmd, response, 0)) // Don't wait for response - there isn't one
-    {
-        return false;
-    }
     return true;
 }
 
@@ -2291,103 +2389,6 @@ bool StarGoTelescope::getTrackingAdjustment(double *valueRA)
     }
 
     *valueRA = static_cast<double>(raValue / 100.0);
-    return true;
-}
-
-/*******************************************************************************
-*
-*******************************************************************************/
-bool StarGoTelescope::SetMeridianFlipMode(int index)
-{
-    // 0: Auto mode: Enabled and not Forced
-    // 1: Disabled mode: Disabled and not Forced
-    // 2: Forced mode: Enabled and Forced
-    LOG_DEBUG(__FUNCTION__);
-
-    if (isSimulation())
-    {
-        MeridianFlipModeSP.s = IPS_OK;
-        IDSetSwitch(&MeridianFlipModeSP, nullptr);
-        return true;
-    }
-    if( index > 2)
-    {
-        LOGF_ERROR("Invalid Meridian Flip Mode %d", index);
-        return false;
-    }
-    const char* enablecmd = index == 1 ? ":TTSFs#" : ":TTRFs#";
-    const char* forcecmd  = index == 2 ? ":TTSFd#" : ":TTRFd#";
-    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
-    if(!sendQuery(enablecmd, response) || !sendQuery(forcecmd, response))
-    {
-        LOGF_ERROR("Cannot set Meridian Flip Mode %d", index);
-        return false;
-    }
-
-    switch (index)
-    {
-        case 0:
-            LOG_INFO("Meridian flip enabled.");
-            break;
-        case 1:
-            LOG_WARN("Meridian flip DISABLED. BE CAREFUL, THIS MAY CAUSE DAMAGE TO YOUR MOUNT!");
-            break;
-        case 2:
-            LOG_WARN("Meridian flip FORCED. BE CAREFUL, THIS MAY CAUSE DAMAGE TO YOUR MOUNT!");
-            break;
-    }
-
-    return true;
-}
-
-/*******************************************************************************
-*
-*******************************************************************************/
-bool StarGoTelescope::GetMeridianFlipMode(int* index)
-{
-    LOG_DEBUG(__FUNCTION__);
-
-    // 0: Auto mode: Enabled and not Forced
-    // 1: Disabled mode: Disabled and not Forced
-    // 2: Forced mode: Enabled and Forced
-    const char* enablecmd = ":TTGFs#";
-    const char* forcecmd  = ":TTGFd#";
-    char enableresp[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
-    char forceresp[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
-    if(!sendQuery(enablecmd, enableresp) || !sendQuery(forcecmd, forceresp))
-    {
-        LOGF_ERROR("Cannot get Meridian Flip Mode %s %s", enableresp, forceresp);
-        return false;
-    }
-    int enable = 0;
-    if (! sscanf(enableresp, "vs%01d", &enable))
-    {
-        LOGF_ERROR("Invalid meridian flip enabled response '%s", enableresp);
-        return false;
-    }
-    int force = 0;
-    if (! sscanf(forceresp, "vd%01d", &force))
-    {
-        LOGF_ERROR("Invalid meridian flip forced response '%s", forceresp);
-        return false;
-    }
-
-    if( enable == 1)
-    {
-        *index = 1; // disabled
-        LOG_WARN("Meridian flip DISABLED. BE CAREFUL, THIS MAY CAUSE DAMAGE TO YOUR MOUNT!");
-    }
-    else if( force == 0)
-    {
-        *index = 0; // auto
-        LOG_INFO("Meridian flip enabled.");
-    }
-    else
-    {
-        *index = 2; // forced
-        LOG_WARN("Meridian flip FORCED. BE CAREFUL, THIS MAY CAUSE DAMAGE TO YOUR MOUNT!");
-    }
-
     return true;
 }
 
