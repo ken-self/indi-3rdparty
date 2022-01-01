@@ -215,13 +215,13 @@ class StarGoTelescope : public INDI::Telescope, public INDI::GuiderInterface
         int SendPulseCmd(int8_t direction, uint32_t duration_msec);
         bool isGuiding();
 
-        // StarGo stuff
+        // Other general functions
         void getBasicData();
+        bool getScopeAlignmentStatus(char *mountType, bool *isTracking, int *alignmentPoints);
+        bool getMotorStatus(int *xSpeed, int *ySpeed);
         bool getKeypadStatus (bool *isEnabled);
         bool setKeyPadEnabled(bool enabled);
         bool getFirmwareInfo(char *version);
-        bool getScopeAlignmentStatus(char *mountType, bool *isTracking, int *alignmentPoints);
-        bool getMotorStatus(int *xSpeed, int *ySpeed);
         void mountSim();
 
         // Helper functions

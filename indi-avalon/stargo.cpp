@@ -1638,9 +1638,7 @@ void StarGoTelescope::WaitParkOptionReady()
 bool StarGoTelescope::getSystemSlewSpeedMode (int *index)
 {
     LOG_DEBUG(__FUNCTION__);
-    // Command query Keypad status  - :TTGFr#
-    //            response enabled  - vh1
-    //                     disabled - vh0
+    // Command query Max Slew speed - :TTGMX#
 
     char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
 
@@ -2321,10 +2319,6 @@ void StarGoTelescope::getBasicData()
 
     usePulseCommand = true;
 }
-
-/*********************************************************************************
- * Queries
- *********************************************************************************/
 
 /*******************************************************************************
 *
