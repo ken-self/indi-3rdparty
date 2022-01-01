@@ -96,14 +96,13 @@ public:
     StarGoTelescope();
 
     virtual const char *getDefaultName() override;
-
-    virtual bool ISNewNumber(const char *dev, const char *name, double values[], char *names[], int n) override;
+    virtual bool Handshake() override;
     virtual bool ISNewSwitch(const char *dev, const char *name, ISState *states, char *names[], int n) override;
-    virtual void ISGetProperties(const char *dev)override;
-
+    virtual bool ISNewNumber(const char *dev, const char *name, double values[], char *names[], int n) override;
+    virtual void ISGetProperties(const char *dev) override;
     virtual bool initProperties() override;
     virtual bool updateProperties() override;
-    virtual bool Handshake() override;
+    virtual bool saveConfigItems(FILE *fp) override;
 
 protected:
 
@@ -177,9 +176,6 @@ protected:
     INumberVectorProperty MountRequestDelayNP;
     INumber MountRequestDelayN[1];
 
-/* Use pulse-guide commands */
-//    ISwitchVectorProperty UsePulseCmdSP;
-//    ISwitch UsePulseCmdS[2];
     bool usePulseCommand { true };
 
     bool getTimeOnStartup=true, getLocationOnStartup=true;
@@ -195,48 +191,75 @@ protected:
 /***********************************************************************************************
 * Virtual functions
  ***********************************************************************************************/
+        // Telescope:: virtual functions
     virtual bool ReadScopeStatus() override;
-    virtual bool Goto(double ra, double dec) override;
+    virtual bool updateLocation(double latitude, double longitude, double elevation) override;
+//    virtual bool updateTime(ln_date *utc, double utc_offset);
     virtual bool Sync(double ra, double dec) override;
-    virtual bool MoveNS(INDI_DIR_NS dir, TelescopeMotionCommand command) override;
-    virtual bool MoveWE(INDI_DIR_WE dir, TelescopeMotionCommand command) override;
+    virtual bool SetParkPosition(double Axis1Value, double Axis2Value) override;
+    virtual bool SetDefaultPark() override;
+    virtual bool SetCurrentPark() override;
     virtual bool Park() override;
     virtual bool UnPark() override;
+    virtual bool SetSlewRate(int index) override;
+    virtual bool Goto(double ra, double dec) override;
     virtual bool Abort() override;
     virtual bool SetTrackMode(uint8_t mode) override;
-    virtual bool SetTrackRate(double raRate, double deRate) override;
     virtual bool SetTrackEnabled(bool enabled) override;
-//    virtual bool updateTime(ln_date *utc, double utc_offset);
-    virtual bool updateLocation(double latitude, double longitude, double elevation) override;
-    virtual bool SetSlewRate(int index) override;
+    virtual bool SetTrackRate(double raRate, double deRate) override;
 
-    virtual bool saveConfigItems(FILE *fp) override;
-
+        // GuiderInterface virtual functions
     virtual IPState GuideNorth(uint32_t ms) override;
     virtual IPState GuideSouth(uint32_t ms) override;
     virtual IPState GuideEast(uint32_t ms) override;
     virtual IPState GuideWest(uint32_t ms) override;
 //    virtual void GuideComplete(INDI_EQ_AXIS axis) override;
+    virtual bool MoveNS(INDI_DIR_NS dir, TelescopeMotionCommand command) override;
+    virtual bool MoveWE(INDI_DIR_WE dir, TelescopeMotionCommand command) override;
 
-    virtual bool SetParkPosition(double Axis1Value, double Axis2Value) override;
-    virtual bool SetCurrentPark() override;
-    virtual bool SetDefaultPark() override;
 
 
 /***********************************************************************************************
 * StarGo specific functions
  ***********************************************************************************************/
+// Location and time
+    bool getScopeLocation();
+    bool getSiteLatitude(double *siteLat);
+    bool setSiteLatitude(double Lat);
+    bool getSiteLongitude(double *siteLong);
+    bool setSiteLongitude(double Long);
+    bool setLocalSiderealTime(double longitude);
+    bool getLST_String(char* input);
+    bool getScopeTime();
+    bool getLocalDate(char *dateString) ;
+    bool setLocalDate(uint8_t days, uint8_t months, uint16_t years) ;
+    bool getLocalTime(char *timeString) ;
+    bool setLocalTime24(uint8_t hour, uint8_t minute, uint8_t second) ;
+    bool getUTCOffset(double *offset) ;
+    bool setUTCOffset(double offset) ;
+
 // Parking
-    void WaitParkOptionReady();
+    bool getParkHomeStatus (char* status);
     bool setHomeSync();
     bool setParkPosition();
     bool setGotoHome();
-    bool getParkHomeStatus (char* status);
+    void WaitParkOptionReady();
+
+// Slewing
+    bool getMaxSlews(int *raSlew, int *decSlew);
+    bool setMaxSlews(int raSlew, int decSlew);
+    bool getMoveSpeed(int *centerSpeed, int *findSpeed ); // Not implemented
+    bool setMoveSpeed(int centerSpeed, int findSpeed );
+    bool setSlewMode(int slewMode);
+    bool getEqCoordinates(double *ra, double *dec);
+    bool setObjectCoords(double ra, double dec);
+    bool getSideOfPier();
+    bool SetMeridianFlipMode(int index);
+    bool GetMeridianFlipMode(int *index);
 
 // autoguiding and tracking
-    bool getScopeAlignmentStatus(char *mountType, bool *isTracking, int *alignmentPoints);
-    bool setTrackingAdjustment(double adjustRA);
     bool getTrackingAdjustment(double *valueRA);
+    bool setTrackingAdjustment(double adjustRA);
     bool isGuiding();
     bool setGuidingSpeeds(int raSpeed, int decSpeed);
     bool getGuidingSpeeds(int *raSpeed, int *decSpeed);
@@ -244,19 +267,14 @@ protected:
     bool getST4Status(bool *isEnabled);
     int SendPulseCmd(int8_t direction, uint32_t duration_msec) ;
 
-// Slewing
-    bool setSlewMode(int slewMode);
-    bool setObjectCoords(double ra, double dec);
-    bool getEqCoordinates(double *ra, double *dec);
-    bool getMaxSlews(int *raSlew, int *decSlew);
-    bool setMaxSlews(int raSlew, int decSlew);
-    bool getMoveSpeed(int *centerSpeed, int *findSpeed ); // Not implemented
-    bool setMoveSpeed(int centerSpeed, int findSpeed );
-    bool SetMeridianFlipMode(int index);
-    bool GetMeridianFlipMode(int *index);
-    bool getSideOfPier();
+// Misc
+    void getBasicData();
+    bool getScopeAlignmentStatus(char *mountType, bool *isTracking, int *alignmentPoints);
+    bool getMotorStatus(int *xSpeed, int *ySpeed);
     bool getKeypadStatus (bool *isEnabled);
     bool setKeyPadEnabled(bool enabled);
+    bool getFirmwareInfo(char *version, char *mount, char *tcb );
+    void mountSim();
 
 // Motors
     bool getGearRatios(int *raRatio, int *decRatio);
@@ -265,39 +283,13 @@ protected:
     bool setMotorReverse(bool raDir, bool decDir);  //Not implemented
     bool getTorque(int *torque);  //Not implemented
     bool setTorque(int torque);  //Not implemented
-    bool getMotorStatus(int *xSpeed, int *ySpeed);
-
-// Location and time
-    bool getSiteLatitude(double *siteLat);
-    bool getSiteLongitude(double *siteLong);
-    bool setSiteLatitude(double Lat);
-    bool setSiteLongitude(double Long);
-    bool setLocalSiderealTime(double longitude);
-    bool setLocalDate(uint8_t days, uint8_t months, uint16_t years) ;
-    bool setLocalTime24(uint8_t hour, uint8_t minute, uint8_t second) ;
-    bool setUTCOffset(double offset) ;
-    bool getLST_String(char* input);
-    bool getLocalDate(char *dateString) ;
-    bool getLocalTime(char *timeString) ;
-    bool getUTCOffset(double *offset) ;
-    bool getScopeLocation();
-    bool getScopeTime();
-
-// Misc
-    void getBasicData();
-    bool getFirmwareInfo(char *version, char *mount, char *tcb );
-    void setMountRequestDelay(int secs, long nanosecs) {mount_request_delay.tv_sec = secs; mount_request_delay.tv_nsec = nanosecs; };
-
-// Simulate Mount in simulation mode
-    void mountSim();
-
-    // Queries to the scope interface
-    bool sendQuery(const char* cmd, char* response, char end, int wait=AVALON_TIMEOUT);
-    bool sendQuery(const char* cmd, char* response, int wait=AVALON_TIMEOUT);
-    bool ParseMotionState(char* state);
 
 protected:
 // Helper functions
+    bool sendQuery(const char* cmd, char* response, char end, int wait=AVALON_TIMEOUT);
+    bool sendQuery(const char* cmd, char* response, int wait=AVALON_TIMEOUT);
+    bool ParseMotionState(char* state);
+    void setMountRequestDelay(int secs, long nanosecs);
     bool receive(char* buffer, int* bytes, int wait=AVALON_TIMEOUT);
     bool receive(char* buffer, int* bytes, char end, int wait=AVALON_TIMEOUT);
     void flush();
@@ -333,6 +325,11 @@ inline bool StarGoTelescope::sendQuery(const char* cmd, char* response, int wait
 {
     return sendQuery(cmd, response, '#', wait);
 }
+inline void StarGoTelescope::setMountRequestDelay(int secs, long nanosecs)
+{
+        mount_request_delay.tv_sec = secs;
+        mount_request_delay.tv_nsec = nanosecs;
+};
 inline bool StarGoTelescope::receive(char* buffer, int* bytes, int wait)
 {
     return receive(buffer, bytes, '#', wait);
