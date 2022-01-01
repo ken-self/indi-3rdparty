@@ -24,7 +24,9 @@
 
 #pragma once
 
-#include <mounts/lx200telescope.h>
+//#include <mounts/lx200telescope.h>
+#include <indiguiderinterface.h>
+#include <inditelescope.h>
 #include <indicom.h>
 #include <indilogger.h>
 #include <termios.h>
@@ -33,20 +35,22 @@
 #include <string>
 #include <unistd.h>
 
-#define LX200_TIMEOUT 5 /* FD timeout in seconds */
+#define STARGO_TIMEOUT 5 /* FD timeout in seconds */
 #define RB_MAX_LEN    64
 #define AVALON_TIMEOUT                                  2
 #define AVALON_COMMAND_BUFFER_LENGTH                    32
 #define AVALON_RESPONSE_BUFFER_LENGTH                   32
+#define STARGO_GENERIC_SLEWRATE 5        /* slew rate, degrees/s */
 
 enum TDirection
 {
-    LX200_NORTH,
-    LX200_WEST,
-    LX200_EAST,
-    LX200_SOUTH,
-    LX200_ALL
+    STARGO_NORTH,
+    STARGO_WEST,
+    STARGO_EAST,
+    STARGO_SOUTH,
+    STARGO_ALL
 };
+/*
 enum TSlew
 {
     LX200_SLEW_MAX,
@@ -60,11 +64,12 @@ enum TFormat
     LX200_LONG_FORMAT,
     LX200_LONGER_FORMAT
 };
-
+*/
 // StarGo specific tabs
 extern const char *RA_DEC_TAB;
 
-class StarGoTelescope : public LX200Telescope
+//class StarGoTelescope : public LX200Telescope
+class StarGoTelescope : public INDI::Telescope, public INDI::GuiderInterface
 {
     public:
         enum TrackMode
@@ -79,6 +84,15 @@ class StarGoTelescope : public LX200Telescope
             MOTORS_DEC_ONLY = 1,
             MOTORS_RA_ONLY = 2,
             MOTORS_ON = 3
+        };
+        enum MotionState
+        {
+            MOTION_STATIC=0,
+            MOTION_TRACK=1,
+            MOTION_ACCEL=2,
+            MOTION_DECEL=3,
+            MOTION_GUIDE=4,
+            MOTION_SLEW=5
         };
         TrackMode CurrentTrackMode {TRACK_SIDEREAL};
         MotorsState CurrentMotorsState {MOTORS_OFF};
@@ -95,12 +109,11 @@ class StarGoTelescope : public LX200Telescope
         virtual void ISGetProperties(const char *dev)override;
 
         // helper functions
-        virtual bool receive(char* buffer, int* bytes, int wait = AVALON_TIMEOUT);
-        virtual bool receive(char* buffer, int* bytes, char end, int wait = AVALON_TIMEOUT);
-        virtual void flush();
-        virtual bool transmit(const char* buffer);
+        bool receive(char* buffer, int* bytes, int wait = AVALON_TIMEOUT);
+        bool receive(char* buffer, int* bytes, char end, int wait = AVALON_TIMEOUT);
+        void flush();
+        bool transmit(const char* buffer);
         virtual bool SetTrackMode(uint8_t mode) override;
-
     protected:
 
         // Sync Home Position
@@ -119,13 +132,15 @@ class StarGoTelescope : public LX200Telescope
         ISwitchVectorProperty MountGotoHomeSP;
         ISwitch MountGotoHomeS[1];
 
+/*
+* Use IndiTelescope
         // parking position
         ISwitchVectorProperty MountSetParkSP;
         ISwitch MountSetParkS[1];
-
+*/
         // guiding
         INumberVectorProperty GuidingSpeedNP;
-        INumber GuidingSpeedP[2];
+        INumber GuidingSpeedN[2];
 
         ISwitchVectorProperty ST4StatusSP;
         ISwitch ST4StatusS[2];
@@ -150,13 +165,23 @@ class StarGoTelescope : public LX200Telescope
         INumberVectorProperty MountRequestDelayNP;
         INumber MountRequestDelayN[1];
 
-        int controller_format { LX200_LONG_FORMAT };
+//        int controller_format { LX200_LONG_FORMAT };
 
         // override LX200Generic
-        virtual void getBasicData() override;
+        bool usePulseCommand { true };
+    
+        bool sendTimeOnStartup=true, sendLocationOnStartup=true;
+        uint8_t DBG_SCOPE;
+    
+        double targetRA, targetDEC;
+        double currentRA, currentDEC;
+        
+        bool ParkOptionBusy { false };
+    
+        void getBasicData();
         virtual bool ReadScopeStatus() override;
         virtual bool Park() override;
-        virtual void SetParked(bool isparked) override;
+//        virtual void SetParked(bool isparked) override;
         virtual bool UnPark() override;
         virtual bool saveConfigItems(FILE *fp) override;
         virtual bool Goto(double ra, double dec) override;
@@ -164,9 +189,14 @@ class StarGoTelescope : public LX200Telescope
         virtual bool Disconnect() override;
 
         // StarGo stuff
-        virtual void getStarGoBasicData();
-        virtual bool syncHomePosition();
-        bool slewToHome(ISState *states, char *names[], int n);
+//        virtual void getStarGoBasicData();
+        void WaitParkOptionReady();
+        bool syncHomePosition();
+//        bool slewToHome(ISState *states, char *names[], int n); //Embedded in ISNewSwitch
+        virtual bool SetParkPosition(double Axis1Value, double Axis2Value) override;
+        virtual bool SetCurrentPark() override;
+        virtual bool SetDefaultPark() override;
+
         bool setParkPosition(ISState *states, char *names[], int n);
         bool getKeypadStatus (bool *isEnabled);
         bool setKeyPadEnabled(bool enabled);
@@ -181,43 +211,44 @@ class StarGoTelescope : public LX200Telescope
         };
 
         // autoguiding
-        virtual bool setGuidingSpeeds(int raSpeed, int decSpeed);
+        bool isGuiding();
+        bool setGuidingSpeeds(int raSpeed, int decSpeed);
 
         // scope status
-        virtual bool ParseMotionState(char* state);
+        bool ParseMotionState(char* state);
 
         // location
-        virtual bool sendScopeLocation() override;
+        bool sendScopeLocation();
         bool setLocalSiderealTime(double longitude);
         virtual bool updateLocation(double latitude, double longitude, double elevation) override;
-        virtual bool getSiteLatitude(double *siteLat);
-        virtual bool getSiteLongitude(double *siteLong);
-        virtual bool getLST_String(char* input);
+        bool getSiteLatitude(double *siteLat);
+        bool getSiteLongitude(double *siteLong);
+        bool getLST_String(char* input);
         bool getTrackFrequency(double *value);
-        virtual bool getEqCoordinates(double *ra, double *dec);
-
+        bool getEqCoordinates(double *ra, double *dec);
+        bool getScopeTime();
 
         // queries to the scope interface. Wait for specified end character
-        virtual bool sendQuery(const char* cmd, char* response, char end, int wait = AVALON_TIMEOUT);
+        bool sendQuery(const char* cmd, char* response, char end, int wait = AVALON_TIMEOUT);
         // Wait for default "#' character
-        virtual bool sendQuery(const char* cmd, char* response, int wait = AVALON_TIMEOUT);
-        virtual bool getFirmwareInfo(char *version);
-        virtual bool setSiteLatitude(double Lat);
-        virtual bool setSiteLongitude(double Long);
-        virtual bool getScopeAlignmentStatus(char *mountType, bool *isTracking, int *alignmentPoints);
-        virtual bool getMotorStatus(int *xSpeed, int *ySpeed);
-        virtual bool getParkHomeStatus (char* status);
-        virtual bool setMountGotoHome();
-        virtual bool setMountParkPosition();
+        bool sendQuery(const char* cmd, char* response, int wait = AVALON_TIMEOUT);
+        bool getFirmwareInfo(char *version);
+        bool setSiteLatitude(double Lat);
+        bool setSiteLongitude(double Long);
+        bool getScopeAlignmentStatus(char *mountType, bool *isTracking, int *alignmentPoints);
+        bool getMotorStatus(int *xSpeed, int *ySpeed);
+        bool getParkHomeStatus (char* status);
+        bool setMountGotoHome();
+        bool setMountParkPosition();
 
         // guiding
-        virtual bool getST4Status(bool *isEnabled);
-        virtual bool getGuidingSpeeds(int *raSpeed, int *decSpeed);
-        virtual bool setST4Enabled(bool enabled);
+        bool getST4Status(bool *isEnabled);
+        bool getGuidingSpeeds(int *raSpeed, int *decSpeed);
+        bool setST4Enabled(bool enabled);
 
         // meridian flip
-        virtual bool syncSideOfPier();
-        bool checkLX200EquatorialFormat();
+        bool syncSideOfPier();
+//        bool checkLX200EquatorialFormat();
 
         // Guide Commands
         virtual IPState GuideNorth(uint32_t ms) override;
@@ -225,9 +256,9 @@ class StarGoTelescope : public LX200Telescope
         virtual IPState GuideEast(uint32_t ms) override;
         virtual IPState GuideWest(uint32_t ms) override;
         virtual bool SetSlewRate(int index) override;
-        virtual bool SetMeridianFlipMode(int index);
-        virtual bool GetMeridianFlipMode(int *index);
-        virtual int SendPulseCmd(int8_t direction, uint32_t duration_msec) override;
+        bool SetMeridianFlipMode(int index);
+        bool GetMeridianFlipMode(int *index);
+        int SendPulseCmd(int8_t direction, uint32_t duration_msec);
         virtual bool SetTrackEnabled(bool enabled) override;
         virtual bool SetTrackRate(double raRate, double deRate) override;
         // NSWE Motion Commands
@@ -235,12 +266,12 @@ class StarGoTelescope : public LX200Telescope
         virtual bool MoveWE(INDI_DIR_WE dir, TelescopeMotionCommand command) override;
         virtual bool Sync(double ra, double dec) override;
         bool setObjectCoords(double ra, double dec);
-        virtual bool setLocalDate(uint8_t days, uint8_t months, uint16_t years) override;
-        virtual bool setLocalTime24(uint8_t hour, uint8_t minute, uint8_t second) override;
-        virtual bool setUTCOffset(double offset) override;
-        virtual bool getLocalTime(char *timeString) override;
-        virtual bool getLocalDate(char *dateString) override;
-        virtual bool getUTFOffset(double *offset) override;
+        bool setLocalDate(uint8_t days, uint8_t months, uint16_t years);
+        bool setLocalTime24(uint8_t hour, uint8_t minute, uint8_t second);
+        bool setUTCOffset(double offset);
+        bool getLocalTime(char *timeString);
+        bool getLocalDate(char *dateString);
+        bool getUTCOffset(double *offset);
 
         // Abort ALL motion
         virtual bool Abort() override;
@@ -252,10 +283,17 @@ class StarGoTelescope : public LX200Telescope
         bool setTrackingAdjustment(double adjustRA);
         bool getTrackingAdjustment(double *valueRA);
 
+// Simulate Mount in simulation mode
+        void mountSim();
+
         // AUX1 focuser
         bool activateFocuserAux1(bool activate);
 
 };
+inline bool StarGoTelescope::isGuiding()
+{
+    return (GuideNSNP.s == IPS_BUSY || GuideWENP.s == IPS_BUSY);
+}
 inline bool StarGoTelescope::sendQuery(const char* cmd, char* response, int wait)
 {
     return sendQuery(cmd, response, '#', wait);
