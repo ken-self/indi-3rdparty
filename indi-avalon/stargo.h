@@ -88,11 +88,10 @@ class StarGoTelescope : public INDI::Telescope, public INDI::GuiderInterface
         virtual bool Handshake() override;
         virtual bool ISNewSwitch(const char *dev, const char *name, ISState *states, char *names[], int n) override;
         virtual bool ISNewNumber(const char *dev, const char *name, double values[], char *names[], int n) override;
-        virtual bool updateProperties() override;
+        virtual void ISGetProperties(const char *dev) override;
         virtual bool initProperties() override;
-        virtual void ISGetProperties(const char *dev)override;
-
-        virtual bool SetTrackMode(uint8_t mode) override;
+        virtual bool updateProperties() override;
+        virtual bool saveConfigItems(FILE *fp) override;
 
     protected:
         // Sync Home Position
@@ -144,20 +143,36 @@ class StarGoTelescope : public INDI::Telescope, public INDI::GuiderInterface
         double currentRA, currentDEC;
         
         bool ParkOptionBusy { false };
-    
-        void getBasicData();
+
+        // Telescope:: virtual functions
         virtual bool ReadScopeStatus() override;
+        virtual bool updateLocation(double latitude, double longitude, double elevation) override;
+        virtual bool Sync(double ra, double dec) override;
+        virtual bool SetParkPosition(double Axis1Value, double Axis2Value) override;
+        virtual bool SetDefaultPark() override;
+        virtual bool SetCurrentPark() override;
         virtual bool Park() override;
         virtual bool UnPark() override;
-        virtual bool saveConfigItems(FILE *fp) override;
+        virtual bool SetSlewRate(int index) override;
         virtual bool Goto(double ra, double dec) override;
+        virtual bool Abort() override;
+        virtual bool SetTrackMode(uint8_t mode) override;
+        virtual bool SetTrackEnabled(bool enabled) override;
+        virtual bool SetTrackRate(double raRate, double deRate) override;
+
+        // GuiderInterface virtual functions
+        virtual IPState GuideNorth(uint32_t ms) override;
+        virtual IPState GuideSouth(uint32_t ms) override;
+        virtual IPState GuideEast(uint32_t ms) override;
+        virtual IPState GuideWest(uint32_t ms) override;
+        virtual bool MoveNS(INDI_DIR_NS dir, TelescopeMotionCommand command) override;
+        virtual bool MoveWE(INDI_DIR_WE dir, TelescopeMotionCommand command) override;
+
+        void getBasicData();
 
         // StarGo stuff
         void WaitParkOptionReady();
         bool syncHomePosition();
-        virtual bool SetParkPosition(double Axis1Value, double Axis2Value) override;
-        virtual bool SetCurrentPark() override;
-        virtual bool SetDefaultPark() override;
 
         bool setParkPosition(ISState *states, char *names[], int n);
         bool getKeypadStatus (bool *isEnabled);
@@ -182,7 +197,6 @@ class StarGoTelescope : public INDI::Telescope, public INDI::GuiderInterface
         // location
         bool sendScopeLocation();
         bool setLocalSiderealTime(double longitude);
-        virtual bool updateLocation(double latitude, double longitude, double elevation) override;
         bool getSiteLatitude(double *siteLat);
         bool getSiteLongitude(double *siteLong);
         bool getLST_String(char* input);
@@ -211,21 +225,10 @@ class StarGoTelescope : public INDI::Telescope, public INDI::GuiderInterface
         // meridian flip
         bool syncSideOfPier();
 
-        // Guide Commands
-        virtual IPState GuideNorth(uint32_t ms) override;
-        virtual IPState GuideSouth(uint32_t ms) override;
-        virtual IPState GuideEast(uint32_t ms) override;
-        virtual IPState GuideWest(uint32_t ms) override;
-        virtual bool SetSlewRate(int index) override;
         bool SetMeridianFlipMode(int index);
         bool GetMeridianFlipMode(int *index);
         int SendPulseCmd(int8_t direction, uint32_t duration_msec);
-        virtual bool SetTrackEnabled(bool enabled) override;
-        virtual bool SetTrackRate(double raRate, double deRate) override;
         // NSWE Motion Commands
-        virtual bool MoveNS(INDI_DIR_NS dir, TelescopeMotionCommand command) override;
-        virtual bool MoveWE(INDI_DIR_WE dir, TelescopeMotionCommand command) override;
-        virtual bool Sync(double ra, double dec) override;
         bool setObjectCoords(double ra, double dec);
         bool setLocalDate(uint8_t days, uint8_t months, uint16_t years);
         bool setLocalTime24(uint8_t hour, uint8_t minute, uint8_t second);
@@ -235,7 +238,6 @@ class StarGoTelescope : public INDI::Telescope, public INDI::GuiderInterface
         bool getUTCOffset(double *offset);
 
         // Abort ALL motion
-        virtual bool Abort() override;
         int MoveTo(int direction);
 
         bool setSlewMode(int slewMode);
@@ -252,7 +254,6 @@ class StarGoTelescope : public INDI::Telescope, public INDI::GuiderInterface
         bool receive(char* buffer, int* bytes, char end, int wait = AVALON_TIMEOUT);
         void flush();
         bool transmit(const char* buffer);
-
 };
 inline bool StarGoTelescope::isGuiding()
 {

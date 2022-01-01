@@ -296,7 +296,23 @@ bool StarGoTelescope::ISNewNumber(const char *dev, const char *name, double valu
     return result;
 }
 
+/*******************************************************************************
+**
+*******************************************************************************/
+void StarGoTelescope::ISGetProperties(const char *dev)
+{
+    if (dev != nullptr && strcmp(dev, getDeviceName()) != 0)
+        return;
 
+    INDI::Telescope::ISGetProperties(dev);
+    if (isConnected())
+    {
+        if (HasTrackMode() && TrackModeS != nullptr)
+            defineProperty(&TrackModeSP);
+        if (CanControlTrack())
+            defineProperty(&TrackStateSP);
+    }
+}
 
 /**************************************************************************************
 **
@@ -422,6 +438,17 @@ bool StarGoTelescope::updateProperties()
     }
 
     return true;
+}
+
+/*********************************************************************************
+ * config file
+ *********************************************************************************/
+bool StarGoTelescope::saveConfigItems(FILE *fp)
+{
+    LOG_DEBUG(__FUNCTION__);
+    IUSaveConfigNumber(fp, &MountRequestDelayNP);
+
+    return INDI::Telescope::saveConfigItems(fp);
 }
 
 /**************************************************************************************
@@ -556,6 +583,76 @@ bool StarGoTelescope::ReadScopeStatus()
     return true;
 }
 
+/**************************************************************************************
+**
+***************************************************************************************/
+bool StarGoTelescope::updateLocation(double latitude, double longitude, double elevation)
+{
+    LOGF_DEBUG("%s Lat:%.3lf Lon:%.3lf", __FUNCTION__, latitude, longitude);
+    INDI_UNUSED(elevation);
+
+    if (isSimulation())
+        return true;
+
+    //    LOGF_DEBUG("Setting site longitude '%lf'", longitude);
+    if (!isSimulation() && ! setSiteLongitude(longitude))
+    {
+        LOGF_ERROR("Error setting site longitude %lf", longitude);
+        return false;
+    }
+
+    if (!isSimulation() && ! setSiteLatitude(latitude))
+    {
+        LOGF_ERROR("Error setting site latitude %lf", latitude);
+        return false;
+    }
+
+    char l[32] = {0}, L[32] = {0};
+    fs_sexa(l, latitude, 3, 3600);
+    fs_sexa(L, longitude, 4, 3600);
+
+    //    LOGF_INFO("Site location updated to Lat %.32s - Long %.32s", l, L);
+    if(!setLocalSiderealTime(longitude))
+    {
+        LOG_ERROR("Error setting local sidereal time");
+        return false;
+    }
+    return true;
+}
+
+/*******************************************************************************
+*
+*******************************************************************************/
+bool StarGoTelescope::Sync(double ra, double dec)
+{
+    LOG_DEBUG(__FUNCTION__);
+    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
+
+    if(!isSimulation() && !setObjectCoords(ra, dec))
+    {
+        LOG_ERROR("Error setting coords for sync");
+        return false;
+    }
+
+    if (!isSimulation() && !sendQuery(":CM#", response))
+    {
+        EqNP.s = IPS_ALERT;
+        IDSetNumber(&EqNP, "Synchronization failed.");
+        return false;
+    }
+
+    currentRA  = ra;
+    currentDEC = dec;
+
+    LOG_INFO("Synchronization successful.");
+
+    EqNP.s     = IPS_OK;
+
+    NewRaDec(currentRA, currentDEC);
+
+    return true;
+}
+
 /*******************************************************************************
 ** overloads virtual SetCurrentPark
 *******************************************************************************/
@@ -605,6 +702,348 @@ bool StarGoTelescope::SetCurrentPark()
 
     ParkOptionBusy = true;
     WaitParkOptionReady();
+    return true;
+}
+
+/**************************************************************************************
+**
+***************************************************************************************/
+bool StarGoTelescope::Park()
+{
+    LOG_DEBUG(__FUNCTION__);
+    // in: :X362#
+    // out: "pB#"
+
+    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
+    if (sendQuery(":X362#", response) && strcmp(response, "pB") == 0)
+    {
+        LOG_INFO("Parking mount...");
+        TrackState = SCOPE_PARKING;
+        return true;
+    }
+    else
+    {
+        LOGF_ERROR("Parking failed. Response %s", response);
+        return false;
+    }
+}
+
+/*******************************************************************************
+**
+*******************************************************************************/
+bool StarGoTelescope::UnPark()
+{
+    LOG_DEBUG(__FUNCTION__);
+    // in: :X370#
+    // out: "p0#"
+
+    double siteLong;
+
+    // step one: determine site longitude
+    if (!getSiteLongitude(&siteLong))
+    {
+        LOG_WARN("Failed to get site Longitude from device.");
+        return false;
+    }
+    // set LST to avoid errors
+    if (!setLocalSiderealTime(siteLong))
+    {
+        LOGF_ERROR("Failed to set LST before unparking %lf", siteLong);
+        return false;
+    }
+    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
+
+    // and now execute unparking
+    if (sendQuery(":X370#", response) && strcmp(response, "p0") == 0)
+    {
+        LOG_INFO("Unparking mount...");
+        return true;
+    }
+    else
+    {
+        LOGF_ERROR("Unpark failed with response: %s", response);
+        return false;
+    }
+}
+
+/*******************************************************************************
+*
+*******************************************************************************/
+bool StarGoTelescope::SetSlewRate(int index)
+{
+    LOG_DEBUG(__FUNCTION__);
+    // Convert index to Meade format
+    index = 3 - index;
+
+    if (!isSimulation() && !setSlewMode(index))
+    {
+        SlewRateSP.s = IPS_ALERT;
+        IDSetSwitch(&SlewRateSP, "Error setting slew mode.");
+        return false;
+    }
+
+    SlewRateSP.s = IPS_OK;
+    IDSetSwitch(&SlewRateSP, nullptr);
+    return true;
+}
+
+/*******************************************************************************
+**
+*******************************************************************************/
+bool StarGoTelescope::Goto(double ra, double dec)
+{
+    LOG_DEBUG(__FUNCTION__);
+    const struct timespec timeout = {0, 100000000L};
+
+    targetRA  = ra;
+    targetDEC = dec;
+
+    // If moving, let's stop it first.
+    if (EqNP.s == IPS_BUSY)
+    {
+        if (!isSimulation() && !Abort())
+        {
+            AbortSP.s = IPS_ALERT;
+            IDSetSwitch(&AbortSP, "Abort slew failed.");
+            return false;
+        }
+
+        AbortSP.s = IPS_OK;
+        EqNP.s    = IPS_IDLE;
+        IDSetSwitch(&AbortSP, "Slew aborted.");
+        IDSetNumber(&EqNP, nullptr);
+
+        if (MovementNSSP.s == IPS_BUSY || MovementWESP.s == IPS_BUSY)
+        {
+            MovementNSSP.s = MovementWESP.s = IPS_IDLE;
+            EqNP.s                          = IPS_IDLE;
+            IUResetSwitch(&MovementNSSP);
+            IUResetSwitch(&MovementWESP);
+            IDSetSwitch(&MovementNSSP, nullptr);
+            IDSetSwitch(&MovementWESP, nullptr);
+        }
+
+        // sleep for 100 mseconds
+        nanosleep(&timeout, nullptr);
+    }
+    if(!isSimulation() && !setObjectCoords(ra, dec))
+    {
+        LOG_ERROR("Error setting coords for goto");
+        return false;
+    }
+
+    if (!isSimulation())
+    {
+        char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
+        if(!sendQuery(":MS#", response))
+        {
+            LOG_ERROR("Error Slewing");
+            EqNP.s = IPS_ALERT;
+            IDSetNumber(&EqNP, nullptr);
+            return false;
+        }
+    }
+
+    TrackState = SCOPE_SLEWING;
+    EqNP.s     = IPS_BUSY;
+
+    //    LOGF_INFO("Slewing to RA: %s - DEC: %s", RAStr, DecStr);
+
+    return true;
+}
+
+/*******************************************************************************
+*
+*******************************************************************************/
+bool StarGoTelescope::Abort()
+{
+    LOG_DEBUG(__FUNCTION__);
+    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
+    ParkOptionBusy = false;
+    if (!isSimulation() && !sendQuery(":Q#", response, 0))
+    {
+        LOG_ERROR("Failed to abort slew.");
+        return false;
+    }
+
+    if (GuideNSNP.s == IPS_BUSY || GuideWENP.s == IPS_BUSY)
+    {
+        GuideNSNP.s = GuideWENP.s = IPS_IDLE;
+        GuideNSN[0].value = GuideNSN[1].value = 0.0;
+        GuideWEN[0].value = GuideWEN[1].value = 0.0;
+
+        LOG_INFO("Guide aborted.");
+        IDSetNumber(&GuideNSNP, nullptr);
+        IDSetNumber(&GuideWENP, nullptr);
+
+        return true;
+    }
+
+    return true;
+}
+
+/*******************************************************************************
+*
+*******************************************************************************/
+bool StarGoTelescope::SetTrackMode(uint8_t mode)
+{
+    LOGF_DEBUG("%s: Set Track Mode %d", __FUNCTION__, mode);
+    if (isSimulation())
+        return true;
+
+    char cmd[AVALON_COMMAND_BUFFER_LENGTH] = {0};
+    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
+    char s_mode[10] = {0};
+
+    switch (mode)
+    {
+        case TRACK_SIDEREAL:
+            strcpy(cmd, ":TQ#");
+            strcpy(s_mode, "Sidereal");
+            break;
+        case TRACK_SOLAR:
+            strcpy(cmd, ":TS#");
+            strcpy(s_mode, "Solar");
+            break;
+        case TRACK_LUNAR:
+            strcpy(cmd, ":TL#");
+            strcpy(s_mode, "Lunar");
+            break;
+        default:
+            return false;
+    }
+    if ( !sendQuery(cmd, response, 0))  // Dont wait for response - there is none
+        return false;
+    LOGF_INFO("Tracking mode set to %s.", s_mode );
+
+    return true;
+}
+
+/*******************************************************************************
+*
+*******************************************************************************/
+bool StarGoTelescope::SetTrackEnabled(bool enabled)
+{
+    LOGF_INFO("Tracking %s.", enabled ? "enabled" : "disabled");
+    // Command tracking on  - :X122#
+    //         tracking off - :X120#
+
+    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
+    if (! sendQuery(enabled ? ":X122#" : ":X120#", response, 0))
+    {
+        LOGF_ERROR("Failed to %s tracking", enabled ? "enable" : "disable");
+        return false;
+    }
+    return true;
+}
+
+/*******************************************************************************
+*
+*******************************************************************************/
+bool StarGoTelescope::SetTrackRate(double raRate, double deRate)
+{
+    LOG_DEBUG(__FUNCTION__);
+    INDI_UNUSED(deRate);
+    char cmd[AVALON_COMMAND_BUFFER_LENGTH] = {0};
+    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
+    int rate = static_cast<int>(raRate);
+    sprintf(cmd, ":X1E%04d", rate);
+    if(!sendQuery(cmd, response, 0))
+    {
+        LOGF_ERROR("Failed to set tracking t %d", rate);
+        return false;
+    }
+    return true;
+}
+
+/*******************************************************************************
+*
+*******************************************************************************/
+IPState StarGoTelescope::GuideNorth(uint32_t ms)
+{
+    LOGF_DEBUG("%s %dms",__FUNCTION__, ms);
+    if(!SendPulseCmd(STARGO_NORTH, ms))
+    {
+        return IPS_ALERT;
+    }
+    return IPS_IDLE;
+}
+
+/*******************************************************************************
+*
+*******************************************************************************/
+IPState StarGoTelescope::GuideSouth(uint32_t ms)
+{
+    LOGF_DEBUG("%s %dms",__FUNCTION__, ms);
+    if(!SendPulseCmd(STARGO_SOUTH, ms))
+    {
+        return IPS_ALERT;
+    }
+    return IPS_IDLE;
+}
+
+/*******************************************************************************
+*
+*******************************************************************************/
+IPState StarGoTelescope::GuideEast(uint32_t ms)
+{
+    LOGF_DEBUG("%s %dms",__FUNCTION__, ms);
+    if(!SendPulseCmd(STARGO_EAST, ms))
+    {
+        return IPS_ALERT;
+    }
+    return IPS_IDLE;
+}
+
+/*******************************************************************************
+*
+*******************************************************************************/
+IPState StarGoTelescope::GuideWest(uint32_t ms)
+{
+    LOGF_DEBUG("%s %dms",__FUNCTION__, ms );
+    if(!SendPulseCmd(STARGO_WEST, ms))
+    {
+        return IPS_ALERT;
+    }
+    return IPS_IDLE;
+}
+
+/*******************************************************************************
+*
+*******************************************************************************/
+bool StarGoTelescope::MoveNS(INDI_DIR_NS dir, TelescopeMotionCommand command)
+{
+    LOG_DEBUG(__FUNCTION__);
+    char cmd[AVALON_COMMAND_BUFFER_LENGTH] = {0};
+    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
+
+    sprintf(cmd, ":%s%s#", command == MOTION_START ? "M" : "Q", dir == DIRECTION_NORTH ? "n" : "s");
+    if (!isSimulation() && !sendQuery(cmd, response, 0))
+    {
+        LOG_ERROR("Error N/S motion direction.");
+        return false;
+    }
+
+    return true;
+}
+
+/*******************************************************************************
+*
+*******************************************************************************/
+bool StarGoTelescope::MoveWE(INDI_DIR_WE dir, TelescopeMotionCommand command)
+{
+    LOG_DEBUG(__FUNCTION__);
+    char cmd[AVALON_COMMAND_BUFFER_LENGTH] = {0};
+    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
+
+    sprintf(cmd, ":%s%s#", command == MOTION_START ? "M" : "Q", dir == DIRECTION_WEST ? "w" : "e");
+
+    if (!isSimulation() && !sendQuery(cmd, response, 0))
+    {
+        LOG_ERROR("Error W/E motion direction.");
+        return false;
+    }
+
     return true;
 }
 
@@ -971,43 +1410,6 @@ bool StarGoTelescope::sendScopeLocation()
 /**************************************************************************************
 **
 ***************************************************************************************/
-bool StarGoTelescope::updateLocation(double latitude, double longitude, double elevation)
-{
-    LOGF_DEBUG("%s Lat:%.3lf Lon:%.3lf", __FUNCTION__, latitude, longitude);
-    INDI_UNUSED(elevation);
-
-    if (isSimulation())
-        return true;
-
-    //    LOGF_DEBUG("Setting site longitude '%lf'", longitude);
-    if (!isSimulation() && ! setSiteLongitude(longitude))
-    {
-        LOGF_ERROR("Error setting site longitude %lf", longitude);
-        return false;
-    }
-
-    if (!isSimulation() && ! setSiteLatitude(latitude))
-    {
-        LOGF_ERROR("Error setting site latitude %lf", latitude);
-        return false;
-    }
-
-    char l[32] = {0}, L[32] = {0};
-    fs_sexa(l, latitude, 3, 3600);
-    fs_sexa(L, longitude, 4, 3600);
-
-    //    LOGF_INFO("Site location updated to Lat %.32s - Long %.32s", l, L);
-    if(!setLocalSiderealTime(longitude))
-    {
-        LOG_ERROR("Error setting local sidereal time");
-        return false;
-    }
-    return true;
-}
-
-/**************************************************************************************
-**
-***************************************************************************************/
 bool StarGoTelescope::setLocalSiderealTime(double longitude)
 {
     double lst = get_local_sidereal_time(longitude);
@@ -1072,67 +1474,6 @@ bool StarGoTelescope::getSiteLongitude(double *siteLong)
     return true;
 }
 
-/**************************************************************************************
-**
-***************************************************************************************/
-bool StarGoTelescope::Park()
-{
-    LOG_DEBUG(__FUNCTION__);
-    // in: :X362#
-    // out: "pB#"
-
-    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
-    if (sendQuery(":X362#", response) && strcmp(response, "pB") == 0)
-    {
-        LOG_INFO("Parking mount...");
-        TrackState = SCOPE_PARKING;
-        return true;
-    }
-    else
-    {
-        LOGF_ERROR("Parking failed. Response %s", response);
-        return false;
-    }
-}
-
-/*******************************************************************************
-**
-*******************************************************************************/
-bool StarGoTelescope::UnPark()
-{
-    LOG_DEBUG(__FUNCTION__);
-    // in: :X370#
-    // out: "p0#"
-
-    double siteLong;
-
-    // step one: determine site longitude
-    if (!getSiteLongitude(&siteLong))
-    {
-        LOG_WARN("Failed to get site Longitude from device.");
-        return false;
-    }
-    // set LST to avoid errors
-    if (!setLocalSiderealTime(siteLong))
-    {
-        LOGF_ERROR("Failed to set LST before unparking %lf", siteLong);
-        return false;
-    }
-    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
-
-    // and now execute unparking
-    if (sendQuery(":X370#", response) && strcmp(response, "p0") == 0)
-    {
-        LOG_INFO("Unparking mount...");
-        return true;
-    }
-    else
-    {
-        LOGF_ERROR("Unpark failed with response: %s", response);
-        return false;
-    }
-}
-
 /*******************************************************************************
  * @brief Determine the LST with format HHMMSS
  * @return LST value for the current scope locateion
@@ -1157,17 +1498,6 @@ bool StarGoTelescope::getLST_String(char* input)
 
     sprintf(input, "%02d%02d%02d", h, m, s);
     return true;
-}
-
-/*********************************************************************************
- * config file
- *********************************************************************************/
-bool StarGoTelescope::saveConfigItems(FILE *fp)
-{
-    LOG_DEBUG(__FUNCTION__);
-    IUSaveConfigNumber(fp, &MountRequestDelayNP);
-
-    return INDI::Telescope::saveConfigItems(fp);
 }
 
 /*********************************************************************************
@@ -1837,64 +2167,6 @@ bool StarGoTelescope::getFirmwareInfo (char* firmwareInfo)
 /*******************************************************************************
 *
 *******************************************************************************/
-bool StarGoTelescope::SetTrackMode(uint8_t mode)
-{
-    LOGF_DEBUG("%s: Set Track Mode %d", __FUNCTION__, mode);
-    if (isSimulation())
-        return true;
-
-    char cmd[AVALON_COMMAND_BUFFER_LENGTH] = {0};
-    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
-    char s_mode[10] = {0};
-
-    switch (mode)
-    {
-        case TRACK_SIDEREAL:
-            strcpy(cmd, ":TQ#");
-            strcpy(s_mode, "Sidereal");
-            break;
-        case TRACK_SOLAR:
-            strcpy(cmd, ":TS#");
-            strcpy(s_mode, "Solar");
-            break;
-        case TRACK_LUNAR:
-            strcpy(cmd, ":TL#");
-            strcpy(s_mode, "Lunar");
-            break;
-        default:
-            return false;
-    }
-    if ( !sendQuery(cmd, response, 0))  // Dont wait for response - there is none
-        return false;
-    LOGF_INFO("Tracking mode set to %s.", s_mode );
-
-    return true;
-}
-
-/*******************************************************************************
-*
-*******************************************************************************/
-bool StarGoTelescope::SetSlewRate(int index)
-{
-    LOG_DEBUG(__FUNCTION__);
-    // Convert index to Meade format
-    index = 3 - index;
-
-    if (!isSimulation() && !setSlewMode(index))
-    {
-        SlewRateSP.s = IPS_ALERT;
-        IDSetSwitch(&SlewRateSP, "Error setting slew mode.");
-        return false;
-    }
-
-    SlewRateSP.s = IPS_OK;
-    IDSetSwitch(&SlewRateSP, nullptr);
-    return true;
-}
-
-/*******************************************************************************
-*
-*******************************************************************************/
 bool StarGoTelescope::setSlewMode(int slewMode)
 {
     LOG_DEBUG(__FUNCTION__);
@@ -2094,58 +2366,6 @@ bool StarGoTelescope::GetMeridianFlipMode(int* index)
 /*******************************************************************************
 *
 *******************************************************************************/
-IPState StarGoTelescope::GuideNorth(uint32_t ms)
-{
-    LOGF_DEBUG("%s %dms",__FUNCTION__, ms);
-    if(!SendPulseCmd(STARGO_NORTH, ms))
-    {
-        return IPS_ALERT;
-    }
-    return IPS_IDLE;
-}
-
-/*******************************************************************************
-*
-*******************************************************************************/
-IPState StarGoTelescope::GuideSouth(uint32_t ms)
-{
-    LOGF_DEBUG("%s %dms",__FUNCTION__, ms);
-    if(!SendPulseCmd(STARGO_SOUTH, ms))
-    {
-        return IPS_ALERT;
-    }
-    return IPS_IDLE;
-}
-
-/*******************************************************************************
-*
-*******************************************************************************/
-IPState StarGoTelescope::GuideEast(uint32_t ms)
-{
-    LOGF_DEBUG("%s %dms",__FUNCTION__, ms);
-    if(!SendPulseCmd(STARGO_EAST, ms))
-    {
-        return IPS_ALERT;
-    }
-    return IPS_IDLE;
-}
-
-/*******************************************************************************
-*
-*******************************************************************************/
-IPState StarGoTelescope::GuideWest(uint32_t ms)
-{
-    LOGF_DEBUG("%s %dms",__FUNCTION__, ms );
-    if(!SendPulseCmd(STARGO_WEST, ms))
-    {
-        return IPS_ALERT;
-    }
-    return IPS_IDLE;
-}
-
-/*******************************************************************************
-*
-*******************************************************************************/
 int StarGoTelescope::SendPulseCmd(int8_t direction, uint32_t duration_msec)
 {
     LOGF_DEBUG("%s dir=%d dur=%d ms", __FUNCTION__, direction, duration_msec );
@@ -2184,228 +2404,6 @@ int StarGoTelescope::SendPulseCmd(int8_t direction, uint32_t duration_msec)
     }
     bool success = !sendQuery(cmd, response, 0); // no response expected
     return success;
-}
-
-/*******************************************************************************
-*
-*******************************************************************************/
-bool StarGoTelescope::SetTrackEnabled(bool enabled)
-{
-    LOGF_INFO("Tracking %s.", enabled ? "enabled" : "disabled");
-    // Command tracking on  - :X122#
-    //         tracking off - :X120#
-
-    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
-    if (! sendQuery(enabled ? ":X122#" : ":X120#", response, 0))
-    {
-        LOGF_ERROR("Failed to %s tracking", enabled ? "enable" : "disable");
-        return false;
-    }
-    return true;
-}
-
-/*******************************************************************************
-*
-*******************************************************************************/
-bool StarGoTelescope::SetTrackRate(double raRate, double deRate)
-{
-    LOG_DEBUG(__FUNCTION__);
-    INDI_UNUSED(deRate);
-    char cmd[AVALON_COMMAND_BUFFER_LENGTH] = {0};
-    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
-    int rate = static_cast<int>(raRate);
-    sprintf(cmd, ":X1E%04d", rate);
-    if(!sendQuery(cmd, response, 0))
-    {
-        LOGF_ERROR("Failed to set tracking t %d", rate);
-        return false;
-    }
-    return true;
-}
-
-/*******************************************************************************
-**
-*******************************************************************************/
-void StarGoTelescope::ISGetProperties(const char *dev)
-{
-    if (dev != nullptr && strcmp(dev, getDeviceName()) != 0)
-        return;
-
-    INDI::Telescope::ISGetProperties(dev);
-    if (isConnected())
-    {
-        if (HasTrackMode() && TrackModeS != nullptr)
-            defineProperty(&TrackModeSP);
-        if (CanControlTrack())
-            defineProperty(&TrackStateSP);
-    }
-}
-
-/*******************************************************************************
-**
-*******************************************************************************/
-bool StarGoTelescope::Goto(double ra, double dec)
-{
-    LOG_DEBUG(__FUNCTION__);
-    const struct timespec timeout = {0, 100000000L};
-
-    targetRA  = ra;
-    targetDEC = dec;
-
-    // If moving, let's stop it first.
-    if (EqNP.s == IPS_BUSY)
-    {
-        if (!isSimulation() && !Abort())
-        {
-            AbortSP.s = IPS_ALERT;
-            IDSetSwitch(&AbortSP, "Abort slew failed.");
-            return false;
-        }
-
-        AbortSP.s = IPS_OK;
-        EqNP.s    = IPS_IDLE;
-        IDSetSwitch(&AbortSP, "Slew aborted.");
-        IDSetNumber(&EqNP, nullptr);
-
-        if (MovementNSSP.s == IPS_BUSY || MovementWESP.s == IPS_BUSY)
-        {
-            MovementNSSP.s = MovementWESP.s = IPS_IDLE;
-            EqNP.s                          = IPS_IDLE;
-            IUResetSwitch(&MovementNSSP);
-            IUResetSwitch(&MovementWESP);
-            IDSetSwitch(&MovementNSSP, nullptr);
-            IDSetSwitch(&MovementWESP, nullptr);
-        }
-
-        // sleep for 100 mseconds
-        nanosleep(&timeout, nullptr);
-    }
-    if(!isSimulation() && !setObjectCoords(ra, dec))
-    {
-        LOG_ERROR("Error setting coords for goto");
-        return false;
-    }
-
-    if (!isSimulation())
-    {
-        char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
-        if(!sendQuery(":MS#", response))
-        {
-            LOG_ERROR("Error Slewing");
-            EqNP.s = IPS_ALERT;
-            IDSetNumber(&EqNP, nullptr);
-            return false;
-        }
-    }
-
-    TrackState = SCOPE_SLEWING;
-    EqNP.s     = IPS_BUSY;
-
-    //    LOGF_INFO("Slewing to RA: %s - DEC: %s", RAStr, DecStr);
-
-    return true;
-}
-
-/*******************************************************************************
-*
-*******************************************************************************/
-bool StarGoTelescope::MoveNS(INDI_DIR_NS dir, TelescopeMotionCommand command)
-{
-    LOG_DEBUG(__FUNCTION__);
-    char cmd[AVALON_COMMAND_BUFFER_LENGTH] = {0};
-    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
-
-    sprintf(cmd, ":%s%s#", command == MOTION_START ? "M" : "Q", dir == DIRECTION_NORTH ? "n" : "s");
-    if (!isSimulation() && !sendQuery(cmd, response, 0))
-    {
-        LOG_ERROR("Error N/S motion direction.");
-        return false;
-    }
-
-    return true;
-}
-
-/*******************************************************************************
-*
-*******************************************************************************/
-bool StarGoTelescope::MoveWE(INDI_DIR_WE dir, TelescopeMotionCommand command)
-{
-    LOG_DEBUG(__FUNCTION__);
-    char cmd[AVALON_COMMAND_BUFFER_LENGTH] = {0};
-    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
-
-    sprintf(cmd, ":%s%s#", command == MOTION_START ? "M" : "Q", dir == DIRECTION_WEST ? "w" : "e");
-
-    if (!isSimulation() && !sendQuery(cmd, response, 0))
-    {
-        LOG_ERROR("Error W/E motion direction.");
-        return false;
-    }
-
-    return true;
-}
-
-/*******************************************************************************
-*
-*******************************************************************************/
-bool StarGoTelescope::Abort()
-{
-    LOG_DEBUG(__FUNCTION__);
-    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
-    ParkOptionBusy = false;
-    if (!isSimulation() && !sendQuery(":Q#", response, 0))
-    {
-        LOG_ERROR("Failed to abort slew.");
-        return false;
-    }
-
-    if (GuideNSNP.s == IPS_BUSY || GuideWENP.s == IPS_BUSY)
-    {
-        GuideNSNP.s = GuideWENP.s = IPS_IDLE;
-        GuideNSN[0].value = GuideNSN[1].value = 0.0;
-        GuideWEN[0].value = GuideWEN[1].value = 0.0;
-
-        LOG_INFO("Guide aborted.");
-        IDSetNumber(&GuideNSNP, nullptr);
-        IDSetNumber(&GuideWENP, nullptr);
-
-        return true;
-    }
-
-    return true;
-}
-
-/*******************************************************************************
-*
-*******************************************************************************/
-bool StarGoTelescope::Sync(double ra, double dec)
-{
-    LOG_DEBUG(__FUNCTION__);
-    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
-
-    if(!isSimulation() && !setObjectCoords(ra, dec))
-    {
-        LOG_ERROR("Error setting coords for sync");
-        return false;
-    }
-
-    if (!isSimulation() && !sendQuery(":CM#", response))
-    {
-        EqNP.s = IPS_ALERT;
-        IDSetNumber(&EqNP, "Synchronization failed.");
-        return false;
-    }
-
-    currentRA  = ra;
-    currentDEC = dec;
-
-    LOG_INFO("Synchronization successful.");
-
-    EqNP.s     = IPS_OK;
-
-    NewRaDec(currentRA, currentDEC);
-
-    return true;
 }
 
 /*******************************************************************************
