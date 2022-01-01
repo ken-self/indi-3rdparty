@@ -198,49 +198,33 @@ class StarGoTelescope : public INDI::Telescope, public INDI::GuiderInterface
         bool setSystemSlewSpeedMode(int index);
         bool setSlewMode(int slewMode);
         bool getEqCoordinates(double *ra, double *dec);
+        bool setObjectCoords(double ra, double dec);
         bool syncSideOfPier();
         bool SetMeridianFlipMode(int index);
         bool GetMeridianFlipMode(int *index);
 //        int MoveTo(int direction);
 
-        void getBasicData();
+        // Tracking and Guiding functions
+        bool getTrackFrequency(double *value);
+        bool getTrackingAdjustment(double *valueRA);
+        bool setTrackingAdjustment(double adjustRA);
+        bool getGuidingSpeeds(int *raSpeed, int *decSpeed);
+        bool setGuidingSpeeds(int raSpeed, int decSpeed);
+        bool getST4Status(bool *isEnabled);
+        bool setST4Enabled(bool enabled);
+        int SendPulseCmd(int8_t direction, uint32_t duration_msec);
+        bool isGuiding();
 
         // StarGo stuff
+        void getBasicData();
         bool getKeypadStatus (bool *isEnabled);
         bool setKeyPadEnabled(bool enabled);
-
-        // autoguiding
-        bool isGuiding();
-        bool setGuidingSpeeds(int raSpeed, int decSpeed);
-
-        // location
-        bool getTrackFrequency(double *value);
-
         bool getFirmwareInfo(char *version);
         bool getScopeAlignmentStatus(char *mountType, bool *isTracking, int *alignmentPoints);
         bool getMotorStatus(int *xSpeed, int *ySpeed);
-
-        // guiding
-        bool getST4Status(bool *isEnabled);
-        bool getGuidingSpeeds(int *raSpeed, int *decSpeed);
-        bool setST4Enabled(bool enabled);
-
-        // meridian flip
-
-        int SendPulseCmd(int8_t direction, uint32_t duration_msec);
-        // NSWE Motion Commands
-        bool setObjectCoords(double ra, double dec);
-
-        // Abort ALL motion
-
-        // tracking adjustment
-        bool setTrackingAdjustment(double adjustRA);
-        bool getTrackingAdjustment(double *valueRA);
-
-// Simulate Mount in simulation mode
         void mountSim();
 
-        // helper functions
+        // Helper functions
         bool sendQuery(const char* cmd, char* response, char end, int wait = AVALON_TIMEOUT);
         bool sendQuery(const char* cmd, char* response, int wait = AVALON_TIMEOUT);
         bool ParseMotionState(char* state);

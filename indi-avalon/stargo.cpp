@@ -1775,6 +1775,37 @@ bool StarGoTelescope::getEqCoordinates (double *ra, double *dec)
 }
 
 /*******************************************************************************
+*
+*******************************************************************************/
+bool StarGoTelescope::setObjectCoords(double ra, double dec)
+{
+    LOG_DEBUG(__FUNCTION__);
+
+    char RAStr[AVALON_COMMAND_BUFFER_LENGTH] = {0};
+    char DecStr[AVALON_COMMAND_BUFFER_LENGTH] = {0};
+    int h, m, s, d;
+    getSexComponents(ra, &h, &m, &s);
+    snprintf(RAStr, sizeof(RAStr), ":Sr%02d:%02d:%02d#", h, m, s);
+    getSexComponents(dec, &d, &m, &s);
+    /* case with negative zero */
+    if (!d && dec < 0)
+        snprintf(DecStr, sizeof(DecStr), ":Sd-%02d*%02d:%02d#", d, m, s);
+    else
+        snprintf(DecStr, sizeof(DecStr), ":Sd%+03d*%02d:%02d#", d, m, s);
+    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
+    if (isSimulation()) return true;
+    // These commands receive a response without a terminating #
+    if(!sendQuery(RAStr, response, '1', 2)  || !sendQuery(DecStr, response, '1', 2) )
+    {
+        EqNP.s = IPS_ALERT;
+        IDSetNumber(&EqNP, "Error setting RA/DEC.");
+        return false;
+    }
+
+    return true;
+}
+
+/*******************************************************************************
  * @brief Retrieve pier side of the mount and sync it back to the client
  * @return true iff synching succeeds
 *******************************************************************************/
@@ -1916,6 +1947,264 @@ bool StarGoTelescope::SetMeridianFlipMode(int index)
     }
 
     return true;
+}
+
+/*******************************************************************************
+*
+*******************************************************************************/
+bool StarGoTelescope::getTrackFrequency(double *value)
+{
+    LOG_DEBUG(__FUNCTION__);
+    float Freq;
+    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
+
+    if (!sendQuery(":GT#", response))
+        return false;
+
+    if (sscanf(response, "%f#", &Freq) < 1)
+    {
+        LOG_ERROR("Unable to parse response");
+        return false;
+    }
+
+    *value = static_cast<double>(Freq);
+    return true;
+}
+
+/*******************************************************************************
+*
+*******************************************************************************/
+bool StarGoTelescope::getTrackingAdjustment(double *valueRA)
+{
+    /*
+     * :X42# to read the tracking adjustment value as orsRRR#
+     * :X44# to read the tracking adjustment value as odsDDD#
+
+     */
+    LOG_DEBUG(__FUNCTION__);
+    int raValue;
+    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
+
+    if (!sendQuery(":X42#", response))
+        return false;
+
+    if (sscanf(response, "or%04i#", &raValue) < 1)
+    {
+        LOG_ERROR("Unable to parse response");
+        return false;
+    }
+
+    *valueRA = static_cast<double>(raValue / 100.0);
+    return true;
+}
+
+/*******************************************************************************
+ * Adjust RA tracking speed.
+*******************************************************************************/
+bool StarGoTelescope::setTrackingAdjustment(double adjustRA)
+{
+    LOG_DEBUG(__FUNCTION__);
+    char cmd[AVALON_COMMAND_BUFFER_LENGTH] = {0};
+
+    /*
+     * :X41sRRR# to adjust the RA tracking speed where s is the sign + or -  and RRR are three digits whose meaning is parts per 10000 of  RA correction .
+     * :X43sDDD# to fix the cf DEC offset
+     */
+
+    // ensure that -5 <= adjust <= 5
+    if (adjustRA > 5.0)
+    {
+        LOGF_ERROR("Adjusting tracking by %0.2f%% not allowed. Maximal value is 5.0%%", adjustRA);
+        return false;
+    }
+    else if (adjustRA < -5.0)
+    {
+        LOGF_ERROR("Adjusting tracking by %0.2f%% not allowed. Minimal value is -5.0%%", adjustRA);
+        return false;
+    }
+
+    int parameter = static_cast<int>(adjustRA * 100);
+    sprintf(cmd, ":X41%+04i#", parameter);
+
+    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
+    if(!sendQuery(cmd, response, 0))  // No response
+    {
+        LOGF_ERROR("Cannot adjust tracking by %d%%", adjustRA);
+        return false;
+    }
+    if (adjustRA == 0.0)
+        LOG_INFO("RA tracking adjustment cleared.");
+    else
+        LOGF_INFO("RA tracking adjustment to %+0.2f%% succeeded.", adjustRA);
+
+    return true;
+}
+
+/*******************************************************************************
+ * @brief Determine the guiding speeds for RA and DEC axis
+ * @param raSpeed percentage for RA axis
+ * @param decSpeed percenage for DEC axis
+ * @return
+*******************************************************************************/
+bool StarGoTelescope::getGuidingSpeeds (int *raSpeed, int *decSpeed)
+{
+    LOG_DEBUG(__FUNCTION__);
+    // Command query guiding speeds  - :X22#
+    //         response              - rrbdd#
+    //         rr RA speed percentage, dd DEC speed percentage
+
+    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
+
+    if (!sendQuery(":X22#", response))
+    {
+        LOG_ERROR("Failed to send query guiding speeds request.");
+        return false;
+    }
+    if (! sscanf(response, "%02db%2d", raSpeed, decSpeed))
+    {
+        LOGF_ERROR("Unexpected guiding speed response '%s'.", response);
+        return false;
+    }
+
+    return true;
+}
+
+/*******************************************************************************
+ * @brief Set the guiding speeds for RA and DEC axis
+ * @param raSpeed percentage for RA axis
+ * @param decSpeed percenage for DEC axis
+ * @return
+*******************************************************************************/
+bool StarGoTelescope::setGuidingSpeeds (int raSpeed, int decSpeed)
+{
+    LOG_DEBUG(__FUNCTION__);
+    // in RA guiding speed  -  :X20rr#
+    // in DEC guiding speed - :X21dd#
+
+    char cmd[AVALON_COMMAND_BUFFER_LENGTH] = {0};
+    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
+
+    sprintf(cmd, ":X20%2d#", raSpeed);
+    if (sendQuery(cmd, response, 0)) // No response from mount
+    {
+        LOGF_INFO("Setting RA speed to %2d%%.", raSpeed);
+    }
+    else
+    {
+        LOGF_ERROR("Setting RA speed to %2d %% FAILED", raSpeed);
+        return false;
+    }
+    const struct timespec timeout = {0, 100000000L};
+    // sleep for 100 mseconds
+    nanosleep(&timeout, nullptr);
+
+    sprintf(cmd, ":X21%2d#", decSpeed);
+    if (sendQuery(cmd, response, 0))  // No response from mount
+    {
+        LOGF_INFO("Setting DEC speed to %2d%%.", decSpeed);
+    }
+    else
+    {
+        LOGF_ERROR("Setting DEC speed to %2d%% FAILED", decSpeed);
+        return false;
+    }
+    return true;
+}
+
+/*******************************************************************************
+ * @brief Check if the ST4 port is enabled
+ * @param isEnabled - true iff the ST4 port is enabled
+ * @return
+*******************************************************************************/
+bool StarGoTelescope::getST4Status (bool *isEnabled)
+{
+    LOG_DEBUG(__FUNCTION__);
+    // Command query ST4 status  - :TTGFh#
+    //         response enabled  - vh1
+    //                  disabled - vh0
+
+    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
+
+    if (!sendQuery(":TTGFh#", response))
+    {
+        LOG_ERROR("Failed to send query ST4 status request.");
+        return false;
+    }
+    int answer = 0;
+    if (! sscanf(response, "vh%01d", &answer))
+    {
+        LOGF_ERROR("Unexpected ST4 status response '%s'.", response);
+        return false;
+    }
+
+    *isEnabled = (answer == 1);
+    return true;
+}
+
+/*******************************************************************************
+ * @brief Enable or disable the ST4 guiding port
+ * @param enabled flag whether enable or disable
+ * @return
+*******************************************************************************/
+bool StarGoTelescope::setST4Enabled(bool enabled)
+{
+    LOG_DEBUG(__FUNCTION__);
+
+    const char *cmd = enabled ? ":TTSFh#" : ":TTRFh#";
+    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
+    if (sendQuery(cmd, response))
+    {
+        LOG_INFO(enabled ? "ST4 port enabled." : "ST4 port disabled.");
+        return true;
+    }
+    else
+    {
+        LOG_ERROR("Setting ST4 port FAILED");
+        return false;
+    }
+}
+
+/*******************************************************************************
+*
+*******************************************************************************/
+int StarGoTelescope::SendPulseCmd(int8_t direction, uint32_t duration_msec)
+{
+    LOGF_DEBUG("%s dir=%d dur=%d ms", __FUNCTION__, direction, duration_msec );
+
+    if(!usePulseCommand) return true;
+
+    if (MovementNSSP.s == IPS_BUSY || MovementWESP.s == IPS_BUSY)
+    {
+        LOG_ERROR("Cannot guide while moving.");
+        return IPS_ALERT;
+    }
+    if (isParked())
+    {
+        LOG_ERROR("Cannot guide while parked.");
+        return IPS_ALERT;
+    }
+
+    char cmd[AVALON_COMMAND_BUFFER_LENGTH] = {0};
+    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
+    switch (direction)
+    {
+        case STARGO_NORTH:
+            sprintf(cmd, ":Mgn%04u#", duration_msec);
+            break;
+        case STARGO_SOUTH:
+            sprintf(cmd, ":Mgs%04u#", duration_msec);
+            break;
+        case STARGO_EAST:
+            sprintf(cmd, ":Mge%04u#", duration_msec);
+            break;
+        case STARGO_WEST:
+            sprintf(cmd, ":Mgw%04u#", duration_msec);
+            break;
+        default:
+            return 1;
+    }
+    bool success = !sendQuery(cmd, response, 0); // no response expected
+    return success;
 }
 
 /**************************************************************************************
@@ -2106,36 +2395,6 @@ bool StarGoTelescope::getMotorStatus(int *xSpeed, int *ySpeed)
 }
 
 /*******************************************************************************
- * @brief Check if the ST4 port is enabled
- * @param isEnabled - true iff the ST4 port is enabled
- * @return
-*******************************************************************************/
-bool StarGoTelescope::getST4Status (bool *isEnabled)
-{
-    LOG_DEBUG(__FUNCTION__);
-    // Command query ST4 status  - :TTGFh#
-    //         response enabled  - vh1
-    //                  disabled - vh0
-
-    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
-
-    if (!sendQuery(":TTGFh#", response))
-    {
-        LOG_ERROR("Failed to send query ST4 status request.");
-        return false;
-    }
-    int answer = 0;
-    if (! sscanf(response, "vh%01d", &answer))
-    {
-        LOGF_ERROR("Unexpected ST4 status response '%s'.", response);
-        return false;
-    }
-
-    *isEnabled = (answer == 1);
-    return true;
-}
-
-/*******************************************************************************
  * @brief Check if the Keypad port is enabled
  * @param isEnabled - true iff the Keypad port is enabled
  * @return
@@ -2163,100 +2422,6 @@ bool StarGoTelescope::getKeypadStatus (bool *isEnabled)
 
     *isEnabled = (answer == 0);
     return true;
-}
-
-/*******************************************************************************
- * @brief Determine the guiding speeds for RA and DEC axis
- * @param raSpeed percentage for RA axis
- * @param decSpeed percenage for DEC axis
- * @return
-*******************************************************************************/
-bool StarGoTelescope::getGuidingSpeeds (int *raSpeed, int *decSpeed)
-{
-    LOG_DEBUG(__FUNCTION__);
-    // Command query guiding speeds  - :X22#
-    //         response              - rrbdd#
-    //         rr RA speed percentage, dd DEC speed percentage
-
-    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
-
-    if (!sendQuery(":X22#", response))
-    {
-        LOG_ERROR("Failed to send query guiding speeds request.");
-        return false;
-    }
-    if (! sscanf(response, "%02db%2d", raSpeed, decSpeed))
-    {
-        LOGF_ERROR("Unexpected guiding speed response '%s'.", response);
-        return false;
-    }
-
-    return true;
-}
-
-/*******************************************************************************
- * @brief Set the guiding speeds for RA and DEC axis
- * @param raSpeed percentage for RA axis
- * @param decSpeed percenage for DEC axis
- * @return
-*******************************************************************************/
-bool StarGoTelescope::setGuidingSpeeds (int raSpeed, int decSpeed)
-{
-    LOG_DEBUG(__FUNCTION__);
-    // in RA guiding speed  -  :X20rr#
-    // in DEC guiding speed - :X21dd#
-
-    char cmd[AVALON_COMMAND_BUFFER_LENGTH] = {0};
-    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
-
-    sprintf(cmd, ":X20%2d#", raSpeed);
-    if (sendQuery(cmd, response, 0)) // No response from mount
-    {
-        LOGF_INFO("Setting RA speed to %2d%%.", raSpeed);
-    }
-    else
-    {
-        LOGF_ERROR("Setting RA speed to %2d %% FAILED", raSpeed);
-        return false;
-    }
-    const struct timespec timeout = {0, 100000000L};
-    // sleep for 100 mseconds
-    nanosleep(&timeout, nullptr);
-
-    sprintf(cmd, ":X21%2d#", decSpeed);
-    if (sendQuery(cmd, response, 0))  // No response from mount
-    {
-        LOGF_INFO("Setting DEC speed to %2d%%.", decSpeed);
-    }
-    else
-    {
-        LOGF_ERROR("Setting DEC speed to %2d%% FAILED", decSpeed);
-        return false;
-    }
-    return true;
-}
-
-/*******************************************************************************
- * @brief Enable or disable the ST4 guiding port
- * @param enabled flag whether enable or disable
- * @return
-*******************************************************************************/
-bool StarGoTelescope::setST4Enabled(bool enabled)
-{
-    LOG_DEBUG(__FUNCTION__);
-
-    const char *cmd = enabled ? ":TTSFh#" : ":TTRFh#";
-    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
-    if (sendQuery(cmd, response))
-    {
-        LOG_INFO(enabled ? "ST4 port enabled." : "ST4 port disabled.");
-        return true;
-    }
-    else
-    {
-        LOG_ERROR("Setting ST4 port FAILED");
-        return false;
-    }
 }
 
 /*******************************************************************************
@@ -2323,170 +2488,6 @@ bool StarGoTelescope::getFirmwareInfo (char* firmwareInfo)
     return true;
 }
 
-/*******************************************************************************
- * Adjust RA tracking speed.
-*******************************************************************************/
-bool StarGoTelescope::setTrackingAdjustment(double adjustRA)
-{
-    LOG_DEBUG(__FUNCTION__);
-    char cmd[AVALON_COMMAND_BUFFER_LENGTH] = {0};
-
-    /*
-     * :X41sRRR# to adjust the RA tracking speed where s is the sign + or -  and RRR are three digits whose meaning is parts per 10000 of  RA correction .
-     * :X43sDDD# to fix the cf DEC offset
-     */
-
-    // ensure that -5 <= adjust <= 5
-    if (adjustRA > 5.0)
-    {
-        LOGF_ERROR("Adjusting tracking by %0.2f%% not allowed. Maximal value is 5.0%%", adjustRA);
-        return false;
-    }
-    else if (adjustRA < -5.0)
-    {
-        LOGF_ERROR("Adjusting tracking by %0.2f%% not allowed. Minimal value is -5.0%%", adjustRA);
-        return false;
-    }
-
-    int parameter = static_cast<int>(adjustRA * 100);
-    sprintf(cmd, ":X41%+04i#", parameter);
-
-    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
-    if(!sendQuery(cmd, response, 0))  // No response
-    {
-        LOGF_ERROR("Cannot adjust tracking by %d%%", adjustRA);
-        return false;
-    }
-    if (adjustRA == 0.0)
-        LOG_INFO("RA tracking adjustment cleared.");
-    else
-        LOGF_INFO("RA tracking adjustment to %+0.2f%% succeeded.", adjustRA);
-
-    return true;
-}
-
-/*******************************************************************************
-*
-*******************************************************************************/
-bool StarGoTelescope::getTrackingAdjustment(double *valueRA)
-{
-    /*
-     * :X42# to read the tracking adjustment value as orsRRR#
-     * :X44# to read the tracking adjustment value as odsDDD#
-
-     */
-    LOG_DEBUG(__FUNCTION__);
-    int raValue;
-    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
-
-    if (!sendQuery(":X42#", response))
-        return false;
-
-    if (sscanf(response, "or%04i#", &raValue) < 1)
-    {
-        LOG_ERROR("Unable to parse response");
-        return false;
-    }
-
-    *valueRA = static_cast<double>(raValue / 100.0);
-    return true;
-}
-
-/*******************************************************************************
-*
-*******************************************************************************/
-int StarGoTelescope::SendPulseCmd(int8_t direction, uint32_t duration_msec)
-{
-    LOGF_DEBUG("%s dir=%d dur=%d ms", __FUNCTION__, direction, duration_msec );
-
-    if(!usePulseCommand) return true;
-
-    if (MovementNSSP.s == IPS_BUSY || MovementWESP.s == IPS_BUSY)
-    {
-        LOG_ERROR("Cannot guide while moving.");
-        return IPS_ALERT;
-    }
-    if (isParked())
-    {
-        LOG_ERROR("Cannot guide while parked.");
-        return IPS_ALERT;
-    }
-
-    char cmd[AVALON_COMMAND_BUFFER_LENGTH] = {0};
-    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
-    switch (direction)
-    {
-        case STARGO_NORTH:
-            sprintf(cmd, ":Mgn%04u#", duration_msec);
-            break;
-        case STARGO_SOUTH:
-            sprintf(cmd, ":Mgs%04u#", duration_msec);
-            break;
-        case STARGO_EAST:
-            sprintf(cmd, ":Mge%04u#", duration_msec);
-            break;
-        case STARGO_WEST:
-            sprintf(cmd, ":Mgw%04u#", duration_msec);
-            break;
-        default:
-            return 1;
-    }
-    bool success = !sendQuery(cmd, response, 0); // no response expected
-    return success;
-}
-
-/*******************************************************************************
-*
-*******************************************************************************/
-bool StarGoTelescope::setObjectCoords(double ra, double dec)
-{
-    LOG_DEBUG(__FUNCTION__);
-
-    char RAStr[AVALON_COMMAND_BUFFER_LENGTH] = {0};
-    char DecStr[AVALON_COMMAND_BUFFER_LENGTH] = {0};
-    int h, m, s, d;
-    getSexComponents(ra, &h, &m, &s);
-    snprintf(RAStr, sizeof(RAStr), ":Sr%02d:%02d:%02d#", h, m, s);
-    getSexComponents(dec, &d, &m, &s);
-    /* case with negative zero */
-    if (!d && dec < 0)
-        snprintf(DecStr, sizeof(DecStr), ":Sd-%02d*%02d:%02d#", d, m, s);
-    else
-        snprintf(DecStr, sizeof(DecStr), ":Sd%+03d*%02d:%02d#", d, m, s);
-    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
-    if (isSimulation()) return true;
-    // These commands receive a response without a terminating #
-    if(!sendQuery(RAStr, response, '1', 2)  || !sendQuery(DecStr, response, '1', 2) )
-    {
-        EqNP.s = IPS_ALERT;
-        IDSetNumber(&EqNP, "Error setting RA/DEC.");
-        return false;
-    }
-
-    return true;
-}
-
-/*******************************************************************************
-*
-*******************************************************************************/
-bool StarGoTelescope::getTrackFrequency(double *value)
-{
-    LOG_DEBUG(__FUNCTION__);
-    float Freq;
-    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
-
-    if (!sendQuery(":GT#", response))
-        return false;
-
-    if (sscanf(response, "%f#", &Freq) < 1)
-    {
-        LOG_ERROR("Unable to parse response");
-        return false;
-    }
-
-    *value = static_cast<double>(Freq);
-    return true;
-}
 /*******************************************************************************
 **
 *******************************************************************************/
