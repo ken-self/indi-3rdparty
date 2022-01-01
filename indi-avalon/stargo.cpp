@@ -1834,69 +1834,6 @@ bool StarGoTelescope::getFirmwareInfo (char* firmwareInfo)
     return true;
 }
 
-/*********************************************************************************
- * Helper functions
- *********************************************************************************/
-
-
-/*******************************************************************************
- * @brief Receive answer from the communication port.
- * @param buffer - buffer holding the answer
- * @param bytes - number of bytes contained in the answer
- * @author CanisUrsa
- * @return true if communication succeeded, false otherwise
-*******************************************************************************/
-bool StarGoTelescope::receive(char* buffer, int* bytes, char end, int wait)
-{
-    //    LOGF_DEBUG("%s timeout=%ds",__FUNCTION__, wait);
-    int timeout = wait; //? AVALON_TIMEOUT: 0;
-    int returnCode = tty_read_section(PortFD, buffer, end, timeout, bytes);
-    if (returnCode != TTY_OK)
-    {
-        char errorString[MAXRBUF];
-        tty_error_msg(returnCode, errorString, MAXRBUF);
-        if(returnCode == TTY_TIME_OUT && wait <= 0) return false;
-        LOGF_WARN("Failed to receive full response: %s. (Return code: %d)", errorString, returnCode);
-        return false;
-    }
-    if(buffer[*bytes - 1] == '#')
-        buffer[*bytes - 1] = '\0'; // remove #
-    else
-        buffer[*bytes] = '\0';
-
-    return true;
-}
-
-/*******************************************************************************
- * @brief Flush the communication port.
- * @author CanisUrsa
-*******************************************************************************/
-void StarGoTelescope::flush()
-{
-    //    LOG_DEBUG(__FUNCTION__);
-    //    tcflush(PortFD, TCIOFLUSH);
-}
-
-/*******************************************************************************
-*
-*******************************************************************************/
-bool StarGoTelescope::transmit(const char* buffer)
-{
-    //    LOG_DEBUG(__FUNCTION__);
-    int bytesWritten = 0;
-    flush();
-    int returnCode = tty_write_string(PortFD, buffer, &bytesWritten);
-
-    if (returnCode != TTY_OK)
-    {
-        char errorString[MAXRBUF];
-        tty_error_msg(returnCode, errorString, MAXRBUF);
-        LOGF_WARN("Failed to transmit %s. Wrote %d bytes and got error %s.", buffer, bytesWritten, errorString);
-        return false;
-    }
-    return true;
-}
-
 /*******************************************************************************
 *
 *******************************************************************************/
@@ -2784,3 +2721,64 @@ void StarGoTelescope::mountSim()
     NewRaDec(currentRA, currentDEC);
 }
 
+/*********************************************************************************
+ * Helper functions
+ *********************************************************************************/
+
+/*******************************************************************************
+ * @brief Receive answer from the communication port.
+ * @param buffer - buffer holding the answer
+ * @param bytes - number of bytes contained in the answer
+ * @author CanisUrsa
+ * @return true if communication succeeded, false otherwise
+*******************************************************************************/
+bool StarGoTelescope::receive(char* buffer, int* bytes, char end, int wait)
+{
+    //    LOGF_DEBUG("%s timeout=%ds",__FUNCTION__, wait);
+    int timeout = wait; //? AVALON_TIMEOUT: 0;
+    int returnCode = tty_read_section(PortFD, buffer, end, timeout, bytes);
+    if (returnCode != TTY_OK)
+    {
+        char errorString[MAXRBUF];
+        tty_error_msg(returnCode, errorString, MAXRBUF);
+        if(returnCode == TTY_TIME_OUT && wait <= 0) return false;
+        LOGF_WARN("Failed to receive full response: %s. (Return code: %d)", errorString, returnCode);
+        return false;
+    }
+    if(buffer[*bytes - 1] == '#')
+        buffer[*bytes - 1] = '\0'; // remove #
+    else
+        buffer[*bytes] = '\0';
+
+    return true;
+}
+
+/*******************************************************************************
+ * @brief Flush the communication port.
+ * @author CanisUrsa
+*******************************************************************************/
+void StarGoTelescope::flush()
+{
+    //    LOG_DEBUG(__FUNCTION__);
+    //    tcflush(PortFD, TCIOFLUSH);
+}
+
+/*******************************************************************************
+*
+*******************************************************************************/
+bool StarGoTelescope::transmit(const char* buffer)
+{
+    //    LOG_DEBUG(__FUNCTION__);
+    int bytesWritten = 0;
+    flush();
+    int returnCode = tty_write_string(PortFD, buffer, &bytesWritten);
+
+    if (returnCode != TTY_OK)
+    {
+        char errorString[MAXRBUF];
+        tty_error_msg(returnCode, errorString, MAXRBUF);
+        LOGF_WARN("Failed to transmit %s. Wrote %d bytes and got error %s.", buffer, bytesWritten, errorString);
+        return false;
+    }
+    return true;
+}

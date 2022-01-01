@@ -92,11 +92,6 @@ class StarGoTelescope : public INDI::Telescope, public INDI::GuiderInterface
         virtual bool initProperties() override;
         virtual void ISGetProperties(const char *dev)override;
 
-        // helper functions
-        bool receive(char* buffer, int* bytes, int wait = AVALON_TIMEOUT);
-        bool receive(char* buffer, int* bytes, char end, int wait = AVALON_TIMEOUT);
-        void flush();
-        bool transmit(const char* buffer);
         virtual bool SetTrackMode(uint8_t mode) override;
 
     protected:
@@ -251,6 +246,12 @@ class StarGoTelescope : public INDI::Telescope, public INDI::GuiderInterface
 
 // Simulate Mount in simulation mode
         void mountSim();
+
+        // helper functions
+        bool receive(char* buffer, int* bytes, int wait = AVALON_TIMEOUT);
+        bool receive(char* buffer, int* bytes, char end, int wait = AVALON_TIMEOUT);
+        void flush();
+        bool transmit(const char* buffer);
 
 };
 inline bool StarGoTelescope::isGuiding()
