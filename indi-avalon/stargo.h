@@ -176,6 +176,10 @@ protected:
     INumberVectorProperty MountRequestDelayNP;
     INumber MountRequestDelayN[1];
 
+    // HA and LST
+    INumberVectorProperty HaLstNP;
+    INumber HaLstN[2];
+
     bool usePulseCommand { true };
 
     bool getTimeOnStartup=true, getLocationOnStartup=true;

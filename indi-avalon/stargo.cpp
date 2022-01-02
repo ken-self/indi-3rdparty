@@ -46,7 +46,7 @@ StarGoTelescope::StarGoTelescope()
 
     SetTelescopeCapability(TELESCOPE_CAN_PARK | TELESCOPE_CAN_SYNC | TELESCOPE_CAN_GOTO | TELESCOPE_CAN_ABORT |
                            TELESCOPE_HAS_TRACK_MODE | TELESCOPE_HAS_LOCATION | TELESCOPE_CAN_CONTROL_TRACK |
-                           TELESCOPE_HAS_PIER_SIDE, 4);
+                           TELESCOPE_HAS_PIER_SIDE | TELESCOPE_HAS_TIME, 4);
 
     autoRa = new AutoAdjust(this);
 }
@@ -555,6 +555,10 @@ bool StarGoTelescope::initProperties()
     IUFillNumber(&MountRequestDelayN[0], "MOUNT_REQUEST_DELAY", "Request Delay (ms)", "%.0f", 0.0, 1000, 1.0, 50.0);
     IUFillNumberVector(&MountRequestDelayNP, MountRequestDelayN, 1, getDeviceName(), "REQUEST_DELAY", "StarGO", OPTIONS_TAB, IP_RW, 60, IPS_OK);
 
+     IUFillNumber(&HaLstN[0], "HA", "HA (hh:mm:ss)", "%010.6m", 0, 24, 0, 0);
+     IUFillNumber(&HaLstN[1], "LST", "LST (hh:mm:ss)", "%010.6m", 0, 24, 0, 0);
+     IUFillNumberVector(&HaLstNP, HaLstN, 2, getDeviceName(), "HA-LST", "Hour Angle", INFO_TAB, IP_RO, 60, IPS_IDLE);
+
     return true;
 }
 
@@ -586,6 +590,7 @@ bool StarGoTelescope::updateProperties()
         defineProperty(&MaxSlewNP);
         defineProperty(&MoveSpeedNP);
         defineProperty(&MotorStepNP);
+        defineProperty(&HaLstNP);
 
 //        getBasicData(); // Call from Handshake()
     }
@@ -610,6 +615,7 @@ bool StarGoTelescope::updateProperties()
         deleteProperty(MaxSlewNP.name);
         deleteProperty(MoveSpeedNP.name);
         deleteProperty(MotorStepNP.name);
+        deleteProperty(HaLstNP.name);
     }
 
     return true;
@@ -757,6 +763,19 @@ bool StarGoTelescope::ReadScopeStatus()
     TrackState = newTrackState;
 //    NewRaDec(currentRA, currentDEC);
     NewRaDec(r, d);
+    double lst, ha;
+    if(getScopeLST(&lst))
+    {
+        ha = lst - r;
+        HaLstN[0].value =  ha;
+        HaLstN[1].value =  lst;
+        HaLstNP.s = IPS_OK;
+    }
+    else
+    {
+        LOG_ERROR("Retrieving scope LST failed.");
+        HaLstNP.s = IPS_ALERT;
+    }
 
     WaitParkOptionReady();
 
