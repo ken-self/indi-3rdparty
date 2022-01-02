@@ -555,9 +555,9 @@ bool StarGoTelescope::initProperties()
     IUFillNumber(&MountRequestDelayN[0], "MOUNT_REQUEST_DELAY", "Request Delay (ms)", "%.0f", 0.0, 1000, 1.0, 50.0);
     IUFillNumberVector(&MountRequestDelayNP, MountRequestDelayN, 1, getDeviceName(), "REQUEST_DELAY", "StarGO", OPTIONS_TAB, IP_RW, 60, IPS_OK);
 
-     IUFillNumber(&HaLstN[0], "HA", "HA (hh:mm:ss)", "%010.6m", 0, 24, 0, 0);
-     IUFillNumber(&HaLstN[1], "LST", "LST (hh:mm:ss)", "%010.6m", 0, 24, 0, 0);
-     IUFillNumberVector(&HaLstNP, HaLstN, 2, getDeviceName(), "HA-LST", "Hour Angle", INFO_TAB, IP_RO, 60, IPS_IDLE);
+    IUFillNumber(&HaLstN[0], "HA", "HA (hh:mm:ss)", "%010.6m", 0, 24, 0, 0);
+    IUFillNumber(&HaLstN[1], "LST", "LST (hh:mm:ss)", "%010.6m", 0, 24, 0, 0);
+    IUFillNumberVector(&HaLstNP, HaLstN, 2, getDeviceName(), "HA-LST", "Hour Angle", INFO_TAB, IP_RO, 60, IPS_IDLE);
 
     return true;
 }
@@ -1488,7 +1488,7 @@ bool StarGoTelescope::getScopeLST(double *lst)
     double syslst = get_local_sidereal_time(longitude);
     if( fabs(*lst-syslst) > 0.1 )
     {
-        LOG_WARN("Mount LST varies from System LST by < 0.1 hours");
+        LOGF_WARN("Mount LST varies from System LST %.6f %.6f", *lst, syslst );
     }
     return true;
 }
