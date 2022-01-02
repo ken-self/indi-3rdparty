@@ -74,7 +74,7 @@ bool StarGoTelescope::Handshake()
     char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
 
 // Use GetScopeAlignmentStatus as a basic form of Handshake.
-// Checks that the mount responds to the GW command
+// Checks that the mount responds to the GW query (Polar or AltAztracking mode)
     char mountType;
     bool isTracking;
     int alignmentPoints;
@@ -84,14 +84,6 @@ bool StarGoTelescope::Handshake()
         return false;
     }
     
-// Moved from InitProperties
-    double longitude=0.0, latitude=90.0;
-    // Get value from config file if it exists.
-    IUGetConfigNumber(getDeviceName(), "GEOGRAPHIC_COORD", "LONG", &longitude);
-    currentRA  = get_local_sidereal_time(longitude);
-    IUGetConfigNumber(getDeviceName(), "GEOGRAPHIC_COORD", "LAT", &latitude);
-    currentDEC = latitude > 0.0 ? 90.0 : -90.0;
-
 // Handshake commands used in the StarGo ASCOM driver. 
     char cmdsync[AVALON_COMMAND_BUFFER_LENGTH] = {0};
     char cmdlst[AVALON_COMMAND_BUFFER_LENGTH] = {0};
@@ -109,8 +101,8 @@ bool StarGoTelescope::Handshake()
         ":TTSFG#", "0",
         ":X3E1#", nullptr,
         ":TTHS1#", nullptr,
-        cmddate, nullptr,
-        ":TTRFr#", "0",             // Set current date
+        cmddate, nullptr,             // Set current date
+        ":TTRFr#", "0",
         ":X4B1#", nullptr,
         ":TTSFS#", "0",
         ":X474#", nullptr,
@@ -425,8 +417,10 @@ bool StarGoTelescope::ISNewNumber(const char *dev, const char *name, double valu
 }
 
 /*******************************************************************************
-**
+** ISGetProperties defines the minimal set of controls needed for 
+** the client to connect to the driver. These should be moved to updateProperties
 *******************************************************************************/
+/*
 void StarGoTelescope::ISGetProperties(const char *dev)
 {
     if (dev != nullptr && strcmp(dev, getDeviceName()) != 0)
@@ -435,13 +429,16 @@ void StarGoTelescope::ISGetProperties(const char *dev)
     INDI::Telescope::ISGetProperties(dev);
     if (isConnected())
     {
+// Track mode: sidereal, lunar, solar, custom
+// Track state: Track on, track off
+// These steps are performed in INDI::telescope::updateProperties
         if (HasTrackMode() && TrackModeS != nullptr)
             defineProperty(&TrackModeSP);
         if (CanControlTrack())
             defineProperty(&TrackStateSP);
     }
 }
-
+*/
 /*******************************************************************************
 **
 *******************************************************************************/
@@ -463,8 +460,12 @@ bool StarGoTelescope::initProperties()
 
     setDriverInterface(getDriverInterface() | GUIDER_INTERFACE);
 
-// This is called before the driver connects to the device so an error occurs
-// Should happen either during Handshake or UpdateProperties
+// In INDI::Telescope something similar is done in initProperties.
+// Below assumes that at startup the mount is pointing at HA=0 (so RA=LST) and the pole
+// But currentRa and currentDec are not really used as class properties
+// Except maybe in simulation mode
+// so this bit of code looks meaningless
+// Could use instead EqN[AXIS_RA].value and EqN[AXIS_DE].value which are set by NewRaDec()
 /*
     double longitude=0.0, latitude=90.0;
     // Get value from config file if it exists.
@@ -477,8 +478,6 @@ bool StarGoTelescope::initProperties()
     IUFillSwitchVector(&MountGotoHomeSP, MountGotoHomeS, 1, getDeviceName(), "MOUNT_GOTO_HOME", "Goto Home", MAIN_CONTROL_TAB, IP_RW, ISR_ATMOST1, 60, IPS_OK);
 
     SetParkDataType(PARK_HA_DEC);
-//    IUFillSwitch(&MountSetParkS[0], "MOUNT_SET_PARK_VALUE", "Set Park", ISS_OFF);
-//    IUFillSwitchVector(&MountSetParkSP, MountSetParkS, 1, getDeviceName(), "MOUNT_SET_PARK", "Set Park", MAIN_CONTROL_TAB, IP_RW, ISR_ATMOST1, 60, IPS_OK);
 
     IUFillSwitch(&SyncHomeS[0], "SYNC_HOME", "Sync Home", ISS_OFF);
     IUFillSwitchVector(&SyncHomeSP, SyncHomeS, 1, getDeviceName(), "TELESCOPE_SYNC_HOME", "Home Position", MAIN_CONTROL_TAB,
@@ -497,21 +496,21 @@ bool StarGoTelescope::initProperties()
     // Max Slew Speeds
     IUFillNumber(&MaxSlewN[0], "MAX_SLEW_RA", "RA Max Slew", "%.2f", 0.0, 100.0, 1, 0);
     IUFillNumber(&MaxSlewN[1], "MAX_SLEW_DEC", "DEC Max Slew", "%.2f", 0.0, 100.0, 1, 0);
-    IUFillNumberVector(&MaxSlewNP, MaxSlewN, 2, getDeviceName(), "Max Slew","Slewing", ADVANCED_TAB, IP_RW, 60, IPS_IDLE);
+    IUFillNumberVector(&MaxSlewNP, MaxSlewN, 2, getDeviceName(), "Max Slew","Slewing", MOTION_TAB, IP_RW, 60, IPS_IDLE);
 
     // Move Speeds
     IUFillNumber(&MoveSpeedN[0], "MOVE_SPEED_CENTER", "Center Speed", "%.2f", 1.0, 10.0, 1, 0);
     IUFillNumber(&MoveSpeedN[1], "MOVE_SPEED_FIND", "Find Speed", "%.2f", 1.0, 150.0, 1, 0);
-    IUFillNumberVector(&MoveSpeedNP, MoveSpeedN, 2, getDeviceName(), "Goto Speed","Slewing", ADVANCED_TAB, IP_RW, 60, IPS_IDLE);
+    IUFillNumberVector(&MoveSpeedNP, MoveSpeedN, 2, getDeviceName(), "Goto Speed","Slewing", MOTION_TAB, IP_RW, 60, IPS_IDLE);
 
     // RA and Dec motor direction
     IUFillSwitch(&RaMotorReverseS[INDI_ENABLED], "INDI_ENABLED", "Reverse", ISS_OFF);
     IUFillSwitch(&RaMotorReverseS[INDI_DISABLED], "INDI_DISABLED", "Normal", ISS_OFF);
-    IUFillSwitchVector(&RaMotorReverseSP, RaMotorReverseS, 2, getDeviceName(), "RA_REVERSE", "RA Reverse", ADVANCED_TAB, IP_RW, ISR_ATMOST1, 60, IPS_IDLE);
+    IUFillSwitchVector(&RaMotorReverseSP, RaMotorReverseS, 2, getDeviceName(), "RA_REVERSE", "RA Reverse", MOTION_TAB, IP_RW, ISR_ATMOST1, 60, IPS_IDLE);
 
     IUFillSwitch(&DecMotorReverseS[INDI_ENABLED], "INDI_ENABLED", "Reverse", ISS_OFF);
     IUFillSwitch(&DecMotorReverseS[INDI_DISABLED], "INDI_DISABLED", "Normal", ISS_OFF);
-    IUFillSwitchVector(&DecMotorReverseSP, DecMotorReverseS, 2, getDeviceName(), "DEC_REVERSE", "Dec Reverse", ADVANCED_TAB, IP_RW, ISR_ATMOST1, 60, IPS_IDLE);
+    IUFillSwitchVector(&DecMotorReverseSP, DecMotorReverseS, 2, getDeviceName(), "DEC_REVERSE", "Dec Reverse", MOTION_TAB, IP_RW, ISR_ATMOST1, 60, IPS_IDLE);
 
     // Torque
     IUFillNumber(&TorqueN[0], "TORQUE_RA", "Motor Torque", "%.0f", 0.0, 100.0, 1, 0);
@@ -525,21 +524,21 @@ bool StarGoTelescope::initProperties()
     // Guiding settings
     IUFillNumber(&GuidingSpeedN[0], "GUIDE_RATE_WE", "RA Speed", "%.2f", 0.0, 2.0, 0.1, 0);
     IUFillNumber(&GuidingSpeedN[1], "GUIDE_RATE_NS", "DEC Speed", "%.2f", 0.0, 2.0, 0.1, 0);
-    IUFillNumberVector(&GuidingSpeedNP, GuidingSpeedN, 2, getDeviceName(), "GUIDE_RATE","Autoguiding", ADVANCED_TAB, IP_RW, 60, IPS_IDLE);
+    IUFillNumberVector(&GuidingSpeedNP, GuidingSpeedN, 2, getDeviceName(), "GUIDE_RATE","Autoguiding", GUIDE_TAB, IP_RW, 60, IPS_IDLE);
 
     // Tracking Adjustment
     IUFillNumber(&TrackAdjustN[0], "RA_TRACK_ADJ", "RA Tracking Adjust (%)", "%.2f", -5.0, 5.0, 0.01, 0);
-    IUFillNumberVector(&TrackAdjustNP, TrackAdjustN, 1, getDeviceName(), "Track Adjust","Tracking", ADVANCED_TAB, IP_RW, 60, IPS_IDLE);
+    IUFillNumberVector(&TrackAdjustNP, TrackAdjustN, 1, getDeviceName(), "Track Adjust","Tracking", MOTION_TAB, IP_RW, 60, IPS_IDLE);
 
     // Auto Tracking Adjustment
     IUFillSwitch(&RaAutoAdjustS[INDI_ENABLED], "INDI_ENABLED", "Enabled", ISS_ON);
     IUFillSwitch(&RaAutoAdjustS[INDI_DISABLED], "INDI_DISABLED", "Disabled", ISS_OFF);
-    IUFillSwitchVector(&RaAutoAdjustSP, RaAutoAdjustS, 2, getDeviceName(), "RA_AUTO_ADJ", "RA Auto Adjust", ADVANCED_TAB, IP_RW, ISR_1OFMANY, 60, IPS_IDLE);
+    IUFillSwitchVector(&RaAutoAdjustSP, RaAutoAdjustS, 2, getDeviceName(), "RA_AUTO_ADJ", "RA Auto Adjust", MOTION_TAB, IP_RW, ISR_1OFMANY, 60, IPS_IDLE);
 
 
     IUFillSwitch(&ST4StatusS[INDI_ENABLED], "INDI_ENABLED", "Enabled", ISS_OFF);
     IUFillSwitch(&ST4StatusS[INDI_DISABLED], "INDI_DISABLED", "Disabled", ISS_OFF);
-    IUFillSwitchVector(&ST4StatusSP, ST4StatusS, 2, getDeviceName(), "ST4", "ST4", ADVANCED_TAB, IP_RW, ISR_ATMOST1, 60, IPS_IDLE);
+    IUFillSwitchVector(&ST4StatusSP, ST4StatusS, 2, getDeviceName(), "ST4", "ST4", GUIDE_TAB, IP_RW, ISR_ATMOST1, 60, IPS_IDLE);
 
     // keypad enabled / disabled
     IUFillSwitch(&KeypadStatusS[INDI_ENABLED], "INDI_ENABLED", "Enabled", ISS_ON);
@@ -550,11 +549,11 @@ bool StarGoTelescope::initProperties()
     IUFillSwitch(&MeridianFlipModeS[0], "MERIDIAN_FLIP_AUTO", "Auto", ISS_OFF);
     IUFillSwitch(&MeridianFlipModeS[1], "MERIDIAN_FLIP_DISABLED", "Disabled", ISS_OFF);
     IUFillSwitch(&MeridianFlipModeS[2], "MERIDIAN_FLIP_FORCED", "Forced", ISS_OFF);
-    IUFillSwitchVector(&MeridianFlipModeSP, MeridianFlipModeS, 3, getDeviceName(), "MERIDIAN_FLIP_MODE", "Meridian Flip", ADVANCED_TAB, IP_RW, ISR_ATMOST1, 60, IPS_IDLE);
+    IUFillSwitchVector(&MeridianFlipModeSP, MeridianFlipModeS, 3, getDeviceName(), "MERIDIAN_FLIP_MODE", "Meridian Flip", MOTION_TAB, IP_RW, ISR_ATMOST1, 60, IPS_IDLE);
 
     // mount command delay
     IUFillNumber(&MountRequestDelayN[0], "MOUNT_REQUEST_DELAY", "Request Delay (ms)", "%.0f", 0.0, 1000, 1.0, 50.0);
-    IUFillNumberVector(&MountRequestDelayNP, MountRequestDelayN, 1, getDeviceName(), "REQUEST_DELAY", "StarGO", ADVANCED_TAB, IP_RW, 60, IPS_OK);
+    IUFillNumberVector(&MountRequestDelayNP, MountRequestDelayN, 1, getDeviceName(), "REQUEST_DELAY", "StarGO", OPTIONS_TAB, IP_RW, 60, IPS_OK);
 
     return true;
 }
@@ -572,7 +571,6 @@ bool StarGoTelescope::updateProperties()
         defineProperty(&GuideWENP);
         defineProperty(&SyncHomeSP);
         defineProperty(&MountGotoHomeSP);
-//        defineProperty(&MountSetParkSP);
         defineProperty(&GuidingSpeedNP);
         defineProperty(&ST4StatusSP);
         defineProperty(&KeypadStatusSP);
@@ -597,7 +595,6 @@ bool StarGoTelescope::updateProperties()
         deleteProperty(GuideWENP.name);
         deleteProperty(SyncHomeSP.name);
         deleteProperty(MountGotoHomeSP.name);
-//        deleteProperty(MountSetParkSP.name);
         deleteProperty(GuidingSpeedNP.name);
         deleteProperty(ST4StatusSP.name);
         deleteProperty(KeypadStatusSP.name);
@@ -748,31 +745,18 @@ bool StarGoTelescope::ReadScopeStatus()
     }
     IDSetNumber(&MotorStepNP, nullptr);
 
-/* 
-*Not changed very often. Better to confirm the value after setting
-    double raCorrection;
-    if (getTrackingAdjustment(&raCorrection))
-    {
-        TrackAdjustN[0].value = raCorrection;
-        TrackAdjustNP.s      = IPS_OK;
-    }
-    else
-    {
-        TrackAdjustNP.s = IPS_ALERT;
-    }
-    IDSetNumber(&TrackAdjustNP, nullptr);
-*/
     double r, d;
     if(!getEqCoordinates(&r, &d))
     {
         LOG_ERROR("Retrieving equatorial coordinates failed.");
         return false;
     }
-    currentRA = r;
-    currentDEC = d;
+//    currentRA = r;
+//    currentDEC = d;
 
     TrackState = newTrackState;
-    NewRaDec(currentRA, currentDEC);
+//    NewRaDec(currentRA, currentDEC);
+    NewRaDec(r, d);
 
     WaitParkOptionReady();
 
@@ -838,20 +822,25 @@ bool StarGoTelescope::Sync(double ra, double dec)
         return false;
     }
 
-    currentRA  = ra;
-    currentDEC = dec;
+//    currentRA  = ra;
+//    currentDEC = dec;
 
     LOG_INFO("Synchronization successful.");
 
     EqNP.s     = IPS_OK;
 
-    NewRaDec(currentRA, currentDEC);
+//    NewRaDec(currentRA, currentDEC);
+    NewRaDec(ra, dec);
 
     return true;
 }
 
 /*******************************************************************************
-** overloads virtual SetCurrentPark
+** SetParkPosition
+** Set desired parking position to the supplied value.
+** This ONLY sets the desired park position value and does not perform parking.
+** Input arguments are as defined by SetParkDataType(PARK_HA_DEC) (see initProperties)
+**
 *******************************************************************************/
 bool StarGoTelescope::SetParkPosition(double Axis1Value, double Axis2Value)
 {
@@ -868,6 +857,10 @@ bool StarGoTelescope::SetParkPosition(double Axis1Value, double Axis2Value)
     // determine local sidereal time
     double lst = get_local_sidereal_time(longitude);
 
+// Use LST to calculate RA from input HA then slew to that position
+// StarGo can only set the current mount position as the Park position
+// Caution. If mount LST does not match driver LST then the mount can slew
+// to an unexpected location.
     if(!Goto(lst - Axis1Value, Axis2Value)) return false;
     return SetCurrentPark();
 }
@@ -879,10 +872,11 @@ bool StarGoTelescope::SetDefaultPark()
 {
     LOG_DEBUG(__FUNCTION__);
 
+// Not sure why we do this
     double latitude;
     if (!getSiteLatitude(&latitude))
     {
-        LOG_WARN("getLST Failed to get site Latitude from device.");
+        LOG_WARN("Failed to get site Latitude from device.");
         return false;
     }
 
@@ -988,10 +982,12 @@ bool StarGoTelescope::SetSlewRate(int index)
 bool StarGoTelescope::Goto(double ra, double dec)
 {
     LOGF_DEBUG("%s ra:%lf, dec:%lf", __FUNCTION__, ra, dec);
+    // in :MS#
+    //  after setObjectCoords
     const struct timespec timeout = {0, 100000000L};
 
-    targetRA  = ra;
-    targetDEC = dec;
+//    targetRA  = ra;
+//    targetDEC = dec;
 
     // If moving, let's stop it first.
     if (EqNP.s == IPS_BUSY)
@@ -1053,6 +1049,7 @@ bool StarGoTelescope::Goto(double ra, double dec)
 bool StarGoTelescope::Abort()
 {
     LOG_DEBUG(__FUNCTION__);
+    // in :Q#
     char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
     ParkOptionBusy = false;
     if (!isSimulation() && !sendQuery(":Q#", response, 0))
@@ -1142,13 +1139,15 @@ bool StarGoTelescope::SetTrackRate(double raRate, double deRate)
 // * X1Ennnn where nnnn=0500 to 1500; 1000 is base rate
 // See also SetTrackingAdjustment.
 // This virtual function should set values in arcsec/second
+// Convert to %age:
+// (raRate/15-1)*10000 + 1000
 
     LOGF_DEBUG("%s rarate=%lf deRate=%lf",__FUNCTION__,raRate, deRate);
     INDI_UNUSED(raRate);
     INDI_UNUSED(deRate);
     char cmd[AVALON_COMMAND_BUFFER_LENGTH] = {0};
     char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
-    int rate = raRate;
+    int rate = static_cast<int>((raRate/15.0 - 1.0)*10000.0 + 1000.0);
     sprintf(cmd, ":X1E%04d", rate);
     if(!sendQuery(cmd, response, 0))
     {
@@ -1284,6 +1283,7 @@ bool StarGoTelescope::getScopeLocation()
     LOGF_DEBUG("Mount Controller Latitude: %lg Longitude: %lg", LocationN[LOCATION_LATITUDE].value, LocationN[LOCATION_LONGITUDE].value);
 
     IDSetNumber(&LocationNP, nullptr);
+// Not sure why the driver does this in a get function
 //    if(!setLocalSiderealTime(siteLong))
 //    {
 //        LOG_ERROR("Error setting local sidereal time");
@@ -1300,6 +1300,7 @@ bool StarGoTelescope::getScopeLocation()
 bool StarGoTelescope::getSiteLatitude(double *siteLat)
 {
     LOG_DEBUG(__FUNCTION__);
+    // Command :Gt#
     char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
     if (!sendQuery(":Gt#", response)) 
     {
@@ -1423,9 +1424,8 @@ bool StarGoTelescope::setLocalSiderealTime(double longitude)
 bool StarGoTelescope::getLST_String(char* input)
 {
     LOG_DEBUG(__FUNCTION__);
-    double longitude;
 
-    // step one: determine site longitude
+    double longitude;
     if (!getSiteLongitude(&longitude))
     {
         LOG_WARN("getLST Failed to get site Longitude from device.");
@@ -1439,6 +1439,38 @@ bool StarGoTelescope::getLST_String(char* input)
     getSexComponents(lst, &h, &m, &s);
 
     sprintf(input, "%02d%02d%02d", h, m, s);
+    return true;
+}
+/*******************************************************************************
+**
+*******************************************************************************/
+bool StarGoTelescope::getScopeLST(double *lst)
+{
+    LOG_DEBUG(__FUNCTION__);
+    // command :GS#
+    // returns LST as hh:mm:ss#
+    char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
+    if(!sendQuery(":GS#", response))
+    {
+        LOG_ERROR("Failed to get LST");
+        return false;
+    }
+    if (f_scansexa(response, lst))
+    {
+        LOG_ERROR("Unable to parse get LST response.");
+        return false;
+    }
+    double longitude;
+    if (!getSiteLongitude(&longitude))
+    {
+        LOG_WARN("Failed to get site Longitude from device.");
+        return false;
+    }
+    double syslst = get_local_sidereal_time(longitude);
+    if( fabs(*lst-syslst) > 0.1 )
+    {
+        LOG_WARN("Mount LST varies from System LST by < 0.1 hours");
+    }
     return true;
 }
 
@@ -1519,35 +1551,11 @@ bool StarGoTelescope::getScopeTime()
 bool StarGoTelescope::getLocalDate(char *dateString)
 {
     LOG_DEBUG(__FUNCTION__);
-    if (isSimulation())
-    {
-        time_t now = time (nullptr);
-        strftime(dateString, 32, "%F", localtime(&now));
-    }
-    else
-    {
-        char response[AVALON_RESPONSE_BUFFER_LENGTH]={0};
-        int dd, mm, yy;
-        char mell_prefix[3]={0};
-        int vars_read=0;
-//FIXME GC does not work on StarGo
-        if (!sendQuery(":GC#", response))
-            return false;
-        // StarGo format is MM/DD/YY
-        vars_read = sscanf(response, "%d%*c%d%*c%d", &mm, &dd, &yy);
-        if (vars_read < 3)
-        {
-            LOGF_ERROR("Cant read date from mount %s", response);
-            return false;
-        }
-        /* We consider years 50 or more to be in the last century, anything less in the 21st century.*/
-        if (yy > 50)
-            strncpy(mell_prefix, "19", 3);
-        else
-            strncpy(mell_prefix, "20", 3);
-        /* We need to have it in YYYY-MM-DD ISO format */
-        snprintf(dateString, 32, "%s%02d-%02d-%02d", mell_prefix, yy, mm, dd);
-    }
+// The StarGo does not save local date or time (or at least does not
+// provide a way to query them
+// So just use the driver date
+    time_t now = time (nullptr);
+    strftime(dateString, 32, "%F", localtime(&now));
     return true;
 }
 
@@ -1563,8 +1571,9 @@ bool StarGoTelescope::setLocalDate(uint8_t days, uint8_t months, uint16_t years)
     int yy = years % 100;
 
 // Use X50 using DDMMYY
-    snprintf(cmd, sizeof(cmd), ":SC %02d%02d%02d#", months, days, yy);
-    if (!sendQuery(cmd, response))
+//    snprintf(cmd, sizeof(cmd), ":SC %02d%02d%02d#", months, days, yy);
+    snprintf(cmd, sizeof(cmd), ":X50%02d%02d%02d#", days, months, yy);
+    if (!sendQuery(cmd, response, 0))  // No response
     {
         LOG_ERROR("Failed to set date");
         return false;
@@ -1585,30 +1594,10 @@ bool StarGoTelescope::setLocalDate(uint8_t days, uint8_t months, uint16_t years)
 bool StarGoTelescope::getLocalTime(char *timeString)
 {
     LOG_DEBUG(__FUNCTION__);
-    if (isSimulation())
-    {
-        time_t now = time (nullptr);
-        strftime(timeString, 32, "%T", localtime(&now));
-    }
-    else
-    {
-        double ctime=0;
-        int h, m, s;
-        char response[AVALON_RESPONSE_BUFFER_LENGTH]={0};
-// FIXME GL# command does not wrk on StarGo
-        if (!sendQuery(":GL#", response))
-            return false;
-
-        if (f_scansexa(response, &ctime))
-        {
-            LOGF_DEBUG("Unable to parse local time response %s", response);
-            return false;
-        }
-
-        getSexComponents(ctime, &h, &m, &s);
-        snprintf(timeString, 32, "%02d:%02d:%02d", h, m, s);
-    }
-
+// StarGo does not store local date or time
+// It does store LST as time of day so that can be converted back to a time of day
+    time_t now = 0;
+    strftime(timeString, 32, "%T", localtime(&now));
     return true;
 }
 
@@ -1632,32 +1621,18 @@ bool StarGoTelescope::setLocalTime24(uint8_t hour, uint8_t minute, uint8_t secon
 bool StarGoTelescope::getUTCOffset(double *offset)
 {
     LOG_DEBUG(__FUNCTION__);
+    // StarGo does not store the UTC offset
     if (isSimulation())
     {
         *offset = 3;
         return true;
     }
+    time_t t = time(NULL);
+    struct tm lt = {0,0,0,0,0,0,0,0,0,0,""};
+    localtime_r(&t, &lt);
 
-    int lx200_utc_offset = 0;
-    char response[AVALON_RESPONSE_BUFFER_LENGTH]={0};
-    float temp_number;
-
-    if (!sendQuery(":GG#", response))
-        return false;
-
-    /* Float */
-    if (strchr(response, '.'))
-    {
-        if (sscanf(response, "%f", &temp_number) != 1)
-            return false;
-        lx200_utc_offset = static_cast<int>(temp_number);
-    }
-    /* Int */
-    else if (sscanf(response, "%d", &lx200_utc_offset) != 1)
-        return false;
-
-    // LX200 TimeT Offset is defined at the number of hours added to LOCAL TIME to get TimeT. This is contrary to the normal definition.
-    *offset = lx200_utc_offset * -1;
+    *offset = static_cast<double>(lt.tm_gmtoff)/3600;
+    
     return true;
 }
 
@@ -1712,12 +1687,16 @@ bool StarGoTelescope::getParkHomeStatus (char* status)
 }
 
 /*******************************************************************************
-**
+** setHomeSync
+** Sets the current mount position as the Home position
+** Called from ISNewSwitch when the Synch Home button is clicked
 *******************************************************************************/
 bool StarGoTelescope::setHomeSync()
 {
     LOG_DEBUG(__FUNCTION__);
-    char input[AVALON_RESPONSE_BUFFER_LENGTH-5] = {0};
+    // Command Sync Home     :X31hhmmss#
+    // hhmmss is local sidereal time
+    char input[AVALON_COMMAND_BUFFER_LENGTH-5] = {0};
     char cmd[AVALON_COMMAND_BUFFER_LENGTH] = {0};
     if (!getLST_String(input))
     {
@@ -1746,6 +1725,12 @@ bool StarGoTelescope::setHomeSync()
     }
     SyncHomeS[0].s = ISS_OFF;
     IDSetSwitch(&SyncHomeSP, nullptr);
+    
+// Confirm by getting RA/Dec (X590) and mount LST (GS)
+// Calculate HA = LST-RA
+// Dec should be the pole
+
+    
     return true;
 }
 
@@ -2840,7 +2825,7 @@ bool StarGoTelescope::getFirmwareInfo (char* firmwareInfo, char *mount, char *tc
     }
     strcpy(mount, mountType);
 
-    // step 5: get TCB cersion
+    // step 5: get TCB version
     char tcbVer[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
     if (!sendQuery(":X29#", tcbVer))
     {
@@ -2853,7 +2838,8 @@ bool StarGoTelescope::getFirmwareInfo (char* firmwareInfo, char *mount, char *tc
 }
 
 /*******************************************************************************
-**
+** mountSim 
+** called from ReadScopeStatus
 *******************************************************************************/
 void StarGoTelescope::mountSim()
 {
@@ -2873,6 +2859,11 @@ void StarGoTelescope::mountSim()
     dt  = tv.tv_sec - ltv.tv_sec + (tv.tv_usec - ltv.tv_usec) / 1e6;
     ltv = tv;
     da  = STARGO_GENERIC_SLEWRATE * dt;
+    
+    double currentRA = EqN[AXIS_RA].value;
+    double currentDEC = EqN[AXIS_DE].value;
+    double targetRA = TargetN[AXIS_RA].value;
+    double targetDEC = TargetN[AXIS_DE].value;
 
     /* Process per current state. We check the state of EQUATORIAL_COORDS and act acoordingly */
     switch (TrackState)

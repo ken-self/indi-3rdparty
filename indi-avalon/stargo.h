@@ -99,7 +99,7 @@ public:
     virtual bool Handshake() override;
     virtual bool ISNewSwitch(const char *dev, const char *name, ISState *states, char *names[], int n) override;
     virtual bool ISNewNumber(const char *dev, const char *name, double values[], char *names[], int n) override;
-    virtual void ISGetProperties(const char *dev) override;
+//    virtual void ISGetProperties(const char *dev) override;
     virtual bool initProperties() override;
     virtual bool updateProperties() override;
     virtual bool saveConfigItems(FILE *fp) override;
@@ -182,7 +182,7 @@ protected:
     uint8_t DBG_SCOPE;
 
     double targetRA, targetDEC;
-    double currentRA, currentDEC;
+//    double currentRA, currentDEC;
     
     bool ParkOptionBusy { false };
 
@@ -230,6 +230,7 @@ protected:
     bool setSiteLongitude(double Long);
     bool setLocalSiderealTime(double longitude);
     bool getLST_String(char* input);
+    bool getScopeLST(double *lst);
     bool getScopeTime();
     bool getLocalDate(char *dateString) ;
     bool setLocalDate(uint8_t days, uint8_t months, uint16_t years) ;
