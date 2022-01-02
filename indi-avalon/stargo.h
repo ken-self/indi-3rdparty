@@ -234,7 +234,7 @@ protected:
     bool setSiteLongitude(double Long);
     bool setLocalSiderealTime(double longitude);
     bool getLST_String(char* input);
-    bool getScopeLST(double *lst);
+//    bool getScopeLST(double *lst);
     bool getScopeTime();
     bool getLocalDate(char *dateString) ;
     bool setLocalDate(uint8_t days, uint8_t months, uint16_t years) ;

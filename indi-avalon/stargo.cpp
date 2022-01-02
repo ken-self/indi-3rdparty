@@ -763,9 +763,11 @@ bool StarGoTelescope::ReadScopeStatus()
     TrackState = newTrackState;
 //    NewRaDec(currentRA, currentDEC);
     NewRaDec(r, d);
-    double lst, ha;
-    if(getScopeLST(&lst))
+    double ha, lst;
+    char clst[12];
+    if(getLST_String(clst))
     {
+        f_scansexa(clst, &lst);
         ha = lst - r;
         HaLstN[0].value =  ha;
         HaLstN[1].value =  lst;
@@ -1463,11 +1465,13 @@ bool StarGoTelescope::getLST_String(char* input)
 /*******************************************************************************
 **
 *******************************************************************************/
+/*
 bool StarGoTelescope::getScopeLST(double *lst)
 {
     LOG_DEBUG(__FUNCTION__);
     // command :GS#
     // returns LST as hh:mm:ss#
+    // seems to always return 00:34:56
     char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
     if(!sendQuery(":GS#", response))
     {
@@ -1497,7 +1501,7 @@ bool StarGoTelescope::getScopeLST(double *lst)
     *lst = mlst;
     return true;
 }
-
+*/
 /*******************************************************************************
 **
 *******************************************************************************/
