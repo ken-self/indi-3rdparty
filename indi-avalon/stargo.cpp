@@ -1491,7 +1491,7 @@ bool StarGoTelescope::getScopeLST(double *lst)
     {
         char clst[12], csys[12];
         fs_sexa(csys, syslst, 3, 3600);
-        fs_sexa(clst, *lst, 3, 3600);
+        fs_sexa(clst, mlst, 3, 3600);
         LOGF_WARN("Mount LST varies from System LST %s %s", clst, csys );
     }
     *lst = mlst;
