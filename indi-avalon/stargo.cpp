@@ -1474,7 +1474,8 @@ bool StarGoTelescope::getScopeLST(double *lst)
         LOG_ERROR("Failed to get LST");
         return false;
     }
-    if (f_scansexa(response, lst))
+    double mlst;
+    if (f_scansexa(response, &mlst))
     {
         LOG_ERROR("Unable to parse get LST response.");
         return false;
@@ -1486,13 +1487,14 @@ bool StarGoTelescope::getScopeLST(double *lst)
         return false;
     }
     double syslst = get_local_sidereal_time(longitude);
-    if( fabs(*lst-syslst) > 0.1 )
+    if( fabs(mlst-syslst) > 0.1 )
     {
         char clst[12], csys[12];
-        fs_sexa(csys, syslst, 10, 3600);
-        fs_sexa(clst, *lst, 10, 3600);
+        fs_sexa(csys, syslst, 3, 3600);
+        fs_sexa(clst, *lst, 3, 3600);
         LOGF_WARN("Mount LST varies from System LST %s %s", clst, csys );
     }
+    *lst = mlst;
     return true;
 }
 
