@@ -137,12 +137,16 @@ protected:
     ISwitch DecMotorReverseS[2];
 
     // Max slew speed
-    INumberVectorProperty MaxSlewNP;
-    INumber MaxSlewN[2];
+    ISwitchVectorProperty MaxSlewSpeedSP;
+    ISwitch MaxSlewSpeedS[4];
+
+    // Center speeds
+    ISwitchVectorProperty CenterSpeedSP;
+    ISwitch CenterSpeedS[6];
 
     // Center and FInd speeds
-    INumberVectorProperty MoveSpeedNP;
-    INumber MoveSpeedN[2];
+    ISwitchVectorProperty FindSpeedSP;
+    ISwitch FindSpeedS[8];
 
     // Motor Step Position
     INumberVectorProperty MotorStepNP;
@@ -234,7 +238,7 @@ protected:
     bool setSiteLongitude(double Long);
     bool setLocalSiderealTime(double longitude);
     bool getLST_String(char* input);
-//    bool getScopeLST(double *lst);
+    bool getLST(double *lst);
     bool getScopeTime();
     bool getLocalDate(char *dateString) ;
     bool setLocalDate(uint8_t days, uint8_t months, uint16_t years) ;
@@ -251,10 +255,10 @@ protected:
     void WaitParkOptionReady();
 
 // Slewing
-    bool getMaxSlews(int *raSlew, int *decSlew);
-    bool setMaxSlews(int raSlew, int decSlew);
-    bool getMoveSpeed(int *centerSpeed, int *findSpeed ); // Not implemented
-    bool setMoveSpeed(int centerSpeed, int findSpeed );
+    bool getMaxSlewSpeed(int *slewSpeed);
+    bool setMaxSlewSpeed(int slewSpeed);
+    bool getCenterFindSpeed(int *centerSpeed, int *findSpeed ); // Not implemented
+    bool setCenterFindSpeed(int centerSpeed, int findSpeed );
     bool setSlewMode(int slewMode);
     bool getEqCoordinates(double *ra, double *dec);
     bool setObjectCoords(double ra, double dec);
@@ -354,9 +358,9 @@ inline void StarGoTelescope::int2ahex(char * ahex, double val)
 {
     int ival = static_cast<int>(round(val));
 //    char ahex[9];
-    for(unsigned int i=7; i<=0; i--)
+    for(int i=7; i>=0; i--)
     {
-        ahex[i] = (ival & 0x0000000F);
+        ahex[i] = (ival & 0x0000000F) + 48;
         ival = ival >> 4;
     }
     return;
