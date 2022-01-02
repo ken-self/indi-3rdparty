@@ -1488,7 +1488,10 @@ bool StarGoTelescope::getScopeLST(double *lst)
     double syslst = get_local_sidereal_time(longitude);
     if( fabs(*lst-syslst) > 0.1 )
     {
-        LOGF_WARN("Mount LST varies from System LST %.6f %.6f", *lst, syslst );
+        char clst[12], csys[12];
+        fs_sexa(csys, syslst, 10, 3600);
+        fs_sexa(clst, *lst, 10, 3600);
+        LOGF_WARN("Mount LST varies from System LST %s %s", clst, csys );
     }
     return true;
 }
