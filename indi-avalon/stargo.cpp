@@ -484,10 +484,10 @@ bool StarGoTelescope::initProperties()
     IUFillNumberVector(&GearRatioNP, GearRatioN, 2, getDeviceName(), "Gear Ratio","Gearing", INFO_TAB, IP_RO, 60, IPS_IDLE);
 
     // Max Slew Speeds
-    IUFillSwitch(&MaxSlewSpeedS[0], "MAX_SLEW_SPEED_LOW", "low", ISS_OFF);
-    IUFillSwitch(&MaxSlewSpeedS[1], "MAX_SLEW_SPEED_MEDIUM", "medium", ISS_OFF);
-    IUFillSwitch(&MaxSlewSpeedS[2], "MAX_SLEW_SPEED_FAST", "fast", ISS_ON);
-    IUFillSwitch(&MaxSlewSpeedS[3], "MAX_SLEW_SPEED_HIGH", "high", ISS_OFF);
+    IUFillSwitch(&MaxSlewSpeedS[0], "MAX_SLEW_SPEED_LOW", "Low", ISS_OFF);
+    IUFillSwitch(&MaxSlewSpeedS[1], "MAX_SLEW_SPEED_MEDIUM", "Medium", ISS_OFF);
+    IUFillSwitch(&MaxSlewSpeedS[2], "MAX_SLEW_SPEED_FAST", "Fast", ISS_ON);
+    IUFillSwitch(&MaxSlewSpeedS[3], "MAX_SLEW_SPEED_HIGH", "High", ISS_OFF);
     IUFillSwitchVector(&MaxSlewSpeedSP, MaxSlewSpeedS, 4, getDeviceName(), "MAX_SLEW_SPEED", "Max Slew Speed", MOTION_TAB,
                        IP_RW, ISR_1OFMANY, 60, IPS_IDLE);
 
