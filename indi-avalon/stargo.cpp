@@ -494,9 +494,9 @@ bool StarGoTelescope::initProperties()
     // Center Speeds
     IUFillSwitch(&CenterSpeedS[0], "CENTER_SPEED_2X",  "2x", ISS_OFF);
     IUFillSwitch(&CenterSpeedS[1], "CENTER_SPEED_3X",  "3x", ISS_OFF);
-    IUFillSwitch(&CenterSpeedS[2], "CENTER_SPEED_4X",  "4x", ISS_ON);
+    IUFillSwitch(&CenterSpeedS[2], "CENTER_SPEED_4X",  "4x", ISS_OFF);
     IUFillSwitch(&CenterSpeedS[3], "CENTER_SPEED_6X",  "6x", ISS_OFF);
-    IUFillSwitch(&CenterSpeedS[4], "CENTER_SPEED_8X",  "8x", ISS_OFF);
+    IUFillSwitch(&CenterSpeedS[4], "CENTER_SPEED_8X",  "8x", ISS_ON);
     IUFillSwitch(&CenterSpeedS[5], "CENTER_SPEED_10X", "10x", ISS_OFF);
     IUFillSwitchVector(&CenterSpeedSP, CenterSpeedS, 6, getDeviceName(), "CENTER_SPEED", "Center Speed", MOTION_TAB,
                        IP_RW, ISR_1OFMANY, 60, IPS_IDLE);
@@ -504,11 +504,11 @@ bool StarGoTelescope::initProperties()
     // Find Speeds
     IUFillSwitch(&FindSpeedS[0], "FIND_SPEED_10X",  "10x", ISS_OFF);
     IUFillSwitch(&FindSpeedS[1], "FIND_SPEED_15X",  "15x", ISS_OFF);
-    IUFillSwitch(&FindSpeedS[2], "FIND_SPEED_20X",  "20x", ISS_ON);
+    IUFillSwitch(&FindSpeedS[2], "FIND_SPEED_20X",  "20x", ISS_OFF);
     IUFillSwitch(&FindSpeedS[3], "FIND_SPEED_30X",  "30x", ISS_OFF);
     IUFillSwitch(&FindSpeedS[4], "FIND_SPEED_50X",  "50x", ISS_OFF);
-    IUFillSwitch(&FindSpeedS[5], "FIND_SPEED_75X",  "75x", ISS_OFF);
-    IUFillSwitch(&FindSpeedS[6], "FIND_SPEED_100X", "100x", ISS_ON);
+    IUFillSwitch(&FindSpeedS[5], "FIND_SPEED_75X",  "75x", ISS_ON);
+    IUFillSwitch(&FindSpeedS[6], "FIND_SPEED_100X", "100x", ISS_OFF);
     IUFillSwitch(&FindSpeedS[7], "FIND_SPEED_150X", "150x", ISS_OFF);
     IUFillSwitchVector(&FindSpeedSP, FindSpeedS, 8, getDeviceName(), "FIND_SPEED", "Find Speed", MOTION_TAB,
                        IP_RW, ISR_1OFMANY, 60, IPS_IDLE);
@@ -567,7 +567,7 @@ bool StarGoTelescope::initProperties()
 
     IUFillNumber(&HaLstN[0], "HA", "HA (hh:mm:ss)", "%010.6m", 0, 24, 0, 0);
     IUFillNumber(&HaLstN[1], "LST", "LST (hh:mm:ss)", "%010.6m", 0, 24, 0, 0);
-    IUFillNumberVector(&HaLstNP, HaLstN, 2, getDeviceName(), "HA-LST", "Hour Angle", INFO_TAB, IP_RO, 60, IPS_IDLE);
+    IUFillNumberVector(&HaLstNP, HaLstN, 2, getDeviceName(), "HA-LST", "Hour Angle", SITE_TAB, IP_RO, 60, IPS_IDLE);
 
     return true;
 }
@@ -726,6 +726,7 @@ bool StarGoTelescope::ReadScopeStatus()
         newTrackState = SCOPE_PARKED;
         if (TrackState != newTrackState)
             SetParked(true);
+        updateParkPosition();
     }
     else
     {
@@ -918,6 +919,10 @@ bool StarGoTelescope::SetCurrentPark()
 {
     LOG_DEBUG(__FUNCTION__);
 
+// Setting ParkOptionBusy causes WaitParkOptionReady to set the mount park position 
+// once the scope has stopped moving.
+// WaitParkOptionReady is called from ReadScopeStatus
+// An Abort will reset ParkOptionBusy to false
     ParkOptionBusy = true;
     WaitParkOptionReady();
     return true;
@@ -1815,7 +1820,8 @@ bool StarGoTelescope::setGotoHome()
 *******************************************************************************/
 void StarGoTelescope::WaitParkOptionReady()
 {
-    // Check if waiting for park position to set. Reset in Abort())
+    LOGF_DEBUG("%s ParkOptionBusy: %d TrackState: %d", __FUNCTION__, ParkOptionBusy, TrackState);
+   // Check if waiting for park position to set. Reset in Abort())
     if (!ParkOptionBusy) return;
 
     // Check if the mount has stopped slewing
@@ -1828,27 +1834,43 @@ void StarGoTelescope::WaitParkOptionReady()
     if (TrackState != SCOPE_IDLE &&
        TrackState != SCOPE_TRACKING ) return;
 
-    double longitude;
-    bool rc = setParkPosition();
     ParkOptionSP.s = IPS_ALERT;
-    if (!rc)
+    if (!setParkPosition())
     {
         LOG_WARN("Unable to set Park Position.");
     }
-    else if (!getSiteLongitude(&longitude))
-    {
-        LOG_WARN("Failed to get site Longitude from device.");
-    }
     else
     {
-    // determine local sidereal time
-        double lst = get_local_sidereal_time(longitude);
-        SetAxis1Park(lst - EqN[AXIS_RA].value);
-        SetAxis2Park(EqN[AXIS_DE].value);
+        updateParkPosition();
         ParkOptionSP.s = IPS_OK;
     }
     IDSetSwitch(&ParkOptionSP, nullptr);
     ParkOptionBusy = false;
+    return;
+}
+
+/*******************************************************************************
+**
+*******************************************************************************/
+void StarGoTelescope::updateParkPosition()
+{
+    LOGF_DEBUG("%s TrackState: %d", __FUNCTION__, TrackState);
+    // Check if the mount is parked
+    //        SCOPE_PARKED      ready
+    // If it has then update park position. Otherwise wait for next call
+    if (TrackState != SCOPE_PARKED ) return;
+
+    double lst;
+    if (!getLST(&lst))
+    {
+        LOG_WARN("Failed to get site LST from device.");
+    }
+    else
+    {
+    // Update HA and Dec of parking position
+        SetAxis1Park(lst - EqN[AXIS_RA].value);
+        SetAxis2Park(EqN[AXIS_DE].value);
+    }
     return;
 }
 
