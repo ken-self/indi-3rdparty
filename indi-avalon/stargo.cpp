@@ -541,8 +541,8 @@ bool StarGoTelescope::initProperties()
     IUFillNumberVector(&TrackAdjustNP, TrackAdjustN, 1, getDeviceName(), "Track Adjust","Tracking", MOTION_TAB, IP_RW, 60, IPS_IDLE);
 
     // Auto Tracking Adjustment
-    IUFillSwitch(&RaAutoAdjustS[INDI_ENABLED], "INDI_ENABLED", "Enabled", ISS_ON);
-    IUFillSwitch(&RaAutoAdjustS[INDI_DISABLED], "INDI_DISABLED", "Disabled", ISS_OFF);
+    IUFillSwitch(&RaAutoAdjustS[INDI_ENABLED], "INDI_ENABLED", "Enabled", ISS_OFF);
+    IUFillSwitch(&RaAutoAdjustS[INDI_DISABLED], "INDI_DISABLED", "Disabled", ISS_ON);
     IUFillSwitchVector(&RaAutoAdjustSP, RaAutoAdjustS, 2, getDeviceName(), "RA_AUTO_ADJ", "RA Auto Adjust", GUIDE_TAB, IP_RW, ISR_1OFMANY, 60, IPS_IDLE);
 
 
@@ -642,6 +642,8 @@ bool StarGoTelescope::saveConfigItems(FILE *fp)
 // There is no get function for Center and Find speeds so save in config
     IUSaveConfigSwitch(fp, &CenterSpeedSP);
     IUSaveConfigSwitch(fp, &FindSpeedSP);
+    IUSaveConfigSwitch(fp, &RaAutoAdjustSP);
+
     INDI::Telescope::saveConfigItems(fp);
     return true;
 }
