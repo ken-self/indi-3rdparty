@@ -806,6 +806,9 @@ bool StarGoTelescope::updateLocation(double latitude, double longitude, double e
     LOGF_DEBUG("%s Lat:%.3lf Lon:%.3lf",__FUNCTION__, latitude, longitude);
     INDI_UNUSED(elevation);
 
+    if (!isConnected())
+        return false;
+    
     if (isSimulation())
         return true;
 
@@ -2299,6 +2302,7 @@ bool StarGoTelescope::getTrackingAdjustment(double *valueRA)
     /*
      * :X42# to read the tracking adjustment value as orsRRR#
      * :X44# to read the tracking adjustment value as odsDDD#
+     * if :X41 has invalid parameters, then :X42 also returns invalid parameters
 
      */
     LOG_DEBUG(__FUNCTION__);
@@ -2327,8 +2331,7 @@ bool StarGoTelescope::setTrackingAdjustment(double adjustRA)
     /*
      * :X41sRRR# to adjust the RA tracking speed where s is the sign + or -  and RRR are three digits whose meaning is parts per 10000 of  RA correction .
      * :X43sDDD# to fix the cf DEC offset
-     X41 command only applies whole number percentages i.e +/- 100, 200, 300, 400, 500.
-
+     * :X41 accepts invalid parameters. Not sure what it does with them
      :X1Ennnn # where nnnn is between 0500 and 1500. 1000 represents no adjustment and 0500 is -5% and 1500 is +5%
      Ascertained from the StarGo ASCOM driver
      */
