@@ -523,7 +523,7 @@ bool StarGoTelescope::initProperties()
     IUFillSwitchVector(&DecMotorReverseSP, DecMotorReverseS, 2, getDeviceName(), "DEC_REVERSE", "Dec Reverse", MOTION_TAB, IP_RW, ISR_1OFMANY, 60, IPS_IDLE);
 
     // Torque
-    IUFillNumber(&TorqueN[0], "TORQUE_RA", "Motor Torque", "%.0f", 0.0, 100.0, 1, 0);
+    IUFillNumber(&TorqueN[0], "TORQUE_RA", "Motor Torque", "%.0f", 0.0, 100.0, 10.0, 0);
     IUFillNumberVector(&TorqueNP, TorqueN, 1, getDeviceName(), "Torque","Torque", MOTION_TAB, IP_RW, 60, IPS_IDLE);
 
     // Motor Step Position
@@ -1255,6 +1255,17 @@ bool StarGoTelescope::MoveNS(INDI_DIR_NS dir, TelescopeMotionCommand command)
     char cmd[AVALON_COMMAND_BUFFER_LENGTH] = {0};
     char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
 
+// Any other goto prior to this command sets the slew speed to MAX
+// Set the slew speed as requested by the client
+    int premode = IUFindOnSwitchIndex(&SlewRateSP);
+    if (SetSlewRate(premode) == false)
+    {
+        SlewRateSP.s          = IPS_ALERT;
+    }
+    else
+        SlewRateSP.s = IPS_OK;
+    IDSetSwitch(&SlewRateSP, nullptr);
+
     sprintf(cmd, ":%s%s#", command==MOTION_START?"M":"Q", dir == DIRECTION_NORTH?"n":"s");
     if (!isSimulation() && !sendQuery(cmd, response, 0))
     {
@@ -1273,6 +1284,17 @@ bool StarGoTelescope::MoveWE(INDI_DIR_WE dir, TelescopeMotionCommand command)
     LOGF_DEBUG("%s dir=%d cmd=%d", __FUNCTION__, dir, command);
     char cmd[AVALON_COMMAND_BUFFER_LENGTH] = {0};
     char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
+
+// Any other goto prior to this command sets the slew speed to MAX
+// Set the slew speed as requested by the client
+    int premode = IUFindOnSwitchIndex(&SlewRateSP);
+    if (SetSlewRate(premode) == false)
+    {
+        SlewRateSP.s          = IPS_ALERT;
+    }
+    else
+        SlewRateSP.s = IPS_OK;
+    IDSetSwitch(&SlewRateSP, nullptr);
 
     sprintf(cmd, ":%s%s#", command==MOTION_START?"M":"Q", dir == DIRECTION_WEST?"w":"e");
 
@@ -2018,26 +2040,43 @@ bool StarGoTelescope::setCenterFindSpeed(int center, int find )
  * Set centre and find speeds
  * X03aaaabbbb aaaa=center speed; bbbb=findspeed
  * valid center speeds:
-2x  = 007:  = 0x7a = 122
-3x  = 0051  = 0x51 = 81
-4x  = 003=  = 0x3d = 61
-6x  = 0028  = 0x28 = 40
-8x  = 001>  = 0x1e = 30
-10x = 0018  = 0x18 = 24
-Parameter = 240/factor
+*** deprecated 2x  = 007:  = 0x7a = 122
+*** deprecated 3x  = 0051  = 0x51 = 81
+*** deprecated 4x  = 003=  = 0x3d = 61
+*** deprecated 6x  = 0028  = 0x28 = 40
+*** deprecated 8x  = 001>  = 0x1e = 30
+*** deprecated 10x = 0018  = 0x18 = 24
+*** deprecated Parameter = 240/factor
+
+2x  = 0042  = 0x42 = 66
+3x  = 002<  = 0x2c = 44
+4x  = 0021  = 0x21 = 33
+6x  = 0016  = 0x16 = 22
+8x  = 0010  = 0x10 = 16
+10x = 000=  = 0x0d = 13
+
 valid find speeds:
-10x  = 0031  = x31 = 49
-15x  = 0020  = x20 = 32
-20x  = 0018  = x18 = 24
-30x  = 0010  = x10 = 16
-50x  = 000:  = x0a = 10
-75x  = 0006  = x06 = 6
-100x = 0005  = x05 = 5
-150x = 0003  = x03 = 3
-Parameter = 480/factor
+*** deprecated 10x  = 0031  = x31 = 49
+*** deprecated 15x  = 0020  = x20 = 32
+*** deprecated 20x  = 0018  = x18 = 24
+*** deprecated 30x  = 0010  = x10 = 16
+*** deprecated 50x  = 000:  = x0a = 10
+*** deprecated 75x  = 0006  = x06 = 6
+*** deprecated 100x = 0005  = x05 = 5
+*** deprecated 150x = 0003  = x03 = 3
+*** deprecated Parameter = 480/factor
+
+10x  = 001:  = x1a = 26
+15x  = 0012  = x12 = 18
+20x  = 000=  = x0d = 13
+30x  = 0009  = x09 = 9
+50x  = 0005  = x05 = 5
+75x  = 0004  = x04 = 4
+100x = 0003  = x03 = 3
+150x = 0002  = x02 = 2
 */
-    double centerSpeeds[6]={122,81,61,40,30,24};
-    double findSpeeds[8]={49,32,24,16,10,6,5,3};
+    double centerSpeeds[6]={66,44,33,22,16,13};
+    double findSpeeds[8]={26,18,13,9,5,4,3,2};
 
     char cmd[AVALON_COMMAND_BUFFER_LENGTH] = {0};
     char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
@@ -3217,6 +3256,11 @@ bool StarGoTelescope::setTorque(int torque)
 //    LOGF_DEBUG("%s %s", __FUNCTION__, "Not Implemented");
     char cmd[AVALON_COMMAND_BUFFER_LENGTH] = {0};
     char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
+
+// Consider rounding to nearest 10%
+//  torque = torque/10 * 10;
+// Need to send the PAUSE commnd to reset the mount
+// Need to see how Torque is then set on restart - presumably from the config file
     sprintf(cmd, ":TTT%03d", torque);
     if (sendQuery(cmd, response))
     {
