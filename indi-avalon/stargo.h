@@ -114,8 +114,8 @@ protected:
     IText MountFirmwareInfoT[3] = {};
     
     // RA Track Adjust
-    INumberVectorProperty TrackAdjustNP;
-    INumber TrackAdjustN[1];
+    INumberVectorProperty TrackingAdjustmentNP;
+    INumber TrackingAdjustmentN[1];
 
     // Auto RA Tracking Adjustment
     ISwitchVectorProperty RaAutoAdjustSP;

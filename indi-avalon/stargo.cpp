@@ -403,7 +403,7 @@ bool StarGoTelescope::ISNewNumber(const char *dev, const char *name, double valu
             IDSetNumber(&MountRequestDelayNP, nullptr);
             return true;
         }
-        else if (!strcmp(name, TrackAdjustNP.name))
+        else if (!strcmp(name, TrackingAdjustmentNP.name))
         {
             // change tracking adjustment
             bool success = setTrackingAdjustment(values[0]);
@@ -411,13 +411,13 @@ bool StarGoTelescope::ISNewNumber(const char *dev, const char *name, double valu
             {
                 double adjust;
                 success = getTrackingAdjustment(&adjust);  // Get the value set in the mount
-                TrackAdjustN[0].value = adjust;
-                TrackAdjustNP.s       = IPS_OK;
+                TrackingAdjustmentN[0].value = adjust;
+                TrackingAdjustmentNP.s       = IPS_OK;
             }
             else
-                TrackAdjustNP.s = IPS_ALERT;
+                TrackingAdjustmentNP.s = IPS_ALERT;
 
-            IDSetNumber(&TrackAdjustNP, nullptr);
+            IDSetNumber(&TrackingAdjustmentNP, nullptr);
             return success;
         }
         else if (!strcmp(name, TorqueNP.name))
@@ -537,8 +537,8 @@ bool StarGoTelescope::initProperties()
     IUFillNumberVector(&GuidingSpeedNP, GuidingSpeedN, 2, getDeviceName(), "GUIDE_RATE","Autoguiding", GUIDE_TAB, IP_RW, 60, IPS_IDLE);
 
     // Tracking Adjustment
-    IUFillNumber(&TrackAdjustN[0], "RA_TRACK_ADJ", "RA Tracking Adjust (%)", "%.2f", -5.0, 5.0, 0.01, 0);
-    IUFillNumberVector(&TrackAdjustNP, TrackAdjustN, 1, getDeviceName(), "Track Adjust","Tracking", MOTION_TAB, IP_RW, 60, IPS_IDLE);
+    IUFillNumber(&TrackingAdjustmentN[0], "RA_TRACK_ADJ", "RA Tracking Adjust (%)", "%.2f", -5.0, 5.0, 0.01, 0);
+    IUFillNumberVector(&TrackingAdjustmentNP, TrackingAdjustmentN, 1, getDeviceName(), "Track Adjust","Tracking", MOTION_TAB, IP_RW, 60, IPS_IDLE);
 
     // Auto Tracking Adjustment
     IUFillSwitch(&RaAutoAdjustS[INDI_ENABLED], "INDI_ENABLED", "Enabled", ISS_OFF);
@@ -591,7 +591,7 @@ bool StarGoTelescope::updateProperties()
         defineProperty(&MeridianFlipModeSP);
         defineProperty(&MountRequestDelayNP);
         defineProperty(&MountFirmwareInfoTP);
-        defineProperty(&TrackAdjustNP);
+        defineProperty(&TrackingAdjustmentNP);
         defineProperty(&RaAutoAdjustSP);
         defineProperty(&GearRatioNP);
         defineProperty(&TorqueNP);
@@ -617,7 +617,7 @@ bool StarGoTelescope::updateProperties()
         deleteProperty(MeridianFlipModeSP.name);
         deleteProperty(MountRequestDelayNP.name);
         deleteProperty(MountFirmwareInfoTP.name);
-        deleteProperty(TrackAdjustNP.name);
+        deleteProperty(TrackingAdjustmentNP.name);
         deleteProperty(RaAutoAdjustSP.name);
         deleteProperty(GearRatioNP.name);
         deleteProperty(TorqueNP.name);
@@ -2705,14 +2705,14 @@ void StarGoTelescope::getBasicData()
         double raCorrection;
         if (getTrackingAdjustment(&raCorrection))
         {
-            TrackAdjustN[0].value = raCorrection;
-            TrackAdjustNP.s      = IPS_OK;
+            TrackingAdjustmentN[0].value = raCorrection;
+            TrackingAdjustmentNP.s      = IPS_OK;
         }
         else
         {
-            TrackAdjustNP.s = IPS_ALERT;
+            TrackingAdjustmentNP.s = IPS_ALERT;
         }
-        IDSetNumber(&TrackAdjustNP, nullptr);
+        IDSetNumber(&TrackingAdjustmentNP, nullptr);
 
         int raRatio, decRatio;
         if (getGearRatios(&raRatio, &decRatio))
@@ -3526,7 +3526,7 @@ bool StarGoTelescope::AutoAdjust::setRaAdjust(int8_t direction, uint32_t duratio
     }
 
 //    get trackrate = 1 + adj/100
-    double trackAdjust = 1.0 + p->TrackAdjustN[0].value/100.0;
+    double trackAdjust = 1.0 + p->TrackingAdjustmentN[0].value/100.0;
 
     double raCorrection;
     if (p->getTrackingAdjustment(&raCorrection))
