@@ -484,19 +484,19 @@ bool StarGoTelescope::initProperties()
     IUFillNumberVector(&GearRatioNP, GearRatioN, 2, getDeviceName(), "Gear Ratio","Gearing", INFO_TAB, IP_RO, 60, IPS_IDLE);
 
     // Max Slew Speeds
-    IUFillSwitch(&MaxSlewSpeedS[0], "MAX_SLEW_SPEED_LOW", "low", ISS_OFF);
-    IUFillSwitch(&MaxSlewSpeedS[1], "MAX_SLEW_SPEED_MEDIUM", "medium", ISS_OFF);
-    IUFillSwitch(&MaxSlewSpeedS[2], "MAX_SLEW_SPEED_FAST", "fast", ISS_ON);
-    IUFillSwitch(&MaxSlewSpeedS[3], "MAX_SLEW_SPEED_HIGH", "high", ISS_OFF);
+    IUFillSwitch(&MaxSlewSpeedS[0], "MAX_SLEW_SPEED_LOW", "Low", ISS_OFF);
+    IUFillSwitch(&MaxSlewSpeedS[1], "MAX_SLEW_SPEED_MEDIUM", "Medium", ISS_OFF);
+    IUFillSwitch(&MaxSlewSpeedS[2], "MAX_SLEW_SPEED_FAST", "Fast", ISS_ON);
+    IUFillSwitch(&MaxSlewSpeedS[3], "MAX_SLEW_SPEED_HIGH", "High", ISS_OFF);
     IUFillSwitchVector(&MaxSlewSpeedSP, MaxSlewSpeedS, 4, getDeviceName(), "MAX_SLEW_SPEED", "Max Slew Speed", MOTION_TAB,
                        IP_RW, ISR_1OFMANY, 60, IPS_IDLE);
 
     // Center Speeds
     IUFillSwitch(&CenterSpeedS[0], "CENTER_SPEED_2X",  "2x", ISS_OFF);
     IUFillSwitch(&CenterSpeedS[1], "CENTER_SPEED_3X",  "3x", ISS_OFF);
-    IUFillSwitch(&CenterSpeedS[2], "CENTER_SPEED_4X",  "4x", ISS_ON);
+    IUFillSwitch(&CenterSpeedS[2], "CENTER_SPEED_4X",  "4x", ISS_OFF);
     IUFillSwitch(&CenterSpeedS[3], "CENTER_SPEED_6X",  "6x", ISS_OFF);
-    IUFillSwitch(&CenterSpeedS[4], "CENTER_SPEED_8X",  "8x", ISS_OFF);
+    IUFillSwitch(&CenterSpeedS[4], "CENTER_SPEED_8X",  "8x", ISS_ON);
     IUFillSwitch(&CenterSpeedS[5], "CENTER_SPEED_10X", "10x", ISS_OFF);
     IUFillSwitchVector(&CenterSpeedSP, CenterSpeedS, 6, getDeviceName(), "CENTER_SPEED", "Center Speed", MOTION_TAB,
                        IP_RW, ISR_1OFMANY, 60, IPS_IDLE);
@@ -504,11 +504,11 @@ bool StarGoTelescope::initProperties()
     // Find Speeds
     IUFillSwitch(&FindSpeedS[0], "FIND_SPEED_10X",  "10x", ISS_OFF);
     IUFillSwitch(&FindSpeedS[1], "FIND_SPEED_15X",  "15x", ISS_OFF);
-    IUFillSwitch(&FindSpeedS[2], "FIND_SPEED_20X",  "20x", ISS_ON);
+    IUFillSwitch(&FindSpeedS[2], "FIND_SPEED_20X",  "20x", ISS_OFF);
     IUFillSwitch(&FindSpeedS[3], "FIND_SPEED_30X",  "30x", ISS_OFF);
     IUFillSwitch(&FindSpeedS[4], "FIND_SPEED_50X",  "50x", ISS_OFF);
-    IUFillSwitch(&FindSpeedS[5], "FIND_SPEED_75X",  "75x", ISS_OFF);
-    IUFillSwitch(&FindSpeedS[6], "FIND_SPEED_100X", "100x", ISS_ON);
+    IUFillSwitch(&FindSpeedS[5], "FIND_SPEED_75X",  "75x", ISS_ON);
+    IUFillSwitch(&FindSpeedS[6], "FIND_SPEED_100X", "100x", ISS_OFF);
     IUFillSwitch(&FindSpeedS[7], "FIND_SPEED_150X", "150x", ISS_OFF);
     IUFillSwitchVector(&FindSpeedSP, FindSpeedS, 8, getDeviceName(), "FIND_SPEED", "Find Speed", MOTION_TAB,
                        IP_RW, ISR_1OFMANY, 60, IPS_IDLE);
@@ -523,8 +523,8 @@ bool StarGoTelescope::initProperties()
     IUFillSwitchVector(&DecMotorReverseSP, DecMotorReverseS, 2, getDeviceName(), "DEC_REVERSE", "Dec Reverse", MOTION_TAB, IP_RW, ISR_1OFMANY, 60, IPS_IDLE);
 
     // Torque
-    IUFillNumber(&TorqueN[0], "TORQUE_RA", "Motor Torque", "%.0f", 0.0, 100.0, 1, 0);
-    IUFillNumberVector(&TorqueNP, TorqueN, 1, getDeviceName(), "Torque","Torque", ADVANCED_TAB, IP_RW, 60, IPS_IDLE);
+    IUFillNumber(&TorqueN[0], "TORQUE_RA", "Motor Torque", "%.0f", 0.0, 100.0, 10.0, 0);
+    IUFillNumberVector(&TorqueNP, TorqueN, 1, getDeviceName(), "Torque","Torque", MOTION_TAB, IP_RW, 60, IPS_IDLE);
 
     // Motor Step Position
     IUFillNumber(&MotorStepN[0], "MOTOR_STEP_RA", "RA Step Pos", "%.2f", -100000.0, 100000.0, 1, 0);
@@ -541,9 +541,9 @@ bool StarGoTelescope::initProperties()
     IUFillNumberVector(&TrackAdjustNP, TrackAdjustN, 1, getDeviceName(), "Track Adjust","Tracking", MOTION_TAB, IP_RW, 60, IPS_IDLE);
 
     // Auto Tracking Adjustment
-    IUFillSwitch(&RaAutoAdjustS[INDI_ENABLED], "INDI_ENABLED", "Enabled", ISS_ON);
-    IUFillSwitch(&RaAutoAdjustS[INDI_DISABLED], "INDI_DISABLED", "Disabled", ISS_OFF);
-    IUFillSwitchVector(&RaAutoAdjustSP, RaAutoAdjustS, 2, getDeviceName(), "RA_AUTO_ADJ", "RA Auto Adjust", MOTION_TAB, IP_RW, ISR_1OFMANY, 60, IPS_IDLE);
+    IUFillSwitch(&RaAutoAdjustS[INDI_ENABLED], "INDI_ENABLED", "Enabled", ISS_OFF);
+    IUFillSwitch(&RaAutoAdjustS[INDI_DISABLED], "INDI_DISABLED", "Disabled", ISS_ON);
+    IUFillSwitchVector(&RaAutoAdjustSP, RaAutoAdjustS, 2, getDeviceName(), "RA_AUTO_ADJ", "RA Auto Adjust", GUIDE_TAB, IP_RW, ISR_1OFMANY, 60, IPS_IDLE);
 
 
     IUFillSwitch(&ST4StatusS[INDI_ENABLED], "INDI_ENABLED", "Enabled", ISS_OFF);
@@ -553,7 +553,7 @@ bool StarGoTelescope::initProperties()
     // keypad enabled / disabled
     IUFillSwitch(&KeypadStatusS[INDI_ENABLED], "INDI_ENABLED", "Enabled", ISS_ON);
     IUFillSwitch(&KeypadStatusS[INDI_DISABLED], "INDI_DISABLED", "Disabled", ISS_OFF);
-    IUFillSwitchVector(&KeypadStatusSP, KeypadStatusS, 2, getDeviceName(), "Keypad", "Keypad", ADVANCED_TAB, IP_RW, ISR_1OFMANY, 60, IPS_IDLE);
+    IUFillSwitchVector(&KeypadStatusSP, KeypadStatusS, 2, getDeviceName(), "Keypad", "Keypad", MOTION_TAB, IP_RW, ISR_1OFMANY, 60, IPS_IDLE);
 
     // meridian flip
     IUFillSwitch(&MeridianFlipModeS[0], "MERIDIAN_FLIP_AUTO", "Auto", ISS_OFF);
@@ -567,7 +567,7 @@ bool StarGoTelescope::initProperties()
 
     IUFillNumber(&HaLstN[0], "HA", "HA (hh:mm:ss)", "%010.6m", 0, 24, 0, 0);
     IUFillNumber(&HaLstN[1], "LST", "LST (hh:mm:ss)", "%010.6m", 0, 24, 0, 0);
-    IUFillNumberVector(&HaLstNP, HaLstN, 2, getDeviceName(), "HA-LST", "Hour Angle", INFO_TAB, IP_RO, 60, IPS_IDLE);
+    IUFillNumberVector(&HaLstNP, HaLstN, 2, getDeviceName(), "HA-LST", "Hour Angle", SITE_TAB, IP_RO, 60, IPS_IDLE);
 
     return true;
 }
@@ -642,6 +642,8 @@ bool StarGoTelescope::saveConfigItems(FILE *fp)
 // There is no get function for Center and Find speeds so save in config
     IUSaveConfigSwitch(fp, &CenterSpeedSP);
     IUSaveConfigSwitch(fp, &FindSpeedSP);
+    IUSaveConfigSwitch(fp, &RaAutoAdjustSP);
+
     INDI::Telescope::saveConfigItems(fp);
     return true;
 }
@@ -726,6 +728,7 @@ bool StarGoTelescope::ReadScopeStatus()
         newTrackState = SCOPE_PARKED;
         if (TrackState != newTrackState)
             SetParked(true);
+        updateParkPosition();
     }
     else
     {
@@ -803,6 +806,9 @@ bool StarGoTelescope::updateLocation(double latitude, double longitude, double e
     LOGF_DEBUG("%s Lat:%.3lf Lon:%.3lf",__FUNCTION__, latitude, longitude);
     INDI_UNUSED(elevation);
 
+    if (!isConnected())
+        return false;
+    
     if (isSimulation())
         return true;
 
@@ -918,6 +924,10 @@ bool StarGoTelescope::SetCurrentPark()
 {
     LOG_DEBUG(__FUNCTION__);
 
+// Setting ParkOptionBusy causes WaitParkOptionReady to set the mount park position 
+// once the scope has stopped moving.
+// WaitParkOptionReady is called from ReadScopeStatus
+// An Abort will reset ParkOptionBusy to false
     ParkOptionBusy = true;
     WaitParkOptionReady();
     return true;
@@ -1245,6 +1255,17 @@ bool StarGoTelescope::MoveNS(INDI_DIR_NS dir, TelescopeMotionCommand command)
     char cmd[AVALON_COMMAND_BUFFER_LENGTH] = {0};
     char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
 
+// Any other goto prior to this command sets the slew speed to MAX
+// Set the slew speed as requested by the client
+    int premode = IUFindOnSwitchIndex(&SlewRateSP);
+    if (SetSlewRate(premode) == false)
+    {
+        SlewRateSP.s          = IPS_ALERT;
+    }
+    else
+        SlewRateSP.s = IPS_OK;
+    IDSetSwitch(&SlewRateSP, nullptr);
+
     sprintf(cmd, ":%s%s#", command==MOTION_START?"M":"Q", dir == DIRECTION_NORTH?"n":"s");
     if (!isSimulation() && !sendQuery(cmd, response, 0))
     {
@@ -1263,6 +1284,17 @@ bool StarGoTelescope::MoveWE(INDI_DIR_WE dir, TelescopeMotionCommand command)
     LOGF_DEBUG("%s dir=%d cmd=%d", __FUNCTION__, dir, command);
     char cmd[AVALON_COMMAND_BUFFER_LENGTH] = {0};
     char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
+
+// Any other goto prior to this command sets the slew speed to MAX
+// Set the slew speed as requested by the client
+    int premode = IUFindOnSwitchIndex(&SlewRateSP);
+    if (SetSlewRate(premode) == false)
+    {
+        SlewRateSP.s          = IPS_ALERT;
+    }
+    else
+        SlewRateSP.s = IPS_OK;
+    IDSetSwitch(&SlewRateSP, nullptr);
 
     sprintf(cmd, ":%s%s#", command==MOTION_START?"M":"Q", dir == DIRECTION_WEST?"w":"e");
 
@@ -1815,7 +1847,8 @@ bool StarGoTelescope::setGotoHome()
 *******************************************************************************/
 void StarGoTelescope::WaitParkOptionReady()
 {
-    // Check if waiting for park position to set. Reset in Abort())
+    LOGF_DEBUG("%s ParkOptionBusy: %d TrackState: %d", __FUNCTION__, ParkOptionBusy, TrackState);
+   // Check if waiting for park position to set. Reset in Abort())
     if (!ParkOptionBusy) return;
 
     // Check if the mount has stopped slewing
@@ -1828,27 +1861,43 @@ void StarGoTelescope::WaitParkOptionReady()
     if (TrackState != SCOPE_IDLE &&
        TrackState != SCOPE_TRACKING ) return;
 
-    double longitude;
-    bool rc = setParkPosition();
     ParkOptionSP.s = IPS_ALERT;
-    if (!rc)
+    if (!setParkPosition())
     {
         LOG_WARN("Unable to set Park Position.");
     }
-    else if (!getSiteLongitude(&longitude))
-    {
-        LOG_WARN("Failed to get site Longitude from device.");
-    }
     else
     {
-    // determine local sidereal time
-        double lst = get_local_sidereal_time(longitude);
-        SetAxis1Park(lst - EqN[AXIS_RA].value);
-        SetAxis2Park(EqN[AXIS_DE].value);
+        updateParkPosition();
         ParkOptionSP.s = IPS_OK;
     }
     IDSetSwitch(&ParkOptionSP, nullptr);
     ParkOptionBusy = false;
+    return;
+}
+
+/*******************************************************************************
+**
+*******************************************************************************/
+void StarGoTelescope::updateParkPosition()
+{
+    LOGF_DEBUG("%s TrackState: %d", __FUNCTION__, TrackState);
+    // Check if the mount is parked
+    //        SCOPE_PARKED      ready
+    // If it has then update park position. Otherwise wait for next call
+    if (TrackState != SCOPE_PARKED ) return;
+
+    double lst;
+    if (!getLST(&lst))
+    {
+        LOG_WARN("Failed to get site LST from device.");
+    }
+    else
+    {
+    // Update HA and Dec of parking position
+        SetAxis1Park(lst - EqN[AXIS_RA].value);
+        SetAxis2Park(EqN[AXIS_DE].value);
+    }
     return;
 }
 
@@ -1991,26 +2040,43 @@ bool StarGoTelescope::setCenterFindSpeed(int center, int find )
  * Set centre and find speeds
  * X03aaaabbbb aaaa=center speed; bbbb=findspeed
  * valid center speeds:
-2x  = 007:  = 0x7a = 122
-3x  = 0051  = 0x51 = 81
-4x  = 003=  = 0x3d = 61
-6x  = 0028  = 0x28 = 40
-8x  = 001>  = 0x1e = 30
-10x = 0018  = 0x18 = 24
-Parameter = 240/factor
+*** deprecated 2x  = 007:  = 0x7a = 122
+*** deprecated 3x  = 0051  = 0x51 = 81
+*** deprecated 4x  = 003=  = 0x3d = 61
+*** deprecated 6x  = 0028  = 0x28 = 40
+*** deprecated 8x  = 001>  = 0x1e = 30
+*** deprecated 10x = 0018  = 0x18 = 24
+*** deprecated Parameter = 240/factor
+
+2x  = 0042  = 0x42 = 66
+3x  = 002<  = 0x2c = 44
+4x  = 0021  = 0x21 = 33
+6x  = 0016  = 0x16 = 22
+8x  = 0010  = 0x10 = 16
+10x = 000=  = 0x0d = 13
+
 valid find speeds:
-10x  = 0031  = x31 = 49
-15x  = 0020  = x20 = 32
-20x  = 0018  = x18 = 24
-30x  = 0010  = x10 = 16
-50x  = 000:  = x0a = 10
-75x  = 0006  = x06 = 6
-100x = 0005  = x05 = 5
-150x = 0003  = x03 = 3
-Parameter = 480/factor
+*** deprecated 10x  = 0031  = x31 = 49
+*** deprecated 15x  = 0020  = x20 = 32
+*** deprecated 20x  = 0018  = x18 = 24
+*** deprecated 30x  = 0010  = x10 = 16
+*** deprecated 50x  = 000:  = x0a = 10
+*** deprecated 75x  = 0006  = x06 = 6
+*** deprecated 100x = 0005  = x05 = 5
+*** deprecated 150x = 0003  = x03 = 3
+*** deprecated Parameter = 480/factor
+
+10x  = 001:  = x1a = 26
+15x  = 0012  = x12 = 18
+20x  = 000=  = x0d = 13
+30x  = 0009  = x09 = 9
+50x  = 0005  = x05 = 5
+75x  = 0004  = x04 = 4
+100x = 0003  = x03 = 3
+150x = 0002  = x02 = 2
 */
-    double centerSpeeds[6]={122,81,61,40,30,24};
-    double findSpeeds[8]={49,32,24,16,10,6,5,3};
+    double centerSpeeds[6]={66,44,33,22,16,13};
+    double findSpeeds[8]={26,18,13,9,5,4,3,2};
 
     char cmd[AVALON_COMMAND_BUFFER_LENGTH] = {0};
     char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
@@ -2275,6 +2341,7 @@ bool StarGoTelescope::getTrackingAdjustment(double *valueRA)
     /*
      * :X42# to read the tracking adjustment value as orsRRR#
      * :X44# to read the tracking adjustment value as odsDDD#
+     * if :X41 has invalid parameters, then :X42 also returns invalid parameters
 
      */
     LOG_DEBUG(__FUNCTION__);
@@ -2284,7 +2351,7 @@ bool StarGoTelescope::getTrackingAdjustment(double *valueRA)
     if (!sendQuery(":X42#", response))
         return false;
 
-    if (sscanf(response, "or%04i#", &raValue) < 1)
+    if (sscanf(response, "or%04d#", &raValue) < 1)
     {
         LOG_ERROR("Unable to parse tracking adjustment response");
         return false;
@@ -2303,8 +2370,7 @@ bool StarGoTelescope::setTrackingAdjustment(double adjustRA)
     /*
      * :X41sRRR# to adjust the RA tracking speed where s is the sign + or -  and RRR are three digits whose meaning is parts per 10000 of  RA correction .
      * :X43sDDD# to fix the cf DEC offset
-     X41 command only applies whole number percentages i.e +/- 100, 200, 300, 400, 500.
-
+     * :X41 accepts invalid parameters. Not sure what it does with them
      :X1Ennnn # where nnnn is between 0500 and 1500. 1000 represents no adjustment and 0500 is -5% and 1500 is +5%
      Ascertained from the StarGo ASCOM driver
      */
@@ -3190,6 +3256,11 @@ bool StarGoTelescope::setTorque(int torque)
 //    LOGF_DEBUG("%s %s", __FUNCTION__, "Not Implemented");
     char cmd[AVALON_COMMAND_BUFFER_LENGTH] = {0};
     char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
+
+// Consider rounding to nearest 10%
+//  torque = torque/10 * 10;
+// Need to send the PAUSE commnd to reset the mount
+// Need to see how Torque is then set on restart - presumably from the config file
     sprintf(cmd, ":TTT%03d", torque);
     if (sendQuery(cmd, response))
     {

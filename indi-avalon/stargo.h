@@ -99,7 +99,6 @@ public:
     virtual bool Handshake() override;
     virtual bool ISNewSwitch(const char *dev, const char *name, ISState *states, char *names[], int n) override;
     virtual bool ISNewNumber(const char *dev, const char *name, double values[], char *names[], int n) override;
-//    virtual void ISGetProperties(const char *dev) override;
     virtual bool initProperties() override;
     virtual bool updateProperties() override;
     virtual bool saveConfigItems(FILE *fp) override;
@@ -190,7 +189,6 @@ protected:
     uint8_t DBG_SCOPE;
 
     double targetRA, targetDEC;
-//    double currentRA, currentDEC;
     
     bool ParkOptionBusy { false };
 
@@ -253,6 +251,7 @@ protected:
     bool setParkPosition();
     bool setGotoHome();
     void WaitParkOptionReady();
+    void updateParkPosition();
 
 // Slewing
     bool getMaxSlewSpeed(int *slewSpeed);
@@ -356,8 +355,7 @@ inline double StarGoTelescope::ahex2int(char* ahex)
 //Convert to ASCII using Hex+48
 inline void StarGoTelescope::int2ahex(char * ahex, double val)
 {
-    int ival = static_cast<int>(round(val));
-//    char ahex[9];
+    uint32_t ival = static_cast<uint32_t>(round(val));
     for(int i=7; i>=0; i--)
     {
         ahex[i] = (ival & 0x0000000F) + 48;
