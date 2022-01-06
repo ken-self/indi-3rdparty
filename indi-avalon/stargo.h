@@ -262,10 +262,10 @@ protected:
     bool getTrackingAdjustment(double *valueRA);
     bool setTrackingAdjustment(double adjustRA);
     bool isGuiding();
-    bool setGuidingSpeeds(int raSpeed, int decSpeed);
     bool getGuidingSpeeds(int *raSpeed, int *decSpeed);
-    bool setST4Enabled(bool enabled);
+    bool setGuidingSpeeds(int raSpeed, int decSpeed);
     bool getST4Status(bool *isEnabled);
+    bool setST4Enabled(bool enabled);
     int SendPulseCmd(int8_t direction, uint32_t duration_msec) ;
 
 // Misc
