@@ -478,10 +478,20 @@ bool StarGoTelescope::initProperties()
     IUFillText(&MountFirmwareInfoT[2], "MOUNT_TCB", "TCB", "");
     IUFillTextVector(&MountFirmwareInfoTP, MountFirmwareInfoT, 3, getDeviceName(), "MOUNT_INFO", "Mount Info", INFO_TAB, IP_RO, 60, IPS_OK);
 
-    // Gear Ratios
-    IUFillNumber(&GearRatioN[0], "GEAR_RATIO_RA", "RA Gearing", "%.2f", 0.0, 1000.0, 1, 0);
-    IUFillNumber(&GearRatioN[1], "GEAR_RATIO_DEC", "DEC Gearing", "%.2f", 0.0, 1000.0, 1, 0);
-    IUFillNumberVector(&GearRatioNP, GearRatioN, 2, getDeviceName(), "Gear Ratio","Gearing", INFO_TAB, IP_RO, 60, IPS_IDLE);
+    // Guiding settings
+    IUFillNumber(&GuidingSpeedN[0], "GUIDE_RATE_WE", "RA Speed", "%.2f", 0.0, 2.0, 0.1, 0);
+    IUFillNumber(&GuidingSpeedN[1], "GUIDE_RATE_NS", "DEC Speed", "%.2f", 0.0, 2.0, 0.1, 0);
+    IUFillNumberVector(&GuidingSpeedNP, GuidingSpeedN, 2, getDeviceName(), "GUIDE_RATE","Autoguiding", GUIDE_TAB, IP_RW, 60, IPS_IDLE);
+
+    // ST4 guiding enabled / disabled
+    IUFillSwitch(&ST4StatusS[INDI_ENABLED], "INDI_ENABLED", "Enabled", ISS_OFF);
+    IUFillSwitch(&ST4StatusS[INDI_DISABLED], "INDI_DISABLED", "Disabled", ISS_OFF);
+    IUFillSwitchVector(&ST4StatusSP, ST4StatusS, 2, getDeviceName(), "ST4", "ST4", GUIDE_TAB, IP_RW, ISR_1OFMANY, 60, IPS_IDLE);
+
+    // keypad enabled / disabled
+    IUFillSwitch(&KeypadStatusS[INDI_ENABLED], "INDI_ENABLED", "Enabled", ISS_ON);
+    IUFillSwitch(&KeypadStatusS[INDI_DISABLED], "INDI_DISABLED", "Disabled", ISS_OFF);
+    IUFillSwitchVector(&KeypadStatusSP, KeypadStatusS, 2, getDeviceName(), "Keypad", "Keypad", MOTION_TAB, IP_RW, ISR_1OFMANY, 60, IPS_IDLE);
 
     // Max Slew Speeds
     IUFillSwitch(&MaxSlewSpeedS[0], "MAX_SLEW_SPEED_LOW", "Low", ISS_OFF);
@@ -513,6 +523,30 @@ bool StarGoTelescope::initProperties()
     IUFillSwitchVector(&FindSpeedSP, FindSpeedS, 8, getDeviceName(), "FIND_SPEED", "Find Speed", MOTION_TAB,
                        IP_RW, ISR_1OFMANY, 60, IPS_IDLE);
 
+    // Tracking Adjustment
+    IUFillNumber(&TrackingAdjustmentN[0], "RA_TRACK_ADJ", "RA Tracking Adjust (%)", "%.2f", -5.0, 5.0, 0.01, 0);
+    IUFillNumberVector(&TrackingAdjustmentNP, TrackingAdjustmentN, 1, getDeviceName(), "Track Adjust","Tracking", MOTION_TAB, IP_RW, 60, IPS_IDLE);
+
+    // meridian flip
+    IUFillSwitch(&MeridianFlipModeS[0], "MERIDIAN_FLIP_AUTO", "Auto", ISS_OFF);
+    IUFillSwitch(&MeridianFlipModeS[1], "MERIDIAN_FLIP_DISABLED", "Disabled", ISS_OFF);
+    IUFillSwitch(&MeridianFlipModeS[2], "MERIDIAN_FLIP_FORCED", "Forced", ISS_OFF);
+    IUFillSwitchVector(&MeridianFlipModeSP, MeridianFlipModeS, 3, getDeviceName(), "MERIDIAN_FLIP_MODE", "Meridian Flip", MOTION_TAB, IP_RW, ISR_1OFMANY, 60, IPS_IDLE);
+
+    // mount command delay
+    IUFillNumber(&MountRequestDelayN[0], "MOUNT_REQUEST_DELAY", "Request Delay (ms)", "%.0f", 0.0, 1000, 1.0, 50.0);
+    IUFillNumberVector(&MountRequestDelayNP, MountRequestDelayN, 1, getDeviceName(), "REQUEST_DELAY", "StarGO", OPTIONS_TAB, IP_RW, 60, IPS_OK);
+
+    // HA and LST for reference
+    IUFillNumber(&HaLstN[0], "HA", "HA (hh:mm:ss)", "%010.6m", 0, 24, 0, 0);
+    IUFillNumber(&HaLstN[1], "LST", "LST (hh:mm:ss)", "%010.6m", 0, 24, 0, 0);
+    IUFillNumberVector(&HaLstNP, HaLstN, 2, getDeviceName(), "HA-LST", "Hour Angle", SITE_TAB, IP_RO, 60, IPS_IDLE);
+
+    // Gear Ratios
+    IUFillNumber(&GearRatioN[0], "GEAR_RATIO_RA", "RA Gearing", "%.2f", 0.0, 1000.0, 1, 0);
+    IUFillNumber(&GearRatioN[1], "GEAR_RATIO_DEC", "DEC Gearing", "%.2f", 0.0, 1000.0, 1, 0);
+    IUFillNumberVector(&GearRatioNP, GearRatioN, 2, getDeviceName(), "Gear Ratio","Gearing", INFO_TAB, IP_RO, 60, IPS_IDLE);
+
     // RA and Dec motor direction
     IUFillSwitch(&RaMotorReverseS[INDI_ENABLED], "INDI_ENABLED", "Reverse", ISS_OFF);
     IUFillSwitch(&RaMotorReverseS[INDI_DISABLED], "INDI_DISABLED", "Normal", ISS_OFF);
@@ -531,43 +565,10 @@ bool StarGoTelescope::initProperties()
     IUFillNumber(&MotorStepN[1], "MOTOR_STEP_DEC", "DEC Step Pos", "%.2f", -100000.0, 100000.0, 1, 0);
     IUFillNumberVector(&MotorStepNP, MotorStepN, 2, getDeviceName(), "Motor Steps","Position", INFO_TAB, IP_RO, 60, IPS_IDLE);
 
-    // Guiding settings
-    IUFillNumber(&GuidingSpeedN[0], "GUIDE_RATE_WE", "RA Speed", "%.2f", 0.0, 2.0, 0.1, 0);
-    IUFillNumber(&GuidingSpeedN[1], "GUIDE_RATE_NS", "DEC Speed", "%.2f", 0.0, 2.0, 0.1, 0);
-    IUFillNumberVector(&GuidingSpeedNP, GuidingSpeedN, 2, getDeviceName(), "GUIDE_RATE","Autoguiding", GUIDE_TAB, IP_RW, 60, IPS_IDLE);
-
-    // Tracking Adjustment
-    IUFillNumber(&TrackingAdjustmentN[0], "RA_TRACK_ADJ", "RA Tracking Adjust (%)", "%.2f", -5.0, 5.0, 0.01, 0);
-    IUFillNumberVector(&TrackingAdjustmentNP, TrackingAdjustmentN, 1, getDeviceName(), "Track Adjust","Tracking", MOTION_TAB, IP_RW, 60, IPS_IDLE);
-
     // Auto Tracking Adjustment
     IUFillSwitch(&RaAutoAdjustS[INDI_ENABLED], "INDI_ENABLED", "Enabled", ISS_OFF);
     IUFillSwitch(&RaAutoAdjustS[INDI_DISABLED], "INDI_DISABLED", "Disabled", ISS_ON);
     IUFillSwitchVector(&RaAutoAdjustSP, RaAutoAdjustS, 2, getDeviceName(), "RA_AUTO_ADJ", "RA Auto Adjust", GUIDE_TAB, IP_RW, ISR_1OFMANY, 60, IPS_IDLE);
-
-
-    IUFillSwitch(&ST4StatusS[INDI_ENABLED], "INDI_ENABLED", "Enabled", ISS_OFF);
-    IUFillSwitch(&ST4StatusS[INDI_DISABLED], "INDI_DISABLED", "Disabled", ISS_OFF);
-    IUFillSwitchVector(&ST4StatusSP, ST4StatusS, 2, getDeviceName(), "ST4", "ST4", GUIDE_TAB, IP_RW, ISR_1OFMANY, 60, IPS_IDLE);
-
-    // keypad enabled / disabled
-    IUFillSwitch(&KeypadStatusS[INDI_ENABLED], "INDI_ENABLED", "Enabled", ISS_ON);
-    IUFillSwitch(&KeypadStatusS[INDI_DISABLED], "INDI_DISABLED", "Disabled", ISS_OFF);
-    IUFillSwitchVector(&KeypadStatusSP, KeypadStatusS, 2, getDeviceName(), "Keypad", "Keypad", MOTION_TAB, IP_RW, ISR_1OFMANY, 60, IPS_IDLE);
-
-    // meridian flip
-    IUFillSwitch(&MeridianFlipModeS[0], "MERIDIAN_FLIP_AUTO", "Auto", ISS_OFF);
-    IUFillSwitch(&MeridianFlipModeS[1], "MERIDIAN_FLIP_DISABLED", "Disabled", ISS_OFF);
-    IUFillSwitch(&MeridianFlipModeS[2], "MERIDIAN_FLIP_FORCED", "Forced", ISS_OFF);
-    IUFillSwitchVector(&MeridianFlipModeSP, MeridianFlipModeS, 3, getDeviceName(), "MERIDIAN_FLIP_MODE", "Meridian Flip", MOTION_TAB, IP_RW, ISR_1OFMANY, 60, IPS_IDLE);
-
-    // mount command delay
-    IUFillNumber(&MountRequestDelayN[0], "MOUNT_REQUEST_DELAY", "Request Delay (ms)", "%.0f", 0.0, 1000, 1.0, 50.0);
-    IUFillNumberVector(&MountRequestDelayNP, MountRequestDelayN, 1, getDeviceName(), "REQUEST_DELAY", "StarGO", OPTIONS_TAB, IP_RW, 60, IPS_OK);
-
-    IUFillNumber(&HaLstN[0], "HA", "HA (hh:mm:ss)", "%010.6m", 0, 24, 0, 0);
-    IUFillNumber(&HaLstN[1], "LST", "LST (hh:mm:ss)", "%010.6m", 0, 24, 0, 0);
-    IUFillNumberVector(&HaLstNP, HaLstN, 2, getDeviceName(), "HA-LST", "Hour Angle", SITE_TAB, IP_RO, 60, IPS_IDLE);
 
     return true;
 }
@@ -1624,7 +1625,8 @@ bool StarGoTelescope::setLocalDate(uint8_t days, uint8_t months, uint16_t years)
         LOG_ERROR("Failed to set date");
         return false;
     }
-
+    
+// X50 does not get a response so this is unnecessary
     if (response[0] == '0')
     {
         LOG_ERROR("Invalid reponse to set date");
@@ -1690,7 +1692,7 @@ bool StarGoTelescope::setUTCOffset(double offset)
     LOGF_DEBUG("%s offset=%lf", __FUNCTION__, offset);
     char cmd[AVALON_COMMAND_BUFFER_LENGTH]={0};
     char response[AVALON_RESPONSE_BUFFER_LENGTH]={0};
-    int hours = offset * -1.0;
+    int hours = static_cast<int>(offset * -1.0);
 
     snprintf(cmd, sizeof(cmd), ":SG %+03d#", hours);
 
@@ -1721,7 +1723,7 @@ bool StarGoTelescope::getParkHomeStatus (char* status)
         return false;
     }
 
-    if (! sscanf(response, "p%s[012AB]", status))
+    if (! sscanf(response, "p%32s[012AB]", status))
     {
         LOGF_ERROR("Unexpected park home status response '%s'.", response);
         return false;
@@ -2691,8 +2693,8 @@ void StarGoTelescope::getBasicData()
         int raSpeed, decSpeed;
         if (getGuidingSpeeds(&raSpeed, &decSpeed))
         {
-            GuidingSpeedN[0].value =  raSpeed/100.0;
-            GuidingSpeedN[1].value =  decSpeed/100.0;
+            GuidingSpeedN[0].value =  static_cast<double>(raSpeed / 100.0);
+            GuidingSpeedN[1].value =  static_cast<double>(decSpeed / 100.0);
             GuidingSpeedNP.s = IPS_OK;
         }
         else
