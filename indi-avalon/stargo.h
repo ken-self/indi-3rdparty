@@ -89,9 +89,9 @@ public:
         DIRECTION_NORMAL=0,
         DIRECTION_REVERSE=1
     };
-    TrackMode CurrentTrackMode;
-    MotorsState CurrentMotorsState;
-    TelescopeSlewRate CurrentSlewRate;
+    TrackMode CurrentTrackMode {TRACK_SIDEREAL};
+    MotorsState CurrentMotorsState {MOTORS_OFF};
+    TelescopeSlewRate CurrentSlewRate {SLEW_MAX};
 
     StarGoTelescope();
 
