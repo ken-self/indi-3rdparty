@@ -112,7 +112,35 @@ protected:
     // firmware info
     ITextVectorProperty MountFirmwareInfoTP;
     IText MountFirmwareInfoT[3] = {};
-    
+
+    // goto home
+    ISwitchVectorProperty MountGotoHomeSP;
+    ISwitch MountGotoHomeS[1];
+
+    // Guiding
+    INumberVectorProperty GuidingSpeedNP;
+    INumber GuidingSpeedN[2];
+
+    // ST4 status
+    ISwitchVectorProperty ST4StatusSP;
+    ISwitch ST4StatusS[2];
+
+    // Keypad
+    ISwitchVectorProperty KeypadStatusSP;
+    ISwitch KeypadStatusS[2];
+
+    // Max slew speed
+    ISwitchVectorProperty MaxSlewSpeedSP;
+    ISwitch MaxSlewSpeedS[4];
+
+    // Center speeds
+    ISwitchVectorProperty CenterSpeedSP;
+    ISwitch CenterSpeedS[6];
+
+    // Center and Find speeds
+    ISwitchVectorProperty FindSpeedSP;
+    ISwitch FindSpeedS[8];
+
     // RA Track Adjust
     INumberVectorProperty TrackingAdjustmentNP;
     INumber TrackingAdjustmentN[1];
@@ -120,6 +148,14 @@ protected:
     // Auto RA Tracking Adjustment
     ISwitchVectorProperty RaAutoAdjustSP;
     ISwitch RaAutoAdjustS[2];
+
+    // meridian flip
+    ISwitchVectorProperty MeridianFlipModeSP;
+    ISwitch MeridianFlipModeS[3];
+
+    // configurable delay between two commands to avoid flooding StarGO
+    INumberVectorProperty MountRequestDelayNP;
+    INumber MountRequestDelayN[1];
 
     // Gear ratios
     INumberVectorProperty GearRatioNP;
@@ -135,64 +171,21 @@ protected:
     ISwitchVectorProperty DecMotorReverseSP;
     ISwitch DecMotorReverseS[2];
 
-    // Max slew speed
-    ISwitchVectorProperty MaxSlewSpeedSP;
-    ISwitch MaxSlewSpeedS[4];
-
-    // Center speeds
-    ISwitchVectorProperty CenterSpeedSP;
-    ISwitch CenterSpeedS[6];
-
-    // Center and FInd speeds
-    ISwitchVectorProperty FindSpeedSP;
-    ISwitch FindSpeedS[8];
-
     // Motor Step Position
     INumberVectorProperty MotorStepNP;
     INumber MotorStepN[2];
-
-    // goto home
-    ISwitchVectorProperty MountGotoHomeSP;
-    ISwitch MountGotoHomeS[1];
-
-    // parking position
-    ISwitchVectorProperty MountSetParkSP;
-    ISwitch MountSetParkS[1];
-
-    // Guiding
-    INumberVectorProperty GuidingSpeedNP;
-    INumber GuidingSpeedN[2];
-
-    // ST4 status
-    ISwitchVectorProperty ST4StatusSP;
-    ISwitch ST4StatusS[2];
-
-    // Keypad
-    ISwitchVectorProperty KeypadStatusSP;
-    ISwitch KeypadStatusS[2];
-
-    // meridian flip
-    ISwitchVectorProperty MeridianFlipModeSP;
-    ISwitch MeridianFlipModeS[3];
-
-    // configurable delay between two commands to avoid flooding StarGO
-    INumberVectorProperty MountRequestDelayNP;
-    INumber MountRequestDelayN[1];
 
     // HA and LST
     INumberVectorProperty HaLstNP;
     INumber HaLstN[2];
 
     bool usePulseCommand { true };
+    struct timespec mount_request_delay = {0, 50000000L};
 
     bool getTimeOnStartup=true, getLocationOnStartup=true;
     uint8_t DBG_SCOPE;
 
-    double targetRA, targetDEC;
-    
     bool ParkOptionBusy { false };
-
-    struct timespec mount_request_delay = {0, 50000000L};
 
 /***********************************************************************************************
 * Virtual functions
