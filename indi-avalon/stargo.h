@@ -22,7 +22,7 @@
 #ifndef STARGO_TELESCOPE_H
 #define STARGO_TELESCOPE_H
 
-//#pragma once
+#pragma once
 
 #include <indiguiderinterface.h>
 #include <inditelescope.h>
@@ -63,31 +63,31 @@ class StarGoTelescope : public INDI::Telescope, public INDI::GuiderInterface
 public:
     enum TrackMode
     {
-        TRACK_SIDEREAL=0, //=Telescope::TelescopeTrackMode::TRACK_SIDEREAL,
-        TRACK_SOLAR=1, //=Telescope::TelescopeTrackMode::TRACK_SOLAR,
-        TRACK_LUNAR=2, //=Telescope::TelescopeTrackMode::TRACK_LUNAR,
-        TRACK_NONE=3
+        TRACK_SIDEREAL = 0, // = Telescope::TelescopeTrackMode::TRACK_SIDEREAL,
+        TRACK_SOLAR = 1, // = Telescope::TelescopeTrackMode::TRACK_SOLAR,
+        TRACK_LUNAR = 2, // = Telescope::TelescopeTrackMode::TRACK_LUNAR,
+        TRACK_NONE = 3
     };
     enum MotorsState
     {
-        MOTORS_OFF=0,
-        MOTORS_DEC_ONLY=1,
-        MOTORS_RA_ONLY=2,
-        MOTORS_ON=3
+        MOTORS_OFF = 0,
+        MOTORS_DEC_ONLY = 1,
+        MOTORS_RA_ONLY = 2,
+        MOTORS_ON = 3
     };
     enum MotionState
     {
-        MOTION_STATIC=0,
-        MOTION_TRACK=1,
-        MOTION_ACCEL=2,
-        MOTION_DECEL=3,
-        MOTION_GUIDE=4,
-        MOTION_SLEW=5
+        MOTION_STATIC = 0,
+        MOTION_TRACK = 1,
+        MOTION_ACCEL = 2,
+        MOTION_DECEL = 3,
+        MOTION_GUIDE = 4,
+        MOTION_SLEW = 5
     };
     enum MotorReverseection
     {
-        DIRECTION_NORMAL=0,
-        DIRECTION_REVERSE=1
+        DIRECTION_NORMAL = 0,
+        DIRECTION_REVERSE = 1
     };
     TrackMode CurrentTrackMode {TRACK_SIDEREAL};
     MotorsState CurrentMotorsState {MOTORS_OFF};
@@ -193,7 +193,6 @@ protected:
         // Telescope:: virtual functions
     virtual bool ReadScopeStatus() override;
     virtual bool updateLocation(double latitude, double longitude, double elevation) override;
-//    virtual bool updateTime(ln_date *utc, double utc_offset);
     virtual bool Sync(double ra, double dec) override;
     virtual bool SetParkPosition(double Axis1Value, double Axis2Value) override;
     virtual bool SetDefaultPark() override;
@@ -212,7 +211,6 @@ protected:
     virtual IPState GuideSouth(uint32_t ms) override;
     virtual IPState GuideEast(uint32_t ms) override;
     virtual IPState GuideWest(uint32_t ms) override;
-//    virtual void GuideComplete(INDI_EQ_AXIS axis) override;
     virtual bool MoveNS(INDI_DIR_NS dir, TelescopeMotionCommand command) override;
     virtual bool MoveWE(INDI_DIR_WE dir, TelescopeMotionCommand command) override;
 
@@ -261,12 +259,12 @@ protected:
 // autoguiding and tracking
     bool getTrackingAdjustment(double *valueRA);
     bool setTrackingAdjustment(double adjustRA);
-    bool isGuiding();
     bool getGuidingSpeeds(int *raSpeed, int *decSpeed);
     bool setGuidingSpeeds(int raSpeed, int decSpeed);
     bool getST4Status(bool *isEnabled);
     bool setST4Enabled(bool enabled);
     int SendPulseCmd(int8_t direction, uint32_t duration_msec) ;
+    bool isGuiding();
 
 // Misc
     void getBasicData();
