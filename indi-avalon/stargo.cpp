@@ -2153,6 +2153,7 @@ bool StarGoTelescope::setST4Enabled(bool enabled)
     if (sendQuery(cmd, response))
     {
         LOG_INFO(enabled ? "ST4 port enabled." : "ST4 port disabled.");
+        usePulseCommand = !(enabled);
         return true;
     }
     else
@@ -2264,7 +2265,7 @@ void StarGoTelescope::getBasicData()
         {
             KeypadStatusSP.s = IPS_ALERT;
         }
-        IDSetSwitch(&ST4StatusSP, nullptr);
+        IDSetSwitch(&KeypadStatusSP, nullptr);
 
         int index;
         if (GetMeridianFlipMode(&index))
