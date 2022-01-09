@@ -3518,7 +3518,7 @@ void StarGoTelescope::AutoAdjust::reset()
 *******************************************************************************/
 bool StarGoTelescope::AutoAdjust::setRaAdjust(int8_t direction, uint32_t duration_msec)
 {
-    LOGf_DEBUG("%S Dir: %d; Dur: %d", __FUNCTION__, direction, duration_msec);
+    LOGF_DEBUG("%S Dir: %d; Dur: %d", __FUNCTION__, direction, duration_msec);
     if (!enabled)
     {
         LOG_ERROR("Auto tracking adjustment is currently DISABLED");
@@ -3598,7 +3598,7 @@ bool StarGoTelescope::AutoAdjust::setRaAdjust(int8_t direction, uint32_t duratio
     sumy  += ynewest;
     sumxy += xnewest*ynewest;
     sumx2 += xnewest*xnewest;
-    LOGF_DEBUG("Samples: %d; Track error Now: %.3f", x.size, y.back());
+    LOGF_DEBUG("Samples: %d; Track error Now: %.3f", x.size(), y.back());
 
     if (x.size() < nmin)
     {
