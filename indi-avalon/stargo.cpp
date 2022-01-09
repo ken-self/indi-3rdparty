@@ -3485,8 +3485,8 @@ bool StarGoTelescope::transmit(const char* buffer)
 StarGoTelescope::AutoAdjust::AutoAdjust(StarGoTelescope *ptr)
 {
     p = ptr;
-    xmin = 20000;   // Minimum duration of set in milliseconds
-    xmax = 30000;   // Maximum gap between samples
+    xmin = 30000;   // Minimum duration of set in milliseconds
+    xmax = 20000;   // Maximum gap between samples (must be < xmin)
     nmin = 5;       // Minimum number of samples
     reset();
 }
@@ -3518,7 +3518,7 @@ void StarGoTelescope::AutoAdjust::reset()
 *******************************************************************************/
 bool StarGoTelescope::AutoAdjust::setRaAdjust(int8_t direction, uint32_t duration_msec)
 {
-    LOG_DEBUG(__FUNCTION__);
+    LOGf_DEBUG("%S Dir: %d; Dur: %d", __FUNCTION__, direction, duration_msec);
     if (!enabled)
     {
         LOG_ERROR("Auto tracking adjustment is currently DISABLED");
@@ -3555,6 +3555,8 @@ bool StarGoTelescope::AutoAdjust::setRaAdjust(int8_t direction, uint32_t duratio
 
 // Calculate number of milliseconds since the driver was started
     double xnewest = std::chrono::duration<double,std::milli>(std::chrono::system_clock::now() - start).count();
+    LOGF_DEBUG("ms: %.0f; Guide: %.1f; Track: %.2f;", xnewest, guidingSpeed, trackAdjust);
+
     double ddir = 0.0;
     if (direction == STARGO_EAST)
     {
@@ -3562,7 +3564,7 @@ bool StarGoTelescope::AutoAdjust::setRaAdjust(int8_t direction, uint32_t duratio
     }
     else if (direction == STARGO_WEST)
     {
-        ddir = -1.0;
+        ddir = 1.0;
     }
     else
     {
@@ -3579,7 +3581,9 @@ bool StarGoTelescope::AutoAdjust::setRaAdjust(int8_t direction, uint32_t duratio
 
     // Calculate the cumulative corrections so far in milliseconds normalised to sidereal rate
     double ynewest = ddir * static_cast<double>(duration_msec) * guidingSpeed * trackAdjust + (y.empty() ? 0.0: y.back());
-    while (xnewest - x[1] > xmin && x.size() > 2) // enough samples. lose the excess
+    LOGF_DEBUG("Samples: %d; Track error Was %.3f; Now: %.3f", x.size(), y.back(), ynewest);
+
+    while (xnewest - x[1] > xmin && x.size() > 2) // enough duration since second sample - lose the first one and repeat
     {
         sumx  -= x.front();
         sumy  -= y.front();
@@ -3594,16 +3598,18 @@ bool StarGoTelescope::AutoAdjust::setRaAdjust(int8_t direction, uint32_t duratio
     sumy  += ynewest;
     sumxy += xnewest*ynewest;
     sumx2 += xnewest*xnewest;
+    LOGF_DEBUG("Samples: %d; Track error Now: %.3f", x.size, y.back());
 
     if (x.size() < nmin)
     {
-        LOG_INFO("RA auto adjust needs more samples");
+        LOGF_INFO("RA auto adjust needs more samples: %d / %d", x.size(), nmin);
         return true; // not enough samples
     }
 
     uint32_t n = x.size();
-    double slope = (n*sumxy - sumx*sumy)/(n*sumx2 - sumy*sumy);
-    double adjustRA = slope*100.0;  // Convert to a percentage of Sidereal rate
+//    double intercept = (n*sumxy - sumx*sumy)/(n*sumx2 - sumx*sumx);
+    double slope = (sumy*sumx2 - sumx*sumxy)/(n*sumx2 - sumx*sumx);
+    double adjustRA = slope*100.0;  // Convert to a percentage (of Sidereal rate)
     p->setTrackingAdjustment(adjustRA);
     LOGF_INFO("RA auto adjust rate to %.2f", adjustRA);
     return true;
