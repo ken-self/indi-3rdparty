@@ -2373,6 +2373,7 @@ bool StarGoTelescope::getTrackingAdjustment(double *valueRA)
     }
 
     *valueRA = static_cast<double>(raValue / 100.0);
+    LOGF_DEBUG("%s RA adj: %.3f", __FUNCTION__, *valueRA);
     return true;
 }
 
@@ -2381,7 +2382,7 @@ bool StarGoTelescope::getTrackingAdjustment(double *valueRA)
 *******************************************************************************/
 bool StarGoTelescope::setTrackingAdjustment(double adjustRA)
 {
-    LOG_DEBUG(__FUNCTION__);
+    LOGF_DEBUG("%s RA adj: %.3f", __FUNCTION__, adjustRA);
     /*
      * :X41sRRR# to adjust the RA tracking speed where s is the sign + or -  and RRR are three digits whose meaning is parts
      * per 10000 of  RA correction .
