@@ -3582,7 +3582,7 @@ bool StarGoTelescope::AutoAdjust::setRaAdjust(int8_t direction, uint32_t duratio
 
     // Calculate the cumulative corrections so far in milliseconds normalised to sidereal rate
     double ynewest = ddir * static_cast<double>(duration_msec) * guidingSpeed * trackAdjust + (y.empty() ? 0.0: y.back());
-    LOGF_DEBUG("Samples: %d; Track error Was %.3f; Now: %.3f", x.size(), y.back(), ynewest);
+    LOGF_DEBUG("Samples: %d; Track error Was %.3f; Now: %.3f", x.size(), (y.empty() ? 0.0: y.back()), ynewest);
 
     while (xnewest - x[1] > xmin && x.size() > 2) // enough duration since second sample - lose the first one and repeat
     {
