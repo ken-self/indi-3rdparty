@@ -3608,8 +3608,8 @@ bool StarGoTelescope::AutoAdjust::setRaAdjust(int8_t direction, uint32_t duratio
     }
 
     uint32_t n = x.size();
-//    double intercept = (n*sumxy - sumx*sumy)/(n*sumx2 - sumx*sumx);
-    double slope = (sumy*sumx2 - sumx*sumxy)/(n*sumx2 - sumx*sumx);
+    double slope = (n*sumxy - sumx*sumy)/(n*sumx2 - sumx*sumx);
+//    double intercept = (sumy*sumx2 - sumx*sumxy)/(n*sumx2 - sumx*sumx);
     double adjustRA = slope*100.0;  // Convert to a percentage (of Sidereal rate)
     p->setTrackingAdjustment(adjustRA);
     LOGF_INFO("RA auto adjust rate to %.2f", adjustRA);
