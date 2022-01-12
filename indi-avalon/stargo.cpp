@@ -2638,17 +2638,28 @@ bool StarGoTelescope::SendPulseCmd(int8_t direction, uint32_t duration_msec)
 // Call GuideComplete once the guiding pulse is complete.
 // Parameters: INDI_EQ_AXIS axis    Axis of completed guiding operation. AXIS_RA or AXIS_DE
 
-// If there is already a timer remove it
-    if (GuideWETID)
+    if(direction == STARGO_EAST || direction==STARGO_WEST)
     {
-        IERmTimer(GuideWETID);
-        GuideWETID = 0;
+// If there is already a timer remove it
+        if (GuideWETID)
+        {
+            IERmTimer(GuideWETID);
+            GuideWETID = 0;
+        }
+// Set up the timer;
+        GuideWETID = IEAddTimer(static_cast<int>(duration_msec), guideTimeoutHelperWE, this);
     }
-
-//    guide_direction_we = LX200_EAST;
-    GuideWETID      = IEAddTimer(static_cast<int>(duration_msec), guideTimeoutHelperWE, this);
-    return true;
-
+    else if(direction == STARGO_NORTH || direction==STARGO_SOUTH)
+    {
+// If there is already a timer remove it
+        if (GuideNSTID)
+        {
+            IERmTimer(GuideNSTID);
+            GuideNSTID = 0;
+        }
+// Set up the timer;
+        GuideNSTID = IEAddTimer(static_cast<int>(duration_msec), guideTimeoutHelperNS, this);
+    }
 // Assume the guide pulse was issued and acted upon.
     bool adjEnabled = (IUFindOnSwitchIndex(&RaAutoAdjustSP) == DefaultDevice::INDI_ENABLED);
 
@@ -2685,6 +2696,7 @@ void StarGoTelescope::guideTimeoutWE()
         GuideWENP.np[DIRECTION_WEST].value = 0;
         GuideWENP.np[DIRECTION_EAST].value = 0;
         GuideComplete(AXIS_RA);
+        LOG_DEBUG("RA Guiding completed");
         return;
     }
     IDSetNumber(&GuideWENP, nullptr);
@@ -2716,6 +2728,7 @@ void StarGoTelescope::guideTimeoutNS()
         GuideNSNP.np[DIRECTION_NORTH].value = 0;
         GuideNSNP.np[DIRECTION_SOUTH].value = 0;
         GuideComplete(AXIS_DE);
+        LOG_DEBUG("DE Guiding completed");
         return;
     }
     IDSetNumber(&GuideNSNP, nullptr);
