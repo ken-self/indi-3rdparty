@@ -3610,6 +3610,12 @@ bool StarGoTelescope::AutoAdjust::setRaAdjust(int8_t direction, uint32_t duratio
         return true; // not enough samples
     }
 
+    if (x.back() - x.front() < MIN_SET_DURATION_MS)
+    {
+        LOGF_INFO("RA auto adjust needs longer sample duration: %.3f / %.3f", x.back() - x.front(), MIN_SET_DURATION_MS);
+        return true; // not enough samples
+    }
+
     if (xnewest - lastadjust < MIN_ADJUST_PERIOD_MS)
     {
         LOGF_INFO("RA auto adjust too soon to change : %.0f / %.0f", xnewest - lastadjust, MIN_ADJUST_PERIOD_MS);
