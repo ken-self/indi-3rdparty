@@ -263,8 +263,17 @@ protected:
     bool setGuidingSpeeds(int raSpeed, int decSpeed);
     bool getST4Status(bool *isEnabled);
     bool setST4Enabled(bool enabled);
-    int SendPulseCmd(int8_t direction, uint32_t duration_msec) ;
+    bool SendPulseCmd(int8_t direction, uint32_t duration_msec) ;
     bool isGuiding();
+
+/*
+    static void guideTimeoutHelperNS(void *p);
+    static void guideTimeoutHelperWE(void *p);
+    void guideTimeoutNS();
+    void guideTimeoutWE();
+    int GuideNSTID { -1 };
+    int GuideWETID { -1 };
+*/
 
 // Misc
     void getBasicData();
