@@ -2637,7 +2637,7 @@ bool StarGoTelescope::SendPulseCmd(int8_t direction, uint32_t duration_msec)
 // use getMotorStatus(int *xSpeed, int *ySpeed). Speed 4 = Guiding
 // Call GuideComplete once the guiding pulse is complete.
 // Parameters: INDI_EQ_AXIS axis    Axis of completed guiding operation. AXIS_RA or AXIS_DE
-/*
+
 // If there is already a timer remove it
     if (GuideWETID)
     {
@@ -2645,10 +2645,9 @@ bool StarGoTelescope::SendPulseCmd(int8_t direction, uint32_t duration_msec)
         GuideWETID = 0;
     }
 
-    guide_direction_we = LX200_EAST;
+//    guide_direction_we = LX200_EAST;
     GuideWETID      = IEAddTimer(static_cast<int>(duration_msec), guideTimeoutHelperWE, this);
     return true;
-*/
 
 // Assume the guide pulse was issued and acted upon.
     bool adjEnabled = (IUFindOnSwitchIndex(&RaAutoAdjustSP) == DefaultDevice::INDI_ENABLED);
@@ -2660,7 +2659,7 @@ bool StarGoTelescope::SendPulseCmd(int8_t direction, uint32_t duration_msec)
     return true;
 }
 
-/*
+
 void StarGoTelescope::guideTimeoutHelperWE(void * p)
  {
      static_cast<StarGoTelescope *>(p)->guideTimeoutWE();
@@ -2674,20 +2673,21 @@ void StarGoTelescope::guideTimeoutWE()
     if (!getMotorStatus(&x, &y))
     {
         LOG_ERROR("Cannot determine motor status.");
-        return false;
+        GuideWENP.s = IPS_ALERT;
     }
-    if (x != MOTION_STATIC and x != MOTION_TRACK)
+    else if (x != MOTION_STATIC and x != MOTION_TRACK)
     {
         LOG_ERROR("RA motor is still moving");
         GuideWENP.s = IPS_ALERT;
-        IDSetNumber(&GuideWENP, nullptr);
     }
     else
     {
-        GuideComplete(AXIS_RA);
         GuideWENP.np[DIRECTION_WEST].value = 0;
         GuideWENP.np[DIRECTION_EAST].value = 0;
+        GuideComplete(AXIS_RA);
+        return;
     }
+    IDSetNumber(&GuideWENP, nullptr);
     GuideWETID = 0;     // Cancel the timer
 }
  
@@ -2704,24 +2704,24 @@ void StarGoTelescope::guideTimeoutNS()
     if (!getMotorStatus(&x, &y))
     {
         LOG_ERROR("Cannot determine motor status.");
-        return false;
+        GuideNSNP.s = IPS_ALERT;
     }
-    if (y != MOTION_STATIC and y != MOTION_TRACK)
+    else if (y != MOTION_STATIC and y != MOTION_TRACK)
     {
         LOG_ERROR("DE motor is still moving");
         GuideNSNP.s = IPS_ALERT;
-        IDSetNumber(&GuideNSNP, nullptr);
     }
     else
     {
-        GuideComplete(AXIS_DE);
         GuideNSNP.np[DIRECTION_NORTH].value = 0;
         GuideNSNP.np[DIRECTION_SOUTH].value = 0;
+        GuideComplete(AXIS_DE);
+        return;
     }
+    IDSetNumber(&GuideNSNP, nullptr);
     GuideNSTID = 0;     // Cancel the timer
 }
  
-*/
 /**************************************************************************************
 **getBasicData is called from updateProperties whenever a client connects to the driver
 * It could instead be called from Handshake whenever the driver connects to the mount

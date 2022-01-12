@@ -266,14 +266,13 @@ protected:
     bool SendPulseCmd(int8_t direction, uint32_t duration_msec) ;
     bool isGuiding();
 
-/*
     static void guideTimeoutHelperNS(void *p);
     static void guideTimeoutHelperWE(void *p);
     void guideTimeoutNS();
     void guideTimeoutWE();
     int GuideNSTID { -1 };
     int GuideWETID { -1 };
-*/
+
 
 // Misc
     void getBasicData();
