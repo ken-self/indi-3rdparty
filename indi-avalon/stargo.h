@@ -304,12 +304,15 @@ protected:
         bool setEnabled(bool isenabled);
         bool setRaAdjust(int8_t direction, uint32_t duration_msec);
     private:
+        static const double MIN_ADJUST_PERIOD_MS;
+        static const double MIN_SET_DURATION_MS;
+        static const double MAX_SAMPLE_GAP_MS;
+        static const uint32_t MIN_SAMPLES;
         std::deque<double> x;
         std::deque<double> y;
         std::chrono::time_point<std::chrono::system_clock> start;
         double  sumx, sumy, sumxy, sumx2;
-        double  xmin, xmax;
-        uint32_t nmin;
+        double lastadjust;
         bool enabled;
         StarGoTelescope *p;
         void reset();

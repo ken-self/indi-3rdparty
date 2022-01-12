@@ -3483,12 +3483,14 @@ bool StarGoTelescope::transmit(const char* buffer)
 /*******************************************************************************
 **
 *******************************************************************************/
+const double StarGoTelescope::AutoAdjust::MIN_ADJUST_PERIOD_MS = 10000.0;  // Send adjustments each 10s
+const double StarGoTelescope::AutoAdjust::MIN_SET_DURATION_MS = 100000.0;  // Need 100s of data
+const double StarGoTelescope::AutoAdjust::MAX_SAMPLE_GAP_MS = 20000.0;     // A sample gap of 20s resets
+const uint32_t StarGoTelescope::AutoAdjust::MIN_SAMPLES = 5;               // Need at least 5 samples
+
 StarGoTelescope::AutoAdjust::AutoAdjust(StarGoTelescope *ptr)
 {
     p = ptr;
-    xmin = 30000;   // Minimum duration of set in milliseconds
-    xmax = 20000;   // Maximum gap between samples (must be < xmin)
-    nmin = 5;       // Minimum number of samples
     reset();
 }
 /*******************************************************************************
@@ -3509,6 +3511,7 @@ void StarGoTelescope::AutoAdjust::reset()
 {
     LOG_DEBUG(__FUNCTION__);
     sumx=sumy=sumxy=sumx2=0;
+    lastadjust=0;
     x.clear();
     y.clear();
     start = std::chrono::system_clock::now();
@@ -3574,9 +3577,9 @@ bool StarGoTelescope::AutoAdjust::setRaAdjust(int8_t direction, uint32_t duratio
     }
 
     // Reset if the gap to the last reading is too large
-    if ( !x.empty() && (xnewest - x.back()) > xmax)
+    if ( !x.empty() && (xnewest - x.back()) > MAX_SAMPLE_GAP_MS)
     {
-        LOG_INFO("Reset RA auto adjust after hiatus");
+        LOGF_INFO("Reset RA auto adjust after hiatus of %.0f ms; Max %.0f ms", (xnewest - x.back()), MAX_SAMPLE_GAP_MS);
         reset();
     }
 
@@ -3584,7 +3587,7 @@ bool StarGoTelescope::AutoAdjust::setRaAdjust(int8_t direction, uint32_t duratio
     double ynewest = ddir * static_cast<double>(duration_msec) * guidingSpeed * trackAdjust + (y.empty() ? 0.0: y.back());
     LOGF_DEBUG("Samples: %d; Track error Was %.3f; Now: %.3f", x.size(), (y.empty() ? 0.0: y.back()), ynewest);
 
-    while (xnewest - x[1] > xmin && x.size() > 2) // enough duration since second sample - lose the first one and repeat
+    while (xnewest - x[1] > MIN_SET_DURATION_MS && x.size() > 2) // enough duration since second sample - lose the first one and repeat
     {
         sumx  -= x.front();
         sumy  -= y.front();
@@ -3601,18 +3604,23 @@ bool StarGoTelescope::AutoAdjust::setRaAdjust(int8_t direction, uint32_t duratio
     sumx2 += xnewest*xnewest;
     LOGF_DEBUG("Samples: %d; Track error Now: %.3f", x.size(), y.back());
 
-    if (x.size() < nmin)
+    if (x.size() < MIN_SAMPLES)
     {
-        LOGF_INFO("RA auto adjust needs more samples: %d / %d", x.size(), nmin);
+        LOGF_INFO("RA auto adjust needs more samples: %d / %d", x.size(), MIN_SAMPLES);
         return true; // not enough samples
+    }
+
+    if (xnewest - lastadjust < MIN_ADJUST_PERIOD_MS)
+    {
+        LOGF_INFO("RA auto adjust too soon to change : %.0f / %.0f", xnewest - lastadjust, MIN_ADJUST_PERIOD_MS);
+        return true; // not enough time since last adjustment
     }
 
     uint32_t n = x.size();
     double slope = (n*sumxy - sumx*sumy)/(n*sumx2 - sumx*sumx);
-//    double intercept = (sumy*sumx2 - sumx*sumxy)/(n*sumx2 - sumx*sumx);
     double adjustRA = slope*100.0;  // Convert to a percentage (of Sidereal rate)
+    lastadjust = xnewest;           // Remember when the last adjustment was made
     p->setTrackingAdjustment(adjustRA);
     LOGF_INFO("RA auto adjust rate to %.2f", adjustRA);
     return true;
-
 }
