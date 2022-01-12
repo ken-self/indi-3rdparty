@@ -1229,7 +1229,7 @@ IPState StarGoTelescope::GuideSouth(uint32_t ms)
     {
         return IPS_ALERT;
     }
-    return IPS_IDLE;
+    return IPS_BUSY;
 }
 
 /*******************************************************************************
@@ -1242,7 +1242,11 @@ IPState StarGoTelescope::GuideEast(uint32_t ms)
     {
         return IPS_ALERT;
     }
-    return IPS_IDLE;
+
+// FIXME: Doco says:
+// Returns IPS_OK if operation is completed successfully, IPS_BUSY if operation will take take to complete, or IPS_ALERT if operation failed.
+
+    return IPS_BUSY;
 }
 
 /*******************************************************************************
@@ -1255,7 +1259,7 @@ IPState StarGoTelescope::GuideWest(uint32_t ms)
     {
         return IPS_ALERT;
     }
-    return IPS_IDLE;
+    return IPS_BUSY;
 }
 
 /*******************************************************************************
@@ -2551,23 +2555,57 @@ bool StarGoTelescope::setST4Enabled(bool enabled)
 /*******************************************************************************
 **
 *******************************************************************************/
-int StarGoTelescope::SendPulseCmd(int8_t direction, uint32_t duration_msec)
+bool StarGoTelescope::SendPulseCmd(int8_t direction, uint32_t duration_msec)
 {
     LOGF_DEBUG("%s dir=%d dur=%d ms", __FUNCTION__, direction, duration_msec );
     char cmd[AVALON_COMMAND_BUFFER_LENGTH] = {0};
     char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
 
-    if (!usePulseCommand) return true;
+    if (!usePulseCommand)
+    {
+        LOG_ERROR("Cannot pulse guide with ST4 enabled.");
+        return false;
+    }
 
     if (MovementNSSP.s == IPS_BUSY || MovementWESP.s == IPS_BUSY)
     {
         LOG_ERROR("Cannot guide while moving.");
-        return IPS_ALERT;
+        return false;
     }
     if (isParked())
     {
         LOG_ERROR("Cannot guide while parked.");
-        return IPS_ALERT;
+        return false;
+    }
+
+// Use GetMotorStatus to find out what is happening with the motors
+// Should be either 1 or 0 (tracking or idle) to allow guiding
+    int x,y;
+    if(!getMotorStatus(&x,&y))
+    {
+        LOG_ERROR("Cannot determine motor status.");
+        return false;
+    }
+    if(direction == STARGO_EAST || direction==STARGO_WEST)
+    {
+        if(x != MOTION_STATIC and x != MOTION_TRACK)
+        {
+            LOG_ERROR("RA motor is in use");
+            return false;
+        }
+    }
+    else if(direction == STARGO_NORTH || direction==STARGO_SOUTH)
+    {
+        if(y != MOTION_STATIC and y != MOTION_TRACK)
+        {
+            LOG_ERROR("DE motor is in use");
+            return false;
+        }
+    }
+    else
+    {
+        LOGF_ERROR("Invalid direction %d", direction);
+        return false;
     }
 
     switch (direction)
@@ -2585,13 +2623,33 @@ int StarGoTelescope::SendPulseCmd(int8_t direction, uint32_t duration_msec)
             sprintf(cmd, ":Mgw%04u#", duration_msec);
             break;
         default:
-            return 1;
+//          LOGF_ERROR("Invalid direction %d", direction);
+            return false;
     }
     if (!sendQuery(cmd, response, 0)) // Don't wait for response - there isn't one
     {
         LOG_ERROR("Failed to send guide pulse request.");
         return false;
     }
+    
+// FIXME: Should wait for the guide pulse to complete before continuing
+// We know how long it should take. But we should not block other processes.
+// use getMotorStatus(int *xSpeed, int *ySpeed). Speed 4 = Guiding
+// Call GuideComplete once the guiding pulse is complete.
+// Parameters: INDI_EQ_AXIS axis    Axis of completed guiding operation. AXIS_RA or AXIS_DE
+/*
+// If there is already a timer remove it
+    if (GuideWETID)
+    {
+        IERmTimer(GuideWETID);
+        GuideWETID = 0;
+    }
+
+    guide_direction_we = LX200_EAST;
+    GuideWETID      = IEAddTimer(static_cast<int>(duration_msec), guideTimeoutHelperWE, this);
+    return true;
+*/
+
 // Assume the guide pulse was issued and acted upon.
     bool adjEnabled = (IUFindOnSwitchIndex(&RaAutoAdjustSP) == DefaultDevice::INDI_ENABLED);
 
@@ -2602,6 +2660,68 @@ int StarGoTelescope::SendPulseCmd(int8_t direction, uint32_t duration_msec)
     return true;
 }
 
+/*
+void StarGoTelescope::guideTimeoutHelperWE(void * p)
+ {
+     static_cast<StarGoTelescope *>(p)->guideTimeoutWE();
+ }
+  
+void StarGoTelescope::guideTimeoutWE()
+{
+    LOG_DEBUG(__FUNCTION__);
+// Check motor status
+    int x, y;
+    if (!getMotorStatus(&x, &y))
+    {
+        LOG_ERROR("Cannot determine motor status.");
+        return false;
+    }
+    if (x != MOTION_STATIC and x != MOTION_TRACK)
+    {
+        LOG_ERROR("RA motor is still moving");
+        GuideWENP.s = IPS_ALERT;
+        IDSetNumber(&GuideWENP, nullptr);
+    }
+    else
+    {
+        GuideComplete(AXIS_RA);
+        GuideWENP.np[DIRECTION_WEST].value = 0;
+        GuideWENP.np[DIRECTION_EAST].value = 0;
+    }
+    GuideWETID = 0;     // Cancel the timer
+}
+ 
+void StarGoTelescope::guideTimeoutHelperNS(void * p)
+ {
+     static_cast<StarGoTelescope *>(p)->guideTimeoutNS();
+ }
+  
+void StarGoTelescope::guideTimeoutNS()
+{
+    LOG_DEBUG(__FUNCTION__);
+// Check motor status
+    int x, y;
+    if (!getMotorStatus(&x, &y))
+    {
+        LOG_ERROR("Cannot determine motor status.");
+        return false;
+    }
+    if (y != MOTION_STATIC and y != MOTION_TRACK)
+    {
+        LOG_ERROR("DE motor is still moving");
+        GuideNSNP.s = IPS_ALERT;
+        IDSetNumber(&GuideNSNP, nullptr);
+    }
+    else
+    {
+        GuideComplete(AXIS_DE);
+        GuideNSNP.np[DIRECTION_NORTH].value = 0;
+        GuideNSNP.np[DIRECTION_SOUTH].value = 0;
+    }
+    GuideNSTID = 0;     // Cancel the timer
+}
+ 
+*/
 /**************************************************************************************
 **getBasicData is called from updateProperties whenever a client connects to the driver
 * It could instead be called from Handshake whenever the driver connects to the mount
