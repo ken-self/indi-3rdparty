@@ -394,11 +394,8 @@ bool StarGoTelescope::ISNewNumber(const char *dev, const char *name, double valu
         }
         else if (!strcmp(name, MountRequestDelayNP.name))
         {
-            int secs   = static_cast<int>(floor(values[0] / 1000.0));
-            long nsecs = static_cast<long>(round((values[0] - 1000.0 * secs) * 1000000.0));
-            setMountRequestDelay(secs, nsecs);
-
-            MountRequestDelayN[0].value = secs*1000 + nsecs/1000000;
+            setMountRequestDelay(values[0]);
+            MountRequestDelayN[0].value = values[0];
             MountRequestDelayNP.s = IPS_OK;
             IDSetNumber(&MountRequestDelayNP, nullptr);
             return true;
@@ -541,6 +538,9 @@ bool StarGoTelescope::initProperties()
                        MOTION_TAB, IP_RW, ISR_1OFMANY, 60, IPS_IDLE);
 
     // mount command delay
+    /*
+    default delay is static_cast<double>(xmitDelay.count())/1000.0;
+    */
     IUFillNumber(&MountRequestDelayN[0], "MOUNT_REQUEST_DELAY", "Request Delay (ms)", "%.0f", 0.0, 1000, 1.0, 50.0);
     IUFillNumberVector(&MountRequestDelayNP, MountRequestDelayN, 1, getDeviceName(), "REQUEST_DELAY", "StarGO", OPTIONS_TAB,
                        IP_RW, 60, IPS_OK);
@@ -1216,7 +1216,7 @@ IPState StarGoTelescope::GuideNorth(uint32_t ms)
     {
         return IPS_ALERT;
     }
-    return IPS_IDLE;
+    return IPS_BUSY;
 }
 
 /*******************************************************************************
@@ -2555,7 +2555,7 @@ bool StarGoTelescope::setST4Enabled(bool enabled)
 /*******************************************************************************
 **
 *******************************************************************************/
-bool StarGoTelescope::SendPulseCmd(int8_t direction, uint32_t duration_msec)
+bool StarGoTelescope::SendPulseCmd(TDirection direction, uint32_t duration_msec)
 {
     LOGF_DEBUG("%s dir=%d dur=%d ms", __FUNCTION__, direction, duration_msec );
     char cmd[AVALON_COMMAND_BUFFER_LENGTH] = {0};
@@ -2577,55 +2577,31 @@ bool StarGoTelescope::SendPulseCmd(int8_t direction, uint32_t duration_msec)
         LOG_ERROR("Cannot guide while parked.");
         return false;
     }
-
-// Use GetMotorStatus to find out what is happening with the motors
-// Should be either 1 or 0 (tracking or idle) to allow guiding
-    int x,y;
-    if(!getMotorStatus(&x,&y))
-    {
-        LOG_ERROR("Cannot determine motor status.");
-        return false;
-    }
-    if(direction == STARGO_EAST || direction==STARGO_WEST)
-    {
-        if(x != MOTION_STATIC and x != MOTION_TRACK)
-        {
-            LOG_ERROR("RA motor is in use");
-            return false;
-        }
-    }
-    else if(direction == STARGO_NORTH || direction==STARGO_SOUTH)
-    {
-        if(y != MOTION_STATIC and y != MOTION_TRACK)
-        {
-            LOG_ERROR("DE motor is in use");
-            return false;
-        }
-    }
-    else
+    if( direction < 0 && direction >= 4)
     {
         LOGF_ERROR("Invalid direction %d", direction);
         return false;
     }
+    const INDI_EQ_AXIS axis[4] = {AXIS_DE,AXIS_DE,AXIS_RA,AXIS_RA};
+    const char cdir[4] = { 'n','s','w','e' };
+    const char* caxis[] = { "RA", "DE" };
+    INDI_EQ_AXIS laxis = axis[direction];
 
-    switch (direction)
+// Use GetMotorStatus to find out what is happening with the motors
+// Should be either 1 or 0 (tracking or idle) to allow guiding
+    int motion[2] = {-1,-1};
+    if (!getMotorStatus(&motion[AXIS_RA],&motion[AXIS_DE]))
     {
-        case STARGO_NORTH:
-            sprintf(cmd, ":Mgn%04u#", duration_msec);
-            break;
-        case STARGO_SOUTH:
-            sprintf(cmd, ":Mgs%04u#", duration_msec);
-            break;
-        case STARGO_EAST:
-            sprintf(cmd, ":Mge%04u#", duration_msec);
-            break;
-        case STARGO_WEST:
-            sprintf(cmd, ":Mgw%04u#", duration_msec);
-            break;
-        default:
-//          LOGF_ERROR("Invalid direction %d", direction);
-            return false;
+        LOG_ERROR("Cannot determine motor status.");
+        return false;
     }
+    if (motion[laxis] != MOTION_STATIC and motion[laxis] != MOTION_TRACK)
+    {
+        LOGF_ERROR("motor on %s axis is in use", caxis[laxis]);
+        return false;
+    }
+ 
+    sprintf(cmd, ":Mg%c%04u#", cdir[direction], duration_msec);
     if (!sendQuery(cmd, response, 0)) // Don't wait for response - there isn't one
     {
         LOG_ERROR("Failed to send guide pulse request.");
@@ -2638,104 +2614,75 @@ bool StarGoTelescope::SendPulseCmd(int8_t direction, uint32_t duration_msec)
 // Call GuideComplete once the guiding pulse is complete.
 // Parameters: INDI_EQ_AXIS axis    Axis of completed guiding operation. AXIS_RA or AXIS_DE
 
-    if(direction == STARGO_EAST || direction==STARGO_WEST)
-    {
 // If there is already a timer remove it
-        if (GuideWETID)
-        {
-            IERmTimer(GuideWETID);
-            GuideWETID = 0;
-        }
-// Set up the timer;
-        GuideWETID = IEAddTimer(static_cast<int>(duration_msec), guideTimeoutHelperWE, this);
-    }
-    else if(direction == STARGO_NORTH || direction==STARGO_SOUTH)
+    if (GuideTID[laxis])
     {
-// If there is already a timer remove it
-        if (GuideNSTID)
-        {
-            IERmTimer(GuideNSTID);
-            GuideNSTID = 0;
-        }
-// Set up the timer;
-        GuideNSTID = IEAddTimer(static_cast<int>(duration_msec), guideTimeoutHelperNS, this);
+        IERmTimer(GuideTID[laxis]);
+        GuideTID[laxis] = 0;
     }
+
+// Set up the timer;
+    timeoutArgs[laxis].me = this;
+    timeoutArgs[laxis].axis = laxis;
+
+    GuideTID[laxis] = IEAddTimer(static_cast<int>(duration_msec), guideTimeoutHelper, &timeoutArgs[laxis]);
+
 // Assume the guide pulse was issued and acted upon.
     bool adjEnabled = (IUFindOnSwitchIndex(&RaAutoAdjustSP) == DefaultDevice::INDI_ENABLED);
 
-    if ((direction == STARGO_EAST || direction == STARGO_WEST) && adjEnabled)
+    if (laxis == AXIS_RA && adjEnabled)
     {
         autoRa->setRaAdjust(direction, duration_msec);
     }
     return true;
 }
 
+/*******************************************************************************
+**
+*******************************************************************************/
+void StarGoTelescope::guideTimeoutHelper(void * p)
+ {
+     static_cast<guideTimeoutArgs *>(p)->me->guideTimeout(static_cast<guideTimeoutArgs *>(p)->axis);
+ }
+  
+/*******************************************************************************
+**
+*******************************************************************************/
+void StarGoTelescope::guideTimeout(INDI_EQ_AXIS axis)
+{
+    const char* caxis[] = { "RA", "DE" };
+    LOGF_DEBUG("%s Axis: %s", __FUNCTION__, caxis[axis]);
+    
+// Check motor status
+    int motion[2] = {-1,-1};
+    
+    INumberVectorProperty* GuideNP[2] = {&GuideWENP, &GuideNSNP};
+    const int direction[2][2] = {{DIRECTION_WEST, DIRECTION_EAST},
+                                {DIRECTION_NORTH, DIRECTION_SOUTH} };
 
-void StarGoTelescope::guideTimeoutHelperWE(void * p)
- {
-     static_cast<StarGoTelescope *>(p)->guideTimeoutWE();
- }
-  
-void StarGoTelescope::guideTimeoutWE()
-{
-    LOG_DEBUG(__FUNCTION__);
-// Check motor status
-    int x, y;
-    if (!getMotorStatus(&x, &y))
+    if (!getMotorStatus(&motion[AXIS_RA], &motion[AXIS_DE]))
     {
         LOG_ERROR("Cannot determine motor status.");
-        GuideWENP.s = IPS_ALERT;
+        GuideNP[axis]->s = IPS_ALERT;
     }
-    else if (x != MOTION_STATIC and x != MOTION_TRACK)
+    else if (motion[axis] != MOTION_STATIC and motion[axis] != MOTION_TRACK)
     {
-        LOG_ERROR("RA motor is still moving");
-        GuideWENP.s = IPS_ALERT;
+        LOGF_ERROR("Motor is still moving on axis %s", caxis[axis]);
+        GuideNP[axis]->s = IPS_ALERT;
     }
     else
     {
-        GuideWENP.np[DIRECTION_WEST].value = 0;
-        GuideWENP.np[DIRECTION_EAST].value = 0;
-        GuideComplete(AXIS_RA);
-        LOG_DEBUG("RA Guiding completed");
+        (GuideNP[axis]->np)[direction[axis][0]].value = 0;
+        (GuideNP[axis]->np)[direction[axis][1]].value = 0;
+
+        GuideComplete(axis);
+        LOGF_DEBUG("Guiding completed on axis %s", caxis[axis]);
         return;
     }
-    IDSetNumber(&GuideWENP, nullptr);
-    GuideWETID = 0;     // Cancel the timer
+    IDSetNumber(GuideNP[axis], nullptr);
+    GuideTID[axis] = 0;     // Cancel the timer
 }
- 
-void StarGoTelescope::guideTimeoutHelperNS(void * p)
- {
-     static_cast<StarGoTelescope *>(p)->guideTimeoutNS();
- }
-  
-void StarGoTelescope::guideTimeoutNS()
-{
-    LOG_DEBUG(__FUNCTION__);
-// Check motor status
-    int x, y;
-    if (!getMotorStatus(&x, &y))
-    {
-        LOG_ERROR("Cannot determine motor status.");
-        GuideNSNP.s = IPS_ALERT;
-    }
-    else if (y != MOTION_STATIC and y != MOTION_TRACK)
-    {
-        LOG_ERROR("DE motor is still moving");
-        GuideNSNP.s = IPS_ALERT;
-    }
-    else
-    {
-        GuideNSNP.np[DIRECTION_NORTH].value = 0;
-        GuideNSNP.np[DIRECTION_SOUTH].value = 0;
-        GuideComplete(AXIS_DE);
-        LOG_DEBUG("DE Guiding completed");
-        return;
-    }
-    IDSetNumber(&GuideNSNP, nullptr);
-    GuideNSTID = 0;     // Cancel the timer
-}
- 
-/**************************************************************************************
+ /**************************************************************************************
 **getBasicData is called from updateProperties whenever a client connects to the driver
 * It could instead be called from Handshake whenever the driver connects to the mount
 * It initialises driver properties from the mount before they are updated from the config file
@@ -3442,11 +3389,24 @@ bool StarGoTelescope::sendQuery(const char* cmd, char* response, char end, int w
         lresponse [0] = '\0';
     }
     flush();
+    
+// Get the time and compare to last transmit. If > xmitDelay then ok, else wait
+    std::chrono::nanoseconds delay = xmitDelay - std::chrono::nanoseconds(std::chrono::system_clock::now() - lastXmit);
+    if (delay.count() > 0)
+    {
+        LOGF_DEBUG("Delay transmit for %.1f ms / %.1f ms", static_cast<double>(delay.count())/1000000.0, static_cast<double>(xmitDelay.count())/1000000.0);
+        // Convert duration to timespec values
+        auto secs = std::chrono::duration_cast<std::chrono::seconds>(delay);
+        delay -= secs;
+        timespec sleep_ts{secs.count(), delay.count()};  // int (time_t), long
+        nanosleep(&sleep_ts, nullptr);
+    }
+    // Update the transmit timer
+    lastXmit = std::chrono::system_clock::now();
+
     if (!transmit(cmd))
     {
         LOGF_ERROR("Command <%s> failed.", cmd);
-        // sleep for 50 mseconds to avoid flooding the mount with commands
-        nanosleep(&mount_request_delay, nullptr);
         return false;
     }
     lresponse[0] = '\0';
@@ -3466,9 +3426,6 @@ bool StarGoTelescope::sendQuery(const char* cmd, char* response, char end, int w
         }
     }
     flush();
-
-    // sleep for 50 mseconds to avoid flooding the mount with commands
-    nanosleep(&mount_request_delay, nullptr);
 
     return true;
 }

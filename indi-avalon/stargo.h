@@ -45,14 +45,12 @@
 #define AVALON_RESPONSE_BUFFER_LENGTH                   32
 #define STARGO_GENERIC_SLEWRATE 5        /* slew rate, degrees/s */
 
-
 enum TDirection
 {
     STARGO_NORTH,
-    STARGO_WEST,
-    STARGO_EAST,
     STARGO_SOUTH,
-    STARGO_ALL
+    STARGO_WEST,
+    STARGO_EAST
 };
 
 // StarGo specific tabs
@@ -84,7 +82,7 @@ public:
         MOTION_GUIDE = 4,
         MOTION_SLEW = 5
     };
-    enum MotorReverseection
+    enum MotorReverse
     {
         DIRECTION_NORMAL = 0,
         DIRECTION_REVERSE = 1
@@ -180,7 +178,9 @@ protected:
     INumber HaLstN[2];
 
     bool usePulseCommand { true };
-    struct timespec mount_request_delay = {0, 50000000L};
+//    struct timespec mount_request_delay = {0, 50000000L};
+    std::chrono::time_point<std::chrono::system_clock>  lastXmit = {};
+    std::chrono::nanoseconds xmitDelay {50000000};
 
     bool getTimeOnStartup=true, getLocationOnStartup=true;
     uint8_t DBG_SCOPE;
@@ -213,8 +213,6 @@ protected:
     virtual IPState GuideWest(uint32_t ms) override;
     virtual bool MoveNS(INDI_DIR_NS dir, TelescopeMotionCommand command) override;
     virtual bool MoveWE(INDI_DIR_WE dir, TelescopeMotionCommand command) override;
-
-
 
 /***********************************************************************************************
 * StarGo specific functions
@@ -263,16 +261,20 @@ protected:
     bool setGuidingSpeeds(int raSpeed, int decSpeed);
     bool getST4Status(bool *isEnabled);
     bool setST4Enabled(bool enabled);
-    bool SendPulseCmd(int8_t direction, uint32_t duration_msec) ;
+    bool SendPulseCmd(TDirection direction, uint32_t duration_msec) ;
     bool isGuiding();
 
     static void guideTimeoutHelperNS(void *p);
     static void guideTimeoutHelperWE(void *p);
-    void guideTimeoutNS();
-    void guideTimeoutWE();
-    int GuideNSTID { -1 };
-    int GuideWETID { -1 };
-
+    int GuideTID[2] = { -1, -1 };
+    struct guideTimeoutArgs
+    {
+        StarGoTelescope* me;
+        INDI_EQ_AXIS axis;
+    };
+    guideTimeoutArgs timeoutArgs[2] = { {nullptr, AXIS_RA}, {nullptr, AXIS_DE} };
+    static void guideTimeoutHelper(void *p);
+    void guideTimeout(INDI_EQ_AXIS axis);
 
 // Misc
     void getBasicData();
@@ -296,7 +298,7 @@ protected:
     bool sendQuery(const char* cmd, char* response, char end, int wait=AVALON_TIMEOUT);
     bool sendQuery(const char* cmd, char* response, int wait=AVALON_TIMEOUT);
     bool ParseMotionState(char* state);
-    void setMountRequestDelay(int secs, long nanosecs);
+    void setMountRequestDelay(double delay);
     bool receive(char* buffer, int* bytes, int wait=AVALON_TIMEOUT);
     bool receive(char* buffer, int* bytes, char end, int wait=AVALON_TIMEOUT);
     void flush();
@@ -335,11 +337,16 @@ inline bool StarGoTelescope::sendQuery(const char* cmd, char* response, int wait
 {
     return sendQuery(cmd, response, '#', wait);
 }
-inline void StarGoTelescope::setMountRequestDelay(int secs, long nanosecs)
+inline void StarGoTelescope::setMountRequestDelay(double delay)
 {
-        mount_request_delay.tv_sec = secs;
-        mount_request_delay.tv_nsec = nanosecs;
-};
+    LOGF_DEBUG("%s Delay %.1f ms", __FUNCTION__, delay);
+    xmitDelay = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::duration<double, std::milli>(delay));
+
+//    int secs      = static_cast<int>(floor(delay / 1000.0));
+//    long nanosecs = static_cast<long>(round((delay - 1000.0 * secs) * 1000000.0));
+//    mount_request_delay.tv_sec = secs;
+//    mount_request_delay.tv_nsec = nanosecs;
+}
 inline bool StarGoTelescope::receive(char* buffer, int* bytes, int wait)
 {
     return receive(buffer, bytes, '#', wait);
