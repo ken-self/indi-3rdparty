@@ -966,7 +966,55 @@ IPState StarGoTelescope::GuideNorth(uint32_t ms)
     {
         return IPS_ALERT;
     }
+/*
     return IPS_IDLE;
+    LOGF_DEBUG("%s %dms %d", __FUNCTION__, ms, usePulseCommand);
+    if (usePulseCommand && (MovementNSSP.s == IPS_BUSY || MovementWESP.s == IPS_BUSY))
+    {
+        LOG_ERROR("Cannot guide while moving.");
+        return IPS_ALERT;
+    }
+
+    // If already moving (no pulse command), then stop movement
+    if (MovementNSSP.s == IPS_BUSY)
+    {
+        int dir = IUFindOnSwitchIndex(&MovementNSSP);
+
+        MoveNS(dir == 0 ? DIRECTION_NORTH : DIRECTION_SOUTH, MOTION_STOP);
+    }
+*/
+    if (GuideNSTID)
+    {
+        IERmTimer(GuideNSTID);
+        GuideNSTID = 0;
+    }
+/*
+    if (usePulseCommand)
+    {
+        SendPulseCmd(LX200_NORTH, ms);
+    }
+    else
+    {
+        if (!setSlewMode(LX200_SLEW_GUIDE))
+        {
+            SlewRateSP.s = IPS_ALERT;
+            IDSetSwitch(&SlewRateSP, "Error setting slew mode.");
+            return IPS_ALERT;
+        }
+
+        MovementNSS[DIRECTION_NORTH].s = ISS_ON;
+        MoveNS(DIRECTION_NORTH, MOTION_START);
+    }
+
+    // Set slew to guiding
+    IUResetSwitch(&SlewRateSP);
+    SlewRateS[SLEW_GUIDE].s = ISS_ON;
+    IDSetSwitch(&SlewRateSP, nullptr);
+    guide_direction_ns = LX200_NORTH;
+*/
+    GuideNSTID      = IEAddTimer(static_cast<int>(ms), guideTimeoutHelperNS, this);
+    return IPS_BUSY;
+
 }
 
 /*******************************************************************************
@@ -979,7 +1027,55 @@ IPState StarGoTelescope::GuideSouth(uint32_t ms)
     {
         return IPS_ALERT;
     }
+/*
     return IPS_IDLE;
+    LOGF_DEBUG("%s %dms %d", __FUNCTION__, ms, usePulseCommand);
+    if (usePulseCommand && (MovementNSSP.s == IPS_BUSY || MovementWESP.s == IPS_BUSY))
+    {
+        LOG_ERROR("Cannot guide while moving.");
+        return IPS_ALERT;
+    }
+
+    // If already moving (no pulse command), then stop movement
+    if (MovementNSSP.s == IPS_BUSY)
+    {
+        int dir = IUFindOnSwitchIndex(&MovementNSSP);
+
+        MoveNS(dir == 0 ? DIRECTION_NORTH : DIRECTION_SOUTH, MOTION_STOP);
+    }
+*/
+    if (GuideNSTID)
+    {
+        IERmTimer(GuideNSTID);
+        GuideNSTID = 0;
+    }
+/*
+    if (usePulseCommand)
+    {
+        SendPulseCmd(LX200_SOUTH, ms);
+    }
+    else
+    {
+        if (!setSlewMode(LX200_SLEW_GUIDE))
+        {
+            SlewRateSP.s = IPS_ALERT;
+            IDSetSwitch(&SlewRateSP, "Error setting slew mode.");
+            return IPS_ALERT;
+        }
+
+        MovementNSS[DIRECTION_SOUTH].s = ISS_ON;
+        MoveNS(DIRECTION_SOUTH, MOTION_START);
+    }
+
+    // Set slew to guiding
+    IUResetSwitch(&SlewRateSP);
+    SlewRateS[SLEW_GUIDE].s = ISS_ON;
+    IDSetSwitch(&SlewRateSP, nullptr);
+    guide_direction_ns = LX200_SOUTH;
+*/
+    GuideNSTID         = IEAddTimer(static_cast<int>(ms), guideTimeoutHelperNS, this);
+    return IPS_BUSY;
+
 }
 
 /*******************************************************************************
@@ -992,7 +1088,55 @@ IPState StarGoTelescope::GuideEast(uint32_t ms)
     {
         return IPS_ALERT;
     }
+/*
     return IPS_IDLE;
+    LOGF_DEBUG("%s %dms %d", __FUNCTION__, ms, usePulseCommand);
+    if (usePulseCommand && (MovementNSSP.s == IPS_BUSY || MovementWESP.s == IPS_BUSY))
+    {
+        LOG_ERROR("Cannot guide while moving.");
+        return IPS_ALERT;
+    }
+
+    // If already moving (no pulse command), then stop movement
+    if (MovementWESP.s == IPS_BUSY)
+    {
+        int dir = IUFindOnSwitchIndex(&MovementWESP);
+
+        MoveWE(dir == 0 ? DIRECTION_WEST : DIRECTION_EAST, MOTION_STOP);
+    }
+*/
+    if (GuideWETID)
+    {
+        IERmTimer(GuideWETID);
+        GuideWETID = 0;
+    }
+
+/*
+    if (usePulseCommand)
+    {
+        SendPulseCmd(LX200_EAST, ms);
+    }
+    else
+    {
+        if (!setSlewMode(LX200_SLEW_GUIDE))
+        {
+            SlewRateSP.s = IPS_ALERT;
+            IDSetSwitch(&SlewRateSP, "Error setting slew mode.");
+            return IPS_ALERT;
+        }
+
+        MovementWES[DIRECTION_EAST].s = ISS_ON;
+        MoveWE(DIRECTION_EAST, MOTION_START);
+    }
+    // Set slew to guiding
+    IUResetSwitch(&SlewRateSP);
+    SlewRateS[SLEW_GUIDE].s = ISS_ON;
+    IDSetSwitch(&SlewRateSP, nullptr);
+    guide_direction_we = LX200_EAST;
+*/
+    GuideWETID         = IEAddTimer(static_cast<int>(ms), guideTimeoutHelperWE, this);
+    return IPS_BUSY;
+
 }
 
 /*******************************************************************************
@@ -1005,7 +1149,55 @@ IPState StarGoTelescope::GuideWest(uint32_t ms)
     {
         return IPS_ALERT;
     }
+/*
     return IPS_IDLE;
+    LOGF_DEBUG("%s %dms %d", __FUNCTION__, ms, usePulseCommand);
+    if (usePulseCommand && (MovementNSSP.s == IPS_BUSY || MovementWESP.s == IPS_BUSY))
+    {
+        LOG_ERROR("Cannot guide while moving.");
+        return IPS_ALERT;
+    }
+
+    // If already moving (no pulse command), then stop movement
+    if (MovementWESP.s == IPS_BUSY)
+    {
+        int dir = IUFindOnSwitchIndex(&MovementWESP);
+
+        MoveWE(dir == 0 ? DIRECTION_WEST : DIRECTION_EAST, MOTION_STOP);
+    }
+*/
+    if (GuideWETID)
+    {
+        IERmTimer(GuideWETID);
+        GuideWETID = 0;
+    }
+
+/*
+    if (usePulseCommand)
+    {
+        SendPulseCmd(LX200_WEST, ms);
+    }
+    else
+    {
+        if (!setSlewMode(LX200_SLEW_GUIDE))
+        {
+            SlewRateSP.s = IPS_ALERT;
+            IDSetSwitch(&SlewRateSP, "Error setting slew mode.");
+            return IPS_ALERT;
+        }
+
+        MovementWES[DIRECTION_WEST].s = ISS_ON;
+        MoveWE(DIRECTION_WEST, MOTION_START);
+    }
+    // Set slew to guiding
+    IUResetSwitch(&SlewRateSP);
+    SlewRateS[SLEW_GUIDE].s = ISS_ON;
+    IDSetSwitch(&SlewRateSP, nullptr);
+    guide_direction_we = LX200_WEST;
+*/
+    GuideWETID         = IEAddTimer(static_cast<int>(ms), guideTimeoutHelperWE, this);
+    return IPS_BUSY;
+
 }
 
 /*******************************************************************************
@@ -2204,6 +2396,47 @@ int StarGoTelescope::SendPulseCmd(int8_t direction, uint32_t duration_msec)
     }
     bool success = !sendQuery(cmd, response, 0); // no response expected
     return success;
+}
+
+/**************************************************************************************
+**
+***************************************************************************************/
+void StarGoTelescope::guideTimeoutHelperNS(void * p)
+{
+    static_cast<StarGoTelescope *>(p)->guideTimeoutNS();
+}
+
+/**************************************************************************************
+**
+***************************************************************************************/
+void StarGoTelescope::guideTimeoutHelperWE(void * p)
+{
+    static_cast<StarGoTelescope *>(p)->guideTimeoutWE();
+}
+
+/**************************************************************************************
+**
+***************************************************************************************/
+void StarGoTelescope::guideTimeoutWE()
+{
+    GuideWENP.np[DIRECTION_WEST].value = 0;
+    GuideWENP.np[DIRECTION_EAST].value = 0;
+    GuideWENP.s           = IPS_IDLE;
+    GuideWETID            = 0;
+    IDSetNumber(&GuideWENP, nullptr);
+}
+
+/**************************************************************************************
+**
+***************************************************************************************/
+void StarGoTelescope::guideTimeoutNS()
+{
+    GuideNSNP.np[0].value = 0;
+    GuideNSNP.np[1].value = 0;
+    GuideNSNP.s           = IPS_IDLE;
+    GuideNSTID            = 0;
+    IDSetNumber(&GuideNSNP, nullptr);
+
 }
 
 /**************************************************************************************

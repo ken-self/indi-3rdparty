@@ -214,6 +214,13 @@ class StarGoTelescope : public INDI::Telescope, public INDI::GuiderInterface
         bool setST4Enabled(bool enabled);
         int SendPulseCmd(int8_t direction, uint32_t duration_msec);
         bool isGuiding();
+        static void guideTimeoutHelperNS(void *p);
+        static void guideTimeoutHelperWE(void *p);
+        void guideTimeoutNS();
+        void guideTimeoutWE();
+
+        int GuideNSTID { -1 };
+        int GuideWETID { -1 };
 
         // Other general functions
         void getBasicData();
