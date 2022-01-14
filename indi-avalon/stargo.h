@@ -45,20 +45,30 @@
 #define AVALON_RESPONSE_BUFFER_LENGTH                   32
 #define STARGO_GENERIC_SLEWRATE 5        /* slew rate, degrees/s */
 
-enum TDirection
-{
-    STARGO_NORTH,
-    STARGO_SOUTH,
-    STARGO_WEST,
-    STARGO_EAST
-};
+/*
+#define STRINGIFY(x) #x
+#define TOSTRING(x) STRINGIFY(x)
+#define THROW_INFO_BASE(intro, file, line) intro " " file ":" TOSTRING(line)
+#define ERROR_INFO(s) (std::string(THROW_INFO_BASE("Error thrown from", __FILE__, __LINE__) "->" s))
+#define ERROR_INFOF(s,...) (std::string(THROW_INFO_BASE("Error thrown from", __FILE__, __LINE__) "->" s), __VA_ARGS__)
+#define THROWIF(a,s) if(a) throw ERROR_INFO(s)
+#define THROWIFF(a,s,...) if(a) throw ERROR_INFOF(s, __VA_ARGS__)
+*/
 
 // StarGo specific tabs
 extern const char *ADVANCED_TAB;
+class ZFilterFactory;
 
 class StarGoTelescope : public INDI::Telescope, public INDI::GuiderInterface
 {
 public:
+    enum TDirection
+    {
+        STARGO_NORTH,
+        STARGO_SOUTH,
+        STARGO_WEST,
+        STARGO_EAST
+    };
     enum TrackMode
     {
         TRACK_SIDEREAL = 0, // = Telescope::TelescopeTrackMode::TRACK_SIDEREAL,
@@ -313,13 +323,18 @@ protected:
         AutoAdjust(StarGoTelescope *ptr);
         bool setEnabled(bool isenabled);
         bool setRaAdjust(int8_t direction, uint32_t duration_msec);
+        bool setRaAdjustZ(int8_t direction, uint32_t duration_msec);
     private:
         static const double MIN_ADJUST_PERIOD_MS;
         static const double MIN_SET_DURATION_MS;
         static const double MAX_SAMPLE_GAP_MS;
         static const uint32_t MIN_SAMPLES;
+        ZFilterFactory* zfilter;
         std::deque<double> x;
         std::deque<double> y;
+        double zxlast {0.0};
+        double zylast {0.0};
+        double sumdur {0.0};
         std::chrono::time_point<std::chrono::system_clock> start;
         double  sumx, sumy, sumxy, sumx2;
         double lastadjust;
@@ -329,7 +344,7 @@ protected:
         const char* getDeviceName(){return p->getDeviceName();}
     };
     AutoAdjust *autoRa;
-};
+    };
 inline bool StarGoTelescope::isGuiding(){
     return (GuideNSNP.s == IPS_BUSY || GuideWENP.s == IPS_BUSY);
 }

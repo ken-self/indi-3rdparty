@@ -36,6 +36,7 @@ SET(stargo_SRCS
     ${CMAKE_CURRENT_SOURCE_DIR}/stargo.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/stargosystem.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/stargofocuser.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/zfilterfactory.cpp
     )
 
 #add_executable(indi_lx200stargo ${lx200stargo_SRCS})

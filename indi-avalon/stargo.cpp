@@ -19,11 +19,14 @@
     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 */
 #include "stargo.h"
+#include "zfilterfactory.h"
 
 #include <cmath>
 #include <memory>
 #include <cstring>
 #include <unistd.h>
+//#include <cassert>
+//????? Why WIN32
 #ifndef _WIN32
 #include <termios.h>
 #endif
@@ -2633,6 +2636,7 @@ bool StarGoTelescope::SendPulseCmd(TDirection direction, uint32_t duration_msec)
     if (laxis == AXIS_RA && adjEnabled)
     {
         autoRa->setRaAdjust(direction, duration_msec);
+//        autoRa->setRaAdjustZ(direction, duration_msec);
     }
     return true;
 }
@@ -3187,13 +3191,13 @@ bool StarGoTelescope::getGearRatios(int *raRatio, int *decRatio)
     char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
     if (!sendQuery(":X480#", response))
     {
-        LOG_ERROR("Failed to send get RA gear ratiorequest.");
+        LOG_ERROR("Failed to send get RA gear ratio request.");
         return false;
     }
     *raRatio = ahex2int(&response[2]);
     if (!sendQuery(":X481#", response))
     {
-        LOG_ERROR("Failed to send get DEC gear ratiorequest.");
+        LOG_ERROR("Failed to send get DEC gear ratio request.");
         return false;
     }
     *decRatio = ahex2int(&response[2]);
@@ -3582,6 +3586,8 @@ StarGoTelescope::AutoAdjust::AutoAdjust(StarGoTelescope *ptr)
 {
     p = ptr;
     reset();
+//    zfilter = new ZFilterFactory(ptr);
+//    zfilter->rebuild( BUTTERWORTH, 0, 70 );  // 0 order to force error; Corner period 70x
 }
 /*******************************************************************************
 **
@@ -3606,6 +3612,10 @@ void StarGoTelescope::AutoAdjust::reset()
     y.clear();
     start = std::chrono::system_clock::now();
     p->setTrackingAdjustment(0.0);
+    zfilter->reset();
+    zxlast = 0.0;
+    zylast = 0.0;
+    sumdur = 0.0;
 }
 /*******************************************************************************
 **
@@ -3716,6 +3726,88 @@ bool StarGoTelescope::AutoAdjust::setRaAdjust(int8_t direction, uint32_t duratio
     double slope = (n*sumxy - sumx*sumy)/(n*sumx2 - sumx*sumx);
     double adjustRA = slope*100.0;  // Convert to a percentage (of Sidereal rate)
     lastadjust = xnewest;           // Remember when the last adjustment was made
+    p->setTrackingAdjustment(adjustRA);
+    LOGF_INFO("RA auto adjust rate to %.2f", adjustRA);
+    return true;
+}
+
+/*******************************************************************************
+** Zfilter version
+*******************************************************************************/
+bool StarGoTelescope::AutoAdjust::setRaAdjustZ(int8_t direction, uint32_t duration_msec)
+{
+    LOGF_DEBUG("%S Dir: %d; Dur: %d", __FUNCTION__, direction, duration_msec);
+    if (!enabled)
+    {
+        LOG_ERROR("Auto tracking adjustment is currently DISABLED");
+        return false;
+    }
+
+// Calculate number of milliseconds since the driver was started
+    double xnewest = std::chrono::duration<double,std::milli>(std::chrono::system_clock::now() - start).count();
+    
+// We are only interested in long period drift and since a fourth order zfilter only requires a few samples
+// We do not need to consider every correction made. So just cherry pick a correction each N seconds (say 10)
+// The guiding sampling rate should be >> the sampling rate needed by the zfilter so we can be approximate
+// For more perfection we could interpolate corrections to get a consistent sample rate
+    if(!(direction == STARGO_EAST || direction == STARGO_WEST))
+    {
+        LOG_ERROR("Invalid direction");
+        return false;
+    }
+    double ddir = direction == STARGO_EAST ? -1.0 : 1.0;
+
+// Need to accumulate the corrections to date
+    sumdur += ddir * static_cast<double>(duration_msec);
+    LOGF_DEBUG("Time: %.2f:This corr: %d ms, Sum Corr: %.0f ms", xnewest - zxlast, duration_msec, sumdur);
+
+    if (xnewest - zxlast < MIN_SET_DURATION_MS) // not enough duration since last sample
+    {
+        LOGF_DEBUG("Waiting for sample duration: %.1f ms / %.1f ms", xnewest - zxlast, MIN_SET_DURATION_MS);
+        return true;
+    }
+
+//  Get the guiding speed
+    double guidingSpeed = p->GuidingSpeedN[0].value;
+    int raSpeed, decSpeed;
+
+    if (!p->getGuidingSpeeds(&raSpeed, &decSpeed))
+    {
+        LOG_ERROR("Unable to get guiding speed");
+        return false;
+    }
+    guidingSpeed =  raSpeed/100.0;
+
+//  get trackrate = 1 + adj/100
+    double trackAdjust = 1.0 + p->TrackingAdjustmentN[0].value/100.0;
+    double raCorrection;
+    if (!p->getTrackingAdjustment(&raCorrection))
+    {
+        LOG_ERROR("Unable to get tracking adjustment ");
+        return false;
+    }
+    trackAdjust = 1.0 + raCorrection/100;
+
+    LOGF_DEBUG("ms: %.0f; Guide: %.1f; Track: %.2f;", xnewest, guidingSpeed, trackAdjust);
+
+    // Calculate the correction in milliseconds normalised to sidereal rate
+    double ynewest = sumdur * guidingSpeed * trackAdjust;
+    LOGF_DEBUG("Sum Corr: %.0f ms; Sidereal: %.3f", sumdur, ynewest);
+
+// Calculate the correction to long period drift with the zfilter
+// Convert it to a tracking adjustment by dividing by the sampling period
+// We could get more sophisticated and keep the last 2 or 3 corrections to extrapolate
+// with a non-linear algorithm e.g. cubic spline
+// Otherwise the corrections lag the changes
+    double zynewest = zfilter->addsample(ynewest);
+    double slope = zynewest / (xnewest - zxlast);
+    zxlast = xnewest;
+
+// Convert to a percentage (of Sidereal rate)
+// Need to add current adjustment as the correction is on top of that
+    double adjustRA = slope*100.0 + raCorrection;
+    LOGF_DEBUG("Correction %.3f; Adjustment: %.3f", zynewest, adjustRA);
+
     p->setTrackingAdjustment(adjustRA);
     LOGF_INFO("RA auto adjust rate to %.2f", adjustRA);
     return true;
