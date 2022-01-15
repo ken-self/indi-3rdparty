@@ -2636,7 +2636,6 @@ bool StarGoTelescope::SendPulseCmd(TDirection direction, uint32_t duration_msec)
     if (laxis == AXIS_RA && adjEnabled)
     {
         autoRa->setRaAdjust(direction, duration_msec);
-//        autoRa->setRaAdjustZ(direction, duration_msec);
     }
     return true;
 }
@@ -3581,6 +3580,7 @@ const double StarGoTelescope::AutoAdjust::MIN_ADJUST_PERIOD_MS = 10000.0;  // Se
 const double StarGoTelescope::AutoAdjust::MIN_SET_DURATION_MS = 100000.0;  // Need 100s of data
 const double StarGoTelescope::AutoAdjust::MAX_SAMPLE_GAP_MS = 20000.0;     // A sample gap of 20s resets
 const uint32_t StarGoTelescope::AutoAdjust::MIN_SAMPLES = 5;               // Need at least 5 samples
+const double StarGoTelescope::AutoAdjust::Z_SAMPLE_DURATION_MS = 20000.0;  // Z-filter sample duration
 
 StarGoTelescope::AutoAdjust::AutoAdjust(StarGoTelescope *ptr)
 {
@@ -3623,6 +3623,9 @@ void StarGoTelescope::AutoAdjust::reset()
 bool StarGoTelescope::AutoAdjust::setRaAdjust(int8_t direction, uint32_t duration_msec)
 {
     LOGF_DEBUG("%S Dir: %d; Dur: %d", __FUNCTION__, direction, duration_msec);
+    if(true)
+        return setRaAdjustZ(direction, duration_msec);
+    
     if (!enabled)
     {
         LOG_ERROR("Auto tracking adjustment is currently DISABLED");
@@ -3761,9 +3764,9 @@ bool StarGoTelescope::AutoAdjust::setRaAdjustZ(int8_t direction, uint32_t durati
     sumdur += ddir * static_cast<double>(duration_msec);
     LOGF_DEBUG("Time: %.2f:This corr: %d ms, Sum Corr: %.0f ms", xnewest - zxlast, duration_msec, sumdur);
 
-    if (xnewest - zxlast < MIN_SET_DURATION_MS) // not enough duration since last sample
+    if (xnewest - zxlast < Z_SAMPLE_DURATION_MS) // not enough duration since last sample
     {
-        LOGF_DEBUG("Waiting for sample duration: %.1f ms / %.1f ms", xnewest - zxlast, MIN_SET_DURATION_MS);
+        LOGF_DEBUG("Waiting for sample duration: %.1f ms / %.1f ms", xnewest - zxlast, Z_SAMPLE_DURATION_MS);
         return true;
     }
 

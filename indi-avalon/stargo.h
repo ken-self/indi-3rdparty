@@ -327,6 +327,7 @@ protected:
     private:
         static const double MIN_ADJUST_PERIOD_MS;
         static const double MIN_SET_DURATION_MS;
+        static const double Z_SAMPLE_DURATION_MS;
         static const double MAX_SAMPLE_GAP_MS;
         static const uint32_t MIN_SAMPLES;
         ZFilterFactory* zfilter;

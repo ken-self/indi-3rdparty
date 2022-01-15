@@ -248,11 +248,69 @@ void ZFilterFactory::normalize()
     // Only Lp processing included here
     LOG_DEBUG(__FUNCTION__);
     double w1 = TWOPI * warped_alpha1;
+    
+// LowPass filter    
     for (uint64_t i = 0; i < spoles.size(); i++)
     {
         spoles[i] = spoles[i] * w1;
     }
     szeros.clear();
+/*
+// High Pass filter
+    case opt_hp:
+    {
+        int i;
+        szeros.clear();
+        for (i=0; i < spoles.size(); i++)
+        {
+            spoles[i] = w1 / spoles[i];
+            szeros.push_back(0.0);
+        }
+        break;
+    }
+*/
+/*
+// Band Pass filter
+    case opt_bp:
+    {
+        double w0 = sqrt(w1*w2);
+        double bw = w2-w1;
+        int i;
+        for (i=0; i < spoles.size(); i++)
+        {
+            complex hba = 0.5 * (spoles[i] * bw);
+            complex temp = csqrt(1.0 - sqr(w0 / hba));
+            spoles[i] = hba * (1.0 + temp);
+            spoles.push_back(hba * (1.0 - temp);
+            szeros.push_back(0.0);
+        }
+        // also N zeros at (0,0)
+        break;
+    }
+*/
+/*
+// Band Stop filter
+    case opt_bs:
+    {
+        double w0 = sqrt(w1*w2);
+        double bw = w2-w1;
+        int i;
+        for (i=0; i < spoles.size(); i++)
+        {
+            complex hba = 0.5 * (bw / spoles[i]);
+            complex temp = csqrt(1.0 - sqr(w0 / hba));
+            spoles[i] = hba * (1.0 + temp);
+            spoles.push_back(hba * (1.0 - temp));
+            szeros.push_back(std::complex<double>(0.0,+w0));
+        }
+        // also 2N zeros at (0, +-w0) 
+        for (i=0; i < spoles.size(); i++)
+        {
+            szeros.push_back(std::complex<double>(0.0, -w0));
+        }
+        break;
+    }
+*/
 }
 
 /*******************************************************************************
