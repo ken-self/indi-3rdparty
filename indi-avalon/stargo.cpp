@@ -50,8 +50,6 @@ StarGoTelescope::StarGoTelescope()
     SetTelescopeCapability(TELESCOPE_CAN_PARK | TELESCOPE_CAN_SYNC | TELESCOPE_CAN_GOTO | TELESCOPE_CAN_ABORT |
                            TELESCOPE_HAS_TRACK_MODE | TELESCOPE_HAS_LOCATION | TELESCOPE_CAN_CONTROL_TRACK |
                            TELESCOPE_HAS_PIER_SIDE, 4);
-
-    autoRa = new AutoAdjust(this);
 }
 
 /*******************************************************************************
@@ -131,6 +129,8 @@ bool StarGoTelescope::Handshake()
 
     getBasicData();
     INDI::Telescope::Handshake(); // calls ReadScopeStatus
+
+    autoRa = new AutoAdjust(this);
 
     return true;
 }
@@ -3585,9 +3585,9 @@ const uint32_t StarGoTelescope::AutoAdjust::MIN_SAMPLES = 5;               // Ne
 StarGoTelescope::AutoAdjust::AutoAdjust(StarGoTelescope *ptr)
 {
     p = ptr;
-//    reset();
-//    zfilter = new ZFilterFactory(ptr);
-//    zfilter->rebuild( BUTTERWORTH, 0, 70 );  // 0 order to force error; Corner period 70x
+    zfilter = new ZFilterFactory(ptr);
+    zfilter->rebuild( BUTTERWORTH, 4, 100 );  // 0 order to force error; Corner period 70x
+    reset();
 }
 /*******************************************************************************
 **

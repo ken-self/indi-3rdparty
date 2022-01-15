@@ -99,7 +99,8 @@ void ZFilterFactory::resetsamples()
  ******************************************************************************/
 bool ZFilterFactory::rebuild(FILTER_DESIGN f, int o, double p, bool mzt )
 {
-    LOG_DEBUG(__FUNCTION__);
+    LOGF_DEBUG("ZFilterFactory::%s %s order %d corner %.4fx mzt %d", __FUNCTION__,
+               filtername(f).c_str(), o, p, mzt );
     bool bError = false;
 
     if (o <= 0)
@@ -127,6 +128,13 @@ bool ZFilterFactory::rebuild(FILTER_DESIGN f, int o, double p, bool mzt )
     zplane();
     expandpoly();
     reversecoeffs();
+    
+    LOGF_DEBUG("ZFilter Coefficients (x,y): gain %.3e", gain());
+    for( uint64_t i = rxcoeffs.size()-1; i > 0; i--)
+    {
+        LOGF_DEBUG("[%lu] (%.4e, %.4e)", i, rxcoeffs[i], rycoeffs[i]);
+    }
+    LOGF_DEBUG("[0] (%.4e, n/a)", rxcoeffs[0]);
 
     resetsamples();
 

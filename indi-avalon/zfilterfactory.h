@@ -57,6 +57,7 @@ public:
     double corner() { return 1 / raw_alpha1; };
     FILTER_DESIGN design() { return filt; }
     std::string getname() const;
+    std::string filtername(FILTER_DESIGN f) const;
     int order() { return m_order;  };
     ZFilterFactory(StarGoTelescope* ptr);
     void resetsamples();
@@ -114,15 +115,20 @@ inline std::complex<double> ZFilterFactory::bilinear(const std::complex<double>&
     return (2.0 + pz) / (2.0 - pz);
 }
 
-inline std::string ZFilterFactory::getname() const
+inline std::string ZFilterFactory::filtername(FILTER_DESIGN f) const
 {
-    switch (filt)
+    switch (f)
     {
     case BUTTERWORTH: return "Butterworth";
     case BESSEL: return "Bessel";
     case CHEBYCHEV: return "Chebychev";
     default: return "Unknown filter";
     }
+}
+
+inline std::string ZFilterFactory::getname() const
+{
+    return filtername(filt);
 }
 
 inline void ZFilterFactory::reversecoeffs()
