@@ -3585,7 +3585,7 @@ const uint32_t StarGoTelescope::AutoAdjust::MIN_SAMPLES = 5;               // Ne
 StarGoTelescope::AutoAdjust::AutoAdjust(StarGoTelescope *ptr)
 {
     p = ptr;
-    reset();
+//    reset();
 //    zfilter = new ZFilterFactory(ptr);
 //    zfilter->rebuild( BUTTERWORTH, 0, 70 );  // 0 order to force error; Corner period 70x
 }
@@ -3612,7 +3612,7 @@ void StarGoTelescope::AutoAdjust::reset()
     y.clear();
     start = std::chrono::system_clock::now();
     p->setTrackingAdjustment(0.0);
-    zfilter->reset();
+    zfilter->resetsamples();
     zxlast = 0.0;
     zylast = 0.0;
     sumdur = 0.0;

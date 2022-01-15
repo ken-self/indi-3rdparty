@@ -38,6 +38,7 @@
 #include <math.h>
 #include <vector>
 #include <string>
+#include <algorithm>
 #include <indilogger.h>
 #include "stargo.h"
 
@@ -58,16 +59,18 @@ public:
     std::string getname() const;
     int order() { return m_order;  };
     ZFilterFactory(StarGoTelescope* ptr);
-    void reset();
+    void resetsamples();
     bool rebuild(FILTER_DESIGN f, int o, double p, bool mzt=false );
     double addsample(double input);
 
 private:
     StarGoTelescope* p;
+    bool isValid {false};
     const char* getDeviceName(); //{return p->getDeviceName();}
     std::vector<double> m_xv, m_yv;  // Historical values up to m_order
     double m_sumCorr; // Sum of all corrections issued
     std::vector<double> xcoeffs, ycoeffs;
+    std::vector<double> rxcoeffs, rycoeffs;
 
     const double TWOPI = (2.0 * M_PI);
     const double EPS = 1e-10;
@@ -90,9 +93,12 @@ private:
     void zplane();
     std::complex<double> bilinear(const std::complex<double>&);
     void expandpoly();
-    void expand(const std::vector<std::complex<double>>&, std::vector<std::complex<double>>&);
+    void reversecoeffs();
+    void expand(const std::vector<std::complex<double>>&, 
+                std::vector<std::complex<double>>&);
     void multin(const std::complex<double>&, std::vector<std::complex<double>>&);
-    std::complex<double> eval(const std::vector<std::complex<double>>& coeffs, const std::complex<double>& z);
+    std::complex<double> eval(const std::vector<std::complex<double>>& coeffs,
+                              const std::complex<double>& z);
 };
 
 inline void ZFilterFactory::setpole(const std::complex<double>& z)
@@ -118,6 +124,15 @@ inline std::string ZFilterFactory::getname() const
     default: return "Unknown filter";
     }
 }
+
+inline void ZFilterFactory::reversecoeffs()
+{
+    rxcoeffs = xcoeffs;
+    std::reverse(rxcoeffs.begin(), rxcoeffs.end());
+    rycoeffs = ycoeffs;
+    std::reverse(rycoeffs.begin(), rycoeffs.end());
+}
+
 inline const char* ZFilterFactory::getDeviceName()
 {
     return p->getDeviceName();

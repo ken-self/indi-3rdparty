@@ -31,7 +31,7 @@
 *
 */
 
-/* Based on mkfilter by A.J. Fisher, University of York    September 1992 
+/* Based on mkfilter by A.J. Fisher, University of York    September 1992
 https://www-users.cs.york.ac.uk/~fisher/mkfilter/
 <fisher@minster.york.ac.uk>
 */
@@ -43,7 +43,7 @@ https://www-users.cs.york.ac.uk/~fisher/mkfilter/
 #include "zfilterfactory.h"
 
 /*******************************************************************************
- * 
+ *
  ******************************************************************************/
 ZFilterFactory::ZFilterFactory(StarGoTelescope* ptr)
 {
@@ -81,13 +81,12 @@ ZFilterFactory::ZFilterFactory(StarGoTelescope* ptr)
         std::complex<double>( -1.36069227838e+00, 1.73350574267e+00),
         std::complex<double>( -8.65756901707e-01, 2.29260483098e+00),
     };
-    reset();
 }
 
 /*******************************************************************************
- * 
+ *
  ******************************************************************************/
-void ZFilterFactory::reset()
+void ZFilterFactory::resetsamples()
 {
     LOG_DEBUG(__FUNCTION__);
     m_xv.clear();
@@ -96,7 +95,7 @@ void ZFilterFactory::reset()
 }
 
 /*******************************************************************************
- * 
+ *
  ******************************************************************************/
 bool ZFilterFactory::rebuild(FILTER_DESIGN f, int o, double p, bool mzt )
 {
@@ -105,36 +104,37 @@ bool ZFilterFactory::rebuild(FILTER_DESIGN f, int o, double p, bool mzt )
 
     if (o <= 0)
     {
-        LOG_ERROR("invalid filter order");
+        LOGF_ERROR("invalid filter order %d", o);
     }
     if (p < 2.0)
     {
-        LOG_ERROR("invalid corner period multiplier");
+        LOGF_ERROR("invalid corner period multiplier %.4f", p);
     }
 
     xcoeffs.clear();
     ycoeffs.clear();
-    filt = (p < 6.0) ? BUTTERWORTH : f;
+    filt = f;
     m_order = o;
     raw_alpha2 = raw_alpha1 = 1.0 / p;
     isMzt = (filt == BESSEL) ? mzt : false; // mzt only applies to BESSEL filter
-    
+
     spoles.clear();
     szeros.clear();
-    
+
     splane();
     prewarp();
     normalize();
     zplane();
     expandpoly();
+    reversecoeffs();
 
-    reset();
+    resetsamples();
 
     return bError;
 }
 
 /*******************************************************************************
- * 
+ *
  ******************************************************************************/
 double ZFilterFactory::addsample(double input)
 {
@@ -151,13 +151,15 @@ double ZFilterFactory::addsample(double input)
     m_yv.pop_back();
 
 // Calculate filtered value
-    for (uint64_t i = 0; i < xcoeffs.size(); i++)
+// FIXME: coeffs are in reverse order compared to samples
+// Should reverse them in rebuild
+    for (uint64_t i = 0; i < rxcoeffs.size(); i++)
     {
-        m_yv.at(0) += m_xv.at(i) * xcoeffs.at(i);
+        m_yv.at(0) += m_xv.at(i) * rxcoeffs.at(i);
     }
-    for (uint64_t i = 1; i < ycoeffs.size(); i++)
+    for (uint64_t i = 1; i < rycoeffs.size(); i++)
     {
-        m_yv.at(0) += m_yv.at(i) * ycoeffs.at(i);
+        m_yv.at(0) += m_yv.at(i) * rycoeffs.at(i);
     }
     dReturn = m_yv.at(0) -  m_sumCorr; // Return the difference from the uncorrected waveform
     m_sumCorr += dReturn;
@@ -166,18 +168,16 @@ double ZFilterFactory::addsample(double input)
 }
 
 /*******************************************************************************
- * 
+ * compute S-plane poles for prototype LP filter
  ******************************************************************************/
-void ZFilterFactory::splane() // compute S-plane poles for prototype LP filter
+void ZFilterFactory::splane()
 {
     LOG_DEBUG(__FUNCTION__);
 
-// Bessel filter
-// 
-    if (filt == BESSEL)                           // Bessel filter
+    if (filt == BESSEL)                                 // Bessel filter
     {
         int p = (m_order * m_order) / 4;                // ptr into table
-        if (m_order & 1)                              // If order is odd
+        if (m_order & 1)                                // If order is odd
             setpole(bessel_poles[p++]);
         for (int i = 0; i < m_order / 2; i++)
         {
@@ -186,25 +186,26 @@ void ZFilterFactory::splane() // compute S-plane poles for prototype LP filter
             p++;
         }
     }
-    if (filt == BUTTERWORTH || filt == CHEBYCHEV)                // Butterworth filter
+    if (filt == BUTTERWORTH || filt == CHEBYCHEV)       // Butterworth filter
     {
-        for (int i = 0; i < 2 * m_order; i++) 
+        for (int i = 0; i < 2 * m_order; i++)
         {
-            double theta = (m_order & 1) ? (i * M_PI) / m_order : ((i + 0.5) * M_PI) / m_order;
+            double theta = (m_order & 1) ? (i * M_PI) / m_order :
+                           ((i + 0.5) * M_PI) / m_order;
             setpole(std::polar(1.0,theta));
         }
     }
-    if (filt == CHEBYCHEV)                           // modify for Chebyshev (p. 136 DeFatta et al.) 
-    { 
-        if (chripple >= 0.0) 
+    if (filt == CHEBYCHEV) // modify for Chebyshev (p. 136 DeFatta et al.)
+    {
+        if (chripple >= 0.0)
         {
-            fprintf(stderr, "mkfilter: Chebyshev ripple is %g dB; must be .lt. 0.0\n", chripple);
-            exit(1);        
+            LOGF_DEBUG(" Chebyshev ripple is %g dB; must be .lt. 0.0", chripple);
+            return;
         }
         double rip = pow(10.0, -chripple / 10.0);
         double eps = sqrt(rip - 1.0);
         double y = asinh(1.0 / eps) / (double) m_order;
-        for (uint64_t i = 0; i < spoles.size(); i++) 
+        for (uint64_t i = 0; i < spoles.size(); i++)
         {
             spoles[i].real(spoles[i].real()*sinh(y));
             spoles[i].imag(spoles[i].imag()*cosh(y));
@@ -213,18 +214,18 @@ void ZFilterFactory::splane() // compute S-plane poles for prototype LP filter
 }
 
 /*******************************************************************************
- * 
+ * for bilinear transform, perform pre-warp on alpha values
  ******************************************************************************/
 void ZFilterFactory::prewarp()
 {
     LOG_DEBUG(__FUNCTION__);
-    /* for bilinear transform, perform pre-warp on alpha values */
-    if (isMzt) 
-    { //**Dont prewarp; or use z-transform
-        warped_alpha1 = raw_alpha1;
+
+    if (isMzt)
+    { // Dont prewarp; or use z-transform
+         warped_alpha1 = raw_alpha1;
         warped_alpha2 = raw_alpha2;
     }
-    else 
+    else
     {
         warped_alpha1 = tan(M_PI * raw_alpha1) / M_PI;
         warped_alpha2 = tan(M_PI * raw_alpha2) / M_PI;
@@ -232,25 +233,28 @@ void ZFilterFactory::prewarp()
 }
 
 /*******************************************************************************
- * 
+ * called for trad, not for -Re or -Pi
  ******************************************************************************/
-void ZFilterFactory::normalize() /* called for trad, not for -Re or -Pi */
+void ZFilterFactory::normalize()
 {
+    // Only Lp processing included here
     LOG_DEBUG(__FUNCTION__);
     double w1 = TWOPI * warped_alpha1;
     for (uint64_t i = 0; i < spoles.size(); i++)
+    {
         spoles[i] = spoles[i] * w1;
+    }
     szeros.clear();
 }
 
 /*******************************************************************************
- * 
+ * given S-plane poles & zeros, compute Z-plane poles & zeros
+ * using bilinear transform or matched z-transform
  ******************************************************************************/
-void ZFilterFactory::zplane() 
+void ZFilterFactory::zplane()
 {
     LOG_DEBUG(__FUNCTION__);
-// given S-plane poles & zeros, compute Z-plane poles & zeros
-// using bilinear transform or matched z-transform
+
     uint64_t i;
     zpoles.clear();
     zzeros.clear();
@@ -273,13 +277,16 @@ void ZFilterFactory::zplane()
 }
 
 /*******************************************************************************
- * 
+ * given Z-plane poles & zeros, compute top & bot polynomials in Z,
+ * and then recurrence relation
  ******************************************************************************/
-void ZFilterFactory::expandpoly() // given Z-plane poles & zeros, compute top & bot polynomials in Z, and then recurrence relation
+void ZFilterFactory::expandpoly()
 {
     LOG_DEBUG(__FUNCTION__);
+
     std::vector<std::complex<double>> topcoeffs, botcoeffs;
     uint64_t i;
+
     expand(zzeros, topcoeffs);
     expand(zpoles, botcoeffs);
 
@@ -293,62 +300,79 @@ void ZFilterFactory::expandpoly() // given Z-plane poles & zeros, compute top & 
     dc_gain = eval(topcoeffs, z_one) / eval(botcoeffs, z_one);
     fc_gain = eval(topcoeffs, z_theta) / eval(botcoeffs, z_theta);
     hf_gain = eval(topcoeffs, z_minusone) / eval(botcoeffs, z_minusone);
-    for (i = topcoeffs.size(); i >= 1; i--)
-        xcoeffs.push_back( +(topcoeffs[i-1].real() / botcoeffs.back().real()) );
-    for (i = botcoeffs.size(); i >= 1; i--)
-        ycoeffs.push_back( -(botcoeffs[i-1].real() / botcoeffs.back().real()) );
+    
+    for (i = 0; i < topcoeffs.size(); i++)
+    {
+        xcoeffs.push_back( +(topcoeffs[i].real() / botcoeffs.back().real()) );
+    }
+    for (i = 0; i < botcoeffs.size(); i++)
+    {
+        ycoeffs.push_back( -(botcoeffs[i].real() / botcoeffs.back().real()) );
+    }
 }
 
 /*******************************************************************************
- * 
+ * compute product of poles or zeros as a polynomial of z
  ******************************************************************************/
-void ZFilterFactory::expand(const std::vector<std::complex<double>>& pz, std::vector<std::complex<double>>& coeffs)
+void ZFilterFactory::expand(const std::vector<std::complex<double>>& pz,
+    std::vector<std::complex<double>>& coeffs)
 {
     LOG_DEBUG(__FUNCTION__);
-    // compute product of poles or zeros as a polynomial of z 
+
     uint64_t i;
     coeffs.clear();
     coeffs.push_back(1.0);
     for (i = 0; i < pz.size(); i++)
+    {
         coeffs.push_back(0.0);
+    }
 
 // coeffs now has 1 more element than pz
     for (i = 0; i < pz.size(); i++)
+    {
         multin(pz[i], coeffs);
+    }
 
 // check computed coeffs of z^k are all real
     for (i = 0; i < coeffs.size(); i++)
     {
         if (fabs(coeffs[i].imag()) > EPS)
         {
-            fprintf(stderr, "mkfilter: coeff of z^%lu is not real; poles/zeros are not complex conjugates\n", i);
-            exit(1);
+            LOGF_DEBUG("mkfilter: coeff of z^%lu is not real; "
+                "poles/zeros are not complex conjugates\n", i);
+            // need to fail somehow
         }
     }
 }
 
 /*******************************************************************************
- * 
+ * multiply factor (z-w) into coeffs
  ******************************************************************************/
-void ZFilterFactory::multin(const std::complex<double>& w, std::vector<std::complex<double>>& coeffs)
+void ZFilterFactory::multin(const std::complex<double>& w,
+    std::vector<std::complex<double>>& coeffs)
 {
     LOG_DEBUG(__FUNCTION__);
-    /* multiply factor (z-w) into coeffs */
+
     std::complex<double> nw = -w;
-    for (uint64_t i = coeffs.size(); i >= 1; i--)
-        coeffs[i] = (nw * coeffs[i-1]) + coeffs[i - 2];
+
+    for (uint64_t i = coeffs.size()-1; i >= 1; i--)
+    {
+        coeffs[i] = (nw * coeffs[i]) + coeffs[i - 1];
+    }
     coeffs[0] = nw * coeffs[0];
 }
 
 /*******************************************************************************
- * 
+ * evaluate polynomial in z, substituting for z
  ******************************************************************************/
-std::complex<double> ZFilterFactory::eval(const std::vector<std::complex<double>>& coeffs, const std::complex<double>& z)
-{ 
+std::complex<double> ZFilterFactory::eval(
+    const std::vector<std::complex<double>>& coeffs,
+    const std::complex<double>& z)
+{
     LOG_DEBUG(__FUNCTION__);
-    /* evaluate polynomial in z, substituting for z */
+
     std::complex<double> sum = std::complex<double>(0.0,0.0);
-    for (uint64_t i = coeffs.size(); i >= 1; i--) 
+    for (uint64_t i = coeffs.size(); i >= 1; i--)
         sum = (sum * z) + coeffs[i-1];
     return sum;
 }
