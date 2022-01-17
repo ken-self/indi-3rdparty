@@ -45,16 +45,6 @@
 #define AVALON_RESPONSE_BUFFER_LENGTH                   32
 #define STARGO_GENERIC_SLEWRATE 5        /* slew rate, degrees/s */
 
-/*
-#define STRINGIFY(x) #x
-#define TOSTRING(x) STRINGIFY(x)
-#define THROW_INFO_BASE(intro, file, line) intro " " file ":" TOSTRING(line)
-#define ERROR_INFO(s) (std::string(THROW_INFO_BASE("Error thrown from", __FILE__, __LINE__) "->" s))
-#define ERROR_INFOF(s,...) (std::string(THROW_INFO_BASE("Error thrown from", __FILE__, __LINE__) "->" s), __VA_ARGS__)
-#define THROWIF(a,s) if(a) throw ERROR_INFO(s)
-#define THROWIFF(a,s,...) if(a) throw ERROR_INFOF(s, __VA_ARGS__)
-*/
-
 // StarGo specific tabs
 extern const char *ADVANCED_TAB;
 class ZFilterFactory;
@@ -72,8 +62,8 @@ public:
     enum TrackMode
     {
         TRACK_SIDEREAL = 0, // = Telescope::TelescopeTrackMode::TRACK_SIDEREAL,
-        TRACK_SOLAR = 1, // = Telescope::TelescopeTrackMode::TRACK_SOLAR,
-        TRACK_LUNAR = 2, // = Telescope::TelescopeTrackMode::TRACK_LUNAR,
+        TRACK_SOLAR = 1,    // = Telescope::TelescopeTrackMode::TRACK_SOLAR,
+        TRACK_LUNAR = 2,    // = Telescope::TelescopeTrackMode::TRACK_LUNAR,
         TRACK_NONE = 3
     };
     enum MotorsState
@@ -188,7 +178,6 @@ protected:
     INumber HaLstN[2];
 
     bool usePulseCommand { true };
-//    struct timespec mount_request_delay = {0, 50000000L};
     std::chrono::time_point<std::chrono::system_clock>  lastXmit = {};
     std::chrono::nanoseconds xmitDelay {50000000};
 
@@ -274,8 +263,6 @@ protected:
     bool SendPulseCmd(TDirection direction, uint32_t duration_msec) ;
     bool isGuiding();
 
-    static void guideTimeoutHelperNS(void *p);
-    static void guideTimeoutHelperWE(void *p);
     int GuideTID[2] = { -1, -1 };
     struct guideTimeoutArgs
     {
@@ -321,52 +308,52 @@ protected:
     {
     public:
         AutoAdjust(StarGoTelescope *ptr);
+        ~AutoAdjust();
         bool setEnabled(bool isenabled);
-        bool setRaAdjust(int8_t direction, uint32_t duration_msec);
-        bool setRaAdjustZ(int8_t direction, uint32_t duration_msec);
+        bool isEnabled() { return enabled; }
+        bool addsample(int8_t direction, uint32_t duration_msec);
     private:
-        static const double MIN_ADJUST_PERIOD_MS;
-        static const double MIN_SET_DURATION_MS;
         static const double Z_SAMPLE_DURATION_MS;
-        static const double MAX_SAMPLE_GAP_MS;
-        static const uint32_t MIN_SAMPLES;
-        ZFilterFactory* zfilter;
-        std::deque<double> x;
-        std::deque<double> y;
-        double zxlast {0.0};
-        double zylast {0.0};
-        double sumdur {0.0};
-        std::chrono::time_point<std::chrono::system_clock> start;
-        double  sumx, sumy, sumxy, sumx2;
-        double lastadjust;
-        bool enabled;
-        StarGoTelescope *p;
-        void reset();
+        ZFilterFactory* zfilter {nullptr};
+        bool enabled {false};
+        StarGoTelescope *p {nullptr};
+        int sampleTimerID { -1 };
+        std::deque<double> samples {};
+        void start();
+        void stop();
         const char* getDeviceName(){return p->getDeviceName();}
+        static void sampleTimerHelper(void *p);
+        void sampleTimerProcess();
+
     };
     AutoAdjust *autoRa;
-    };
+};
+
+// ******************************************************************************
 inline bool StarGoTelescope::isGuiding(){
     return (GuideNSNP.s == IPS_BUSY || GuideWENP.s == IPS_BUSY);
 }
+
+// ******************************************************************************
 inline bool StarGoTelescope::sendQuery(const char* cmd, char* response, int wait)
 {
     return sendQuery(cmd, response, '#', wait);
 }
+
+// ******************************************************************************
 inline void StarGoTelescope::setMountRequestDelay(double delay)
 {
     LOGF_DEBUG("%s Delay %.1f ms", __FUNCTION__, delay);
     xmitDelay = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::duration<double, std::milli>(delay));
-
-//    int secs      = static_cast<int>(floor(delay / 1000.0));
-//    long nanosecs = static_cast<long>(round((delay - 1000.0 * secs) * 1000000.0));
-//    mount_request_delay.tv_sec = secs;
-//    mount_request_delay.tv_nsec = nanosecs;
 }
+
+// ******************************************************************************
 inline bool StarGoTelescope::receive(char* buffer, int* bytes, int wait)
 {
     return receive(buffer, bytes, '#', wait);
 }
+
+// ******************************************************************************
 //Convert to Hex using ASCII-48 (ASCII-x30)
 inline double StarGoTelescope::ahex2int(char* ahex)
 {
@@ -377,6 +364,8 @@ inline double StarGoTelescope::ahex2int(char* ahex)
     }
     return val;
 }
+
+// ******************************************************************************
 //Convert to ASCII using Hex+48
 inline void StarGoTelescope::int2ahex(char * ahex, double val)
 {

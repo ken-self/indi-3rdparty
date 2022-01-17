@@ -65,27 +65,28 @@ public:
     double addsample(double input);
 
 private:
-    StarGoTelescope* p;
+    StarGoTelescope* p {nullptr};
     bool isValid {false};
-    const char* getDeviceName(); //{return p->getDeviceName();}
-    std::vector<double> m_xv, m_yv;  // Historical values up to m_order
-    double m_sumCorr; // Sum of all corrections issued
-    std::vector<double> xcoeffs, ycoeffs;
-    std::vector<double> rxcoeffs, rycoeffs;
+    std::vector<double> m_xv {}, m_yv {};  // Historical values up to m_order
+    double m_sumCorr {0.0}; // Sum of all corrections issued
+    std::vector<double> xcoeffs {}, ycoeffs {};
+    std::vector<double> rxcoeffs {}, rycoeffs {};
 
     const double TWOPI = (2.0 * M_PI);
     const double EPS = 1e-10;
     FILTER_DESIGN filt;
-    int m_order;
-    double raw_alpha1, raw_alpha2;
-    bool isMzt;
+    int m_order {0};
+    double raw_alpha1 {0.0}, raw_alpha2 {0.0};
+    bool isMzt {false};
 
     std::complex<double> dc_gain, fc_gain, hf_gain;
-    double warped_alpha1, warped_alpha2;
-    double chripple;
-    std::vector<std::complex<double>> bessel_poles;
-    std::vector<std::complex<double>> spoles, szeros;
-    std::vector<std::complex<double>> zpoles, zzeros;
+    double warped_alpha1 {0.0}, warped_alpha2 {0.0};
+    double chripple {0.0};
+    std::vector<std::complex<double>> bessel_poles {};
+    std::vector<std::complex<double>> spoles {}, szeros {};
+    std::vector<std::complex<double>> zpoles {}, zzeros {};
+
+    const char* getDeviceName(); //{return p->getDeviceName();}
 
     void splane();
     void setpole(const std::complex<double>&);

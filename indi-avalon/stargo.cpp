@@ -25,6 +25,7 @@
 #include <memory>
 #include <cstring>
 #include <unistd.h>
+#include <exception>
 //#include <cassert>
 //????? Why WIN32
 #ifndef _WIN32
@@ -405,6 +406,13 @@ bool StarGoTelescope::ISNewNumber(const char *dev, const char *name, double valu
         }
         else if (!strcmp(name, TrackingAdjustmentNP.name))
         {
+            if( autoRa->isEnabled() )
+            {
+                LOG_ERROR("Cannot adjust tracking rate when auto-adjustment is enabled");
+                TrackingAdjustmentNP.s = IPS_ALERT;
+                IDSetNumber(&TrackingAdjustmentNP, nullptr);
+                return false;
+            }
             // change tracking adjustment
             bool success = setTrackingAdjustment(values[0]);
             if (success)
@@ -488,7 +496,7 @@ bool StarGoTelescope::initProperties()
 
     // ST4 guiding enabled / disabled
     IUFillSwitch(&ST4StatusS[INDI_ENABLED], "INDI_ENABLED", "Enabled", ISS_OFF);
-    IUFillSwitch(&ST4StatusS[INDI_DISABLED], "INDI_DISABLED", "Disabled", ISS_OFF);
+    IUFillSwitch(&ST4StatusS[INDI_DISABLED], "INDI_DISABLED", "Disabled", ISS_ON);
     IUFillSwitchVector(&ST4StatusSP, ST4StatusS, 2, getDeviceName(), "ST4", "ST4", GUIDE_TAB, IP_RW, ISR_1OFMANY, 60,
                        IPS_IDLE);
 
@@ -617,8 +625,6 @@ bool StarGoTelescope::updateProperties()
         defineProperty(&DecMotorReverseSP);
         defineProperty(&MotorStepNP);
         defineProperty(&HaLstNP);
-
-//        getBasicData(); // Call from Handshake()
     }
     else
     {
@@ -1246,8 +1252,9 @@ IPState StarGoTelescope::GuideEast(uint32_t ms)
         return IPS_ALERT;
     }
 
-// FIXME: Doco says:
-// Returns IPS_OK if operation is completed successfully, IPS_BUSY if operation will take take to complete, or IPS_ALERT if operation failed.
+// Doco says:
+// Returns IPS_OK if operation is completed successfully, IPS_BUSY if operation will take timr to complete,
+// or IPS_ALERT if operation failed.
 
     return IPS_BUSY;
 }
@@ -2364,7 +2371,6 @@ bool StarGoTelescope::getTrackingAdjustment(double *valueRA)
      * :X42# to read the tracking adjustment value as orsRRR#
      * :X44# to read the tracking adjustment value as odsDDD#
      * if :X41 has invalid parameters, then :X42 also returns invalid parameters
-
      */
     LOG_DEBUG(__FUNCTION__);
     int raValue;
@@ -2564,6 +2570,7 @@ bool StarGoTelescope::SendPulseCmd(TDirection direction, uint32_t duration_msec)
     char cmd[AVALON_COMMAND_BUFFER_LENGTH] = {0};
     char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
 
+// 
     if (!usePulseCommand)
     {
         LOG_ERROR("Cannot pulse guide with ST4 enabled.");
@@ -2611,12 +2618,7 @@ bool StarGoTelescope::SendPulseCmd(TDirection direction, uint32_t duration_msec)
         return false;
     }
     
-// FIXME: Should wait for the guide pulse to complete before continuing
-// We know how long it should take. But we should not block other processes.
-// use getMotorStatus(int *xSpeed, int *ySpeed). Speed 4 = Guiding
-// Call GuideComplete once the guiding pulse is complete.
-// Parameters: INDI_EQ_AXIS axis    Axis of completed guiding operation. AXIS_RA or AXIS_DE
-
+// Set a timer to call back when guiding should have finished
 // If there is already a timer remove it
     if (GuideTID[laxis])
     {
@@ -2632,10 +2634,11 @@ bool StarGoTelescope::SendPulseCmd(TDirection direction, uint32_t duration_msec)
 
 // Assume the guide pulse was issued and acted upon.
     bool adjEnabled = (IUFindOnSwitchIndex(&RaAutoAdjustSP) == DefaultDevice::INDI_ENABLED);
-
+// or autoRa->isEnabled()
+// We could possibly move this to the timer handler
     if (laxis == AXIS_RA && adjEnabled)
     {
-        autoRa->setRaAdjust(direction, duration_msec);
+        autoRa->addsample(direction, duration_msec);
     }
     return true;
 }
@@ -2865,6 +2868,8 @@ void StarGoTelescope::getBasicData()
     if (getTimeOnStartup && (GetTelescopeCapability() & TELESCOPE_HAS_TIME))
         getScopeTime();
 
+// FIXME. Need to decide if pulseguiding is dependent on ST4 guiding enablement
+// It seems unwise to permit both ST4 guiding and pulse guiding simultaneously
     usePulseCommand = true;
 
 }
@@ -2988,7 +2993,6 @@ bool StarGoTelescope::setKeyPadEnabled(bool enabled)
         LOG_ERROR("Setting Keypad port FAILED");
         return false;
     }
-
 }
 
 /*******************************************************************************
@@ -3248,14 +3252,10 @@ bool StarGoTelescope::getMotorSteps(double *raSteps, double *decSteps)
 bool StarGoTelescope::getMotorReverse(bool *raDir, bool *decDir)
 {
     LOG_DEBUG(__FUNCTION__);
-//    INDI_UNUSED(raDir);
-//    INDI_UNUSED(decDir);
 /*
  * Get RA and Dec motor directions (Forward, Reverse)
  * Get X1B => wrd where r=RA; d=DEC
- *
 */
-//    LOGF_DEBUG("%s %s", __FUNCTION__, "Not Implemented");
     char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
 
     if (!sendQuery(":X1B#", response))
@@ -3282,14 +3282,11 @@ bool StarGoTelescope::getMotorReverse(bool *raDir, bool *decDir)
 bool StarGoTelescope::setMotorReverse(bool raDir, bool decDir)
 {
     LOG_DEBUG(__FUNCTION__);
-//    INDI_UNUSED(raDir);
-//    INDI_UNUSED(decDir);
 /*
  * Set RA and Dec motor directions (Forward, Reverse)
  * Reverse RA X1A0n; DEC X1A1n
  * where n = 0/1
 */
-//    LOGF_DEBUG("%s %s", __FUNCTION__, "Not Implemented");
     const char *racmd = raDir ? ":X1A00#" : ":X1A01#";
     const char *deccmd = decDir ? ":X1A10#" : ":X1A11#";
     char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
@@ -3320,12 +3317,10 @@ bool StarGoTelescope::setMotorReverse(bool raDir, bool decDir)
 bool StarGoTelescope::getTorque(int *torque)
 {
     LOG_DEBUG(__FUNCTION__);
-//    INDI_UNUSED(torque);
 /*
  Get: TTGT
  Return tnnn# where nnn is torque %
 */
-//    LOGF_DEBUG("%s %s", __FUNCTION__, "Not Implemented");
     char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
     if (!sendQuery(":TTGT#", response))
     {
@@ -3346,12 +3341,10 @@ bool StarGoTelescope::getTorque(int *torque)
 bool StarGoTelescope::setTorque(int torque)
 {
     LOG_DEBUG(__FUNCTION__);
-//    INDI_UNUSED(torque);
 /*
  * Set motor torque %
  :TTTnnn#
 */
-//    LOGF_DEBUG("%s %s", __FUNCTION__, "Not Implemented");
     char cmd[AVALON_COMMAND_BUFFER_LENGTH] = {0};
     char response[AVALON_RESPONSE_BUFFER_LENGTH] = {0};
 
@@ -3394,10 +3387,12 @@ bool StarGoTelescope::sendQuery(const char* cmd, char* response, char end, int w
     flush();
     
 // Get the time and compare to last transmit. If > xmitDelay then ok, else wait
-    std::chrono::nanoseconds delay = xmitDelay - std::chrono::nanoseconds(std::chrono::system_clock::now() - lastXmit);
+    std::chrono::nanoseconds delay = xmitDelay - 
+                                     std::chrono::nanoseconds(std::chrono::system_clock::now() - lastXmit);
     if (delay.count() > 0)
     {
-        LOGF_DEBUG("Delay transmit for %.1f ms / %.1f ms", static_cast<double>(delay.count())/1000000.0, static_cast<double>(xmitDelay.count())/1000000.0);
+        LOGF_DEBUG("Delay transmit for %.1f ms / %.1f ms", static_cast<double>(delay.count())/1000000.0, 
+                   static_cast<double>(xmitDelay.count())/1000000.0);
         // Convert duration to timespec values
         auto secs = std::chrono::duration_cast<std::chrono::seconds>(delay);
         delay -= secs;
@@ -3417,7 +3412,6 @@ bool StarGoTelescope::sendQuery(const char* cmd, char* response, char end, int w
     bool found = false;
     while (receive(lresponse, &lbytes, end, lwait))
     {
-//        LOGF_DEBUG("Found response after %ds %s", lwait, lresponse);
         lbytes=0;
         if (! ParseMotionState(lresponse))
         {
@@ -3525,7 +3519,6 @@ bool StarGoTelescope::ParseMotionState(char* state)
 *******************************************************************************/
 bool StarGoTelescope::receive(char* buffer, int* bytes, char end, int wait)
 {
-//    LOGF_DEBUG("%s timeout=%ds",__FUNCTION__, wait);
     int timeout = wait; //? AVALON_TIMEOUT: 0;
     int returnCode = tty_read_section(PortFD, buffer, end, timeout, bytes);
     if (returnCode != TTY_OK)
@@ -3560,7 +3553,6 @@ void StarGoTelescope::flush()
 *******************************************************************************/
 bool StarGoTelescope::transmit(const char* buffer)
 {
-//    LOG_DEBUG(__FUNCTION__);
     int bytesWritten = 0;
     flush();
     int returnCode = tty_write_string(PortFD, buffer, &bytesWritten);
@@ -3574,21 +3566,34 @@ bool StarGoTelescope::transmit(const char* buffer)
     return true;
 }
 /*******************************************************************************
-**
+** sub class AutoAdjust
 *******************************************************************************/
-const double StarGoTelescope::AutoAdjust::MIN_ADJUST_PERIOD_MS = 10000.0;  // Send adjustments each 10s
-const double StarGoTelescope::AutoAdjust::MIN_SET_DURATION_MS = 100000.0;  // Need 100s of data
-const double StarGoTelescope::AutoAdjust::MAX_SAMPLE_GAP_MS = 20000.0;     // A sample gap of 20s resets
-const uint32_t StarGoTelescope::AutoAdjust::MIN_SAMPLES = 5;               // Need at least 5 samples
 const double StarGoTelescope::AutoAdjust::Z_SAMPLE_DURATION_MS = 20000.0;  // Z-filter sample duration
 
 StarGoTelescope::AutoAdjust::AutoAdjust(StarGoTelescope *ptr)
 {
     p = ptr;
+    // Set RA Auto Adjust Z-filter parameters
+    // Based on a 20 second sample period (Z_SAMPLE_DURATION_MS) and the long period drift
+    // of the M-Uno mount (and others??) of 1200 seconds with 50" p-p (~0.13"/s max drift)
+    // There are further frequency spikes at 600s (14" p-p or ~0.07"/s max)
+    // and 180s (7.4" p-p or 0.125"/s max)
+    // Corner period: For Butterworth and Bessel lowpass designs, the corner frequency is the frequency 
+    // at which the magnitude of the response is -3 dB.
+    // We want the corner to be at around 600s or less so that full attenuation occurs at 1200s.
+    // So the corner period vs sample period is 600/20 = 30x
     zfilter = new ZFilterFactory(ptr);
-    zfilter->rebuild( BUTTERWORTH, 4, 100 );  // 0 order to force error; Corner period 70x
-    reset();
+    zfilter->rebuild( BUTTERWORTH, 4, 30 );
 }
+/*******************************************************************************
+**
+*******************************************************************************/
+StarGoTelescope::AutoAdjust::~AutoAdjust()
+{
+    stop();
+    delete zfilter;
+}
+
 /*******************************************************************************
 **
 *******************************************************************************/
@@ -3597,179 +3602,64 @@ bool StarGoTelescope::AutoAdjust::setEnabled(bool isenabled)
     LOGF_DEBUG("%s enabled=%d",__FUNCTION__, enabled);
     enabled = isenabled;
     LOGF_INFO("RA Auto Adjust %s.", enabled?"enabled":"disabled");
-    return true;
-}
-
-/*******************************************************************************
-**
-*******************************************************************************/
-void StarGoTelescope::AutoAdjust::reset()
-{
-    LOG_DEBUG(__FUNCTION__);
-    sumx=sumy=sumxy=sumx2=0;
-    lastadjust=0;
-    x.clear();
-    y.clear();
-    start = std::chrono::system_clock::now();
-    p->setTrackingAdjustment(0.0);
-    zfilter->resetsamples();
-    zxlast = 0.0;
-    zylast = 0.0;
-    sumdur = 0.0;
-}
-/*******************************************************************************
-**
-*******************************************************************************/
-bool StarGoTelescope::AutoAdjust::setRaAdjust(int8_t direction, uint32_t duration_msec)
-{
-    LOGF_DEBUG("%S Dir: %d; Dur: %d", __FUNCTION__, direction, duration_msec);
-    if(true)
-        return setRaAdjustZ(direction, duration_msec);
-    
     if (!enabled)
     {
-        LOG_ERROR("Auto tracking adjustment is currently DISABLED");
-        return false;
-    }
-
-// Get the guiding speed
-    double guidingSpeed = p->GuidingSpeedN[0].value;
-
-    int raSpeed, decSpeed;
-    if (p->getGuidingSpeeds(&raSpeed, &decSpeed))
-    {
-        guidingSpeed =  raSpeed/100.0;
+        stop();
     }
     else
     {
-        LOG_ERROR("Unable to get guiding speed");
-        return false;
+        start();
     }
-
-//    get trackrate = 1 + adj/100
-    double trackAdjust = 1.0 + p->TrackingAdjustmentN[0].value/100.0;
-
-    double raCorrection;
-    if (p->getTrackingAdjustment(&raCorrection))
-    {
-        trackAdjust = 1.0 + raCorrection/100;
-    }
-    else
-    {
-        LOG_ERROR("Unable to get tracking adjustment ");
-        return false;
-    }
-
-// Calculate number of milliseconds since the driver was started
-    double xnewest = std::chrono::duration<double,std::milli>(std::chrono::system_clock::now() - start).count();
-    LOGF_DEBUG("ms: %.0f; Guide: %.1f; Track: %.2f;", xnewest, guidingSpeed, trackAdjust);
-
-    double ddir = 0.0;
-    if (direction == STARGO_EAST)
-    {
-        ddir = -1.0;
-    }
-    else if (direction == STARGO_WEST)
-    {
-        ddir = 1.0;
-    }
-    else
-    {
-        LOG_ERROR("Invalid direction.");
-        return false;
-    }
-
-    // Reset if the gap to the last reading is too large
-    if ( !x.empty() && (xnewest - x.back()) > MAX_SAMPLE_GAP_MS)
-    {
-        LOGF_INFO("Reset RA auto adjust after hiatus of %.0f ms; Max %.0f ms", (xnewest - x.back()), MAX_SAMPLE_GAP_MS);
-        reset();
-    }
-
-    // Calculate the cumulative corrections so far in milliseconds normalised to sidereal rate
-    double ynewest = ddir * static_cast<double>(duration_msec) * guidingSpeed * trackAdjust + (y.empty() ? 0.0: y.back());
-    LOGF_DEBUG("Samples: %d; Track error Was %.3f; Now: %.3f", x.size(), (y.empty() ? 0.0: y.back()), ynewest);
-
-    while (xnewest - x[1] > MIN_SET_DURATION_MS && x.size() > 2) // enough duration since second sample - lose the first one and repeat
-    {
-        sumx  -= x.front();
-        sumy  -= y.front();
-        sumxy -= x.front()*y.front();
-        sumx2 -= x.front()*x.front();
-        x.pop_front();
-        y.pop_front();
-    }
-    x.push_back(xnewest);
-    y.push_back(ynewest);
-    sumx  += xnewest;
-    sumy  += ynewest;
-    sumxy += xnewest*ynewest;
-    sumx2 += xnewest*xnewest;
-    LOGF_DEBUG("Samples: %d; Track error Now: %.3f", x.size(), y.back());
-
-    if (x.size() < MIN_SAMPLES)
-    {
-        LOGF_INFO("RA auto adjust needs more samples: %d / %d", x.size(), MIN_SAMPLES);
-        return true; // not enough samples
-    }
-
-    if (x.back() - x.front() < MIN_SET_DURATION_MS)
-    {
-        LOGF_INFO("RA auto adjust needs longer sample duration: %.3f / %.3f", x.back() - x.front(), MIN_SET_DURATION_MS);
-        return true; // not enough samples
-    }
-
-    if (xnewest - lastadjust < MIN_ADJUST_PERIOD_MS)
-    {
-        LOGF_INFO("RA auto adjust too soon to change : %.0f / %.0f", xnewest - lastadjust, MIN_ADJUST_PERIOD_MS);
-        return true; // not enough time since last adjustment
-    }
-
-    uint32_t n = x.size();
-    double slope = (n*sumxy - sumx*sumy)/(n*sumx2 - sumx*sumx);
-    double adjustRA = slope*100.0;  // Convert to a percentage (of Sidereal rate)
-    lastadjust = xnewest;           // Remember when the last adjustment was made
-    p->setTrackingAdjustment(adjustRA);
-    LOGF_INFO("RA auto adjust rate to %.2f", adjustRA);
     return true;
+}
+
+/*******************************************************************************
+**
+*******************************************************************************/
+void StarGoTelescope::AutoAdjust::start()
+{
+    LOG_DEBUG(__FUNCTION__);
+    p->setTrackingAdjustment(0.0);
+    zfilter->resetsamples();
+    samples.clear();
+    stop();
+    sampleTimerID = IEAddPeriodicTimer(static_cast<int>(Z_SAMPLE_DURATION_MS), sampleTimerHelper, this);
+
+}
+/*******************************************************************************
+**
+*******************************************************************************/
+void StarGoTelescope::AutoAdjust::stop()
+{
+    // If there is a timer remove it
+    if (sampleTimerID)
+    {
+        IERmTimer(sampleTimerID);
+        sampleTimerID = 0;
+    }
+    samples.clear();
 }
 
 /*******************************************************************************
 ** Zfilter version
 *******************************************************************************/
-bool StarGoTelescope::AutoAdjust::setRaAdjustZ(int8_t direction, uint32_t duration_msec)
+bool StarGoTelescope::AutoAdjust::addsample(int8_t direction, uint32_t duration_msec)
 {
-    LOGF_DEBUG("%S Dir: %d; Dur: %d", __FUNCTION__, direction, duration_msec);
+    LOGF_DEBUG("%s Dir: %d; Dur: %d", __FUNCTION__, direction, duration_msec);
+try{
     if (!enabled)
     {
         LOG_ERROR("Auto tracking adjustment is currently DISABLED");
         return false;
     }
 
-// Calculate number of milliseconds since the driver was started
-    double xnewest = std::chrono::duration<double,std::milli>(std::chrono::system_clock::now() - start).count();
-    
-// We are only interested in long period drift and since a fourth order zfilter only requires a few samples
-// We do not need to consider every correction made. So just cherry pick a correction each N seconds (say 10)
-// The guiding sampling rate should be >> the sampling rate needed by the zfilter so we can be approximate
-// For more perfection we could interpolate corrections to get a consistent sample rate
     if(!(direction == STARGO_EAST || direction == STARGO_WEST))
     {
         LOG_ERROR("Invalid direction");
         return false;
     }
     double ddir = direction == STARGO_EAST ? -1.0 : 1.0;
-
-// Need to accumulate the corrections to date
-    sumdur += ddir * static_cast<double>(duration_msec);
-    LOGF_DEBUG("Time: %.2f:This corr: %d ms, Sum Corr: %.0f ms", xnewest - zxlast, duration_msec, sumdur);
-
-    if (xnewest - zxlast < Z_SAMPLE_DURATION_MS) // not enough duration since last sample
-    {
-        LOGF_DEBUG("Waiting for sample duration: %.1f ms / %.1f ms", xnewest - zxlast, Z_SAMPLE_DURATION_MS);
-        return true;
-    }
-
+    
 //  Get the guiding speed
     double guidingSpeed = p->GuidingSpeedN[0].value;
     int raSpeed, decSpeed;
@@ -3781,37 +3671,78 @@ bool StarGoTelescope::AutoAdjust::setRaAdjustZ(int8_t direction, uint32_t durati
     }
     guidingSpeed =  raSpeed/100.0;
 
-//  get trackrate = 1 + adj/100
-    double trackAdjust = 1.0 + p->TrackingAdjustmentN[0].value/100.0;
-    double raCorrection;
-    if (!p->getTrackingAdjustment(&raCorrection))
-    {
-        LOG_ERROR("Unable to get tracking adjustment ");
-        return false;
-    }
-    trackAdjust = 1.0 + raCorrection/100;
-
-    LOGF_DEBUG("ms: %.0f; Guide: %.1f; Track: %.2f;", xnewest, guidingSpeed, trackAdjust);
-
     // Calculate the correction in milliseconds normalised to sidereal rate
-    double ynewest = sumdur * guidingSpeed * trackAdjust;
-    LOGF_DEBUG("Sum Corr: %.0f ms; Sidereal: %.3f", sumdur, ynewest);
+    double ynewest = ddir * static_cast<double>(duration_msec) * guidingSpeed;
+    samples.push_back(ynewest);
+    LOGF_DEBUG("Correction: %.0f ms @ Sidereal. Guide rate: %.2f", ynewest, guidingSpeed);
 
+    return true;
+}
+catch (std::exception& e)
+{
+    LOGF_ERROR("%s >>> %s", __FUNCTION__, e.what());
+    return false;
+}
+
+}
+
+/*******************************************************************************
+**
+*******************************************************************************/
+void StarGoTelescope::AutoAdjust::sampleTimerHelper(void *p)
+{
+    static_cast<StarGoTelescope::AutoAdjust *>(p)->sampleTimerProcess();
+}
+
+/*******************************************************************************
+**
+*******************************************************************************/
+void StarGoTelescope::AutoAdjust::sampleTimerProcess()
+{
+    LOG_DEBUG(__FUNCTION__);
+try{
+// Sum the corrections in msec @ sidereal
+    double sumCorr = 0.0;
+    int i=0;
+
+// This could take place while a sample is being added to the queue 
+// and may be the cause of crashes. 
+// Should lock the queue while processing it either here or when adding samples
+// Maybe easier to do here even though adding should take priority
+    while (!samples.empty())
+    {
+        sumCorr += samples.front();
+        samples.pop_front();
+        i++;
+    }
+    LOGF_DEBUG("%d samples sum to %.0f ms correction", i, sumCorr);
+    
 // Calculate the correction to long period drift with the zfilter
 // Convert it to a tracking adjustment by dividing by the sampling period
-// We could get more sophisticated and keep the last 2 or 3 corrections to extrapolate
-// with a non-linear algorithm e.g. cubic spline
-// Otherwise the corrections lag the changes
-    double zynewest = zfilter->addsample(ynewest);
-    double slope = zynewest / (xnewest - zxlast);
-    zxlast = xnewest;
+// i.e. we have sidereal ms correction over duration ms => sidereal adjustment
+    double newcorrection = zfilter->addsample(sumCorr);
+    double slope = newcorrection / Z_SAMPLE_DURATION_MS;
+
+//  get trackrate adjustment percentage
+    double currAdjust = p->TrackingAdjustmentN[0].value;
+    if (!p->getTrackingAdjustment(&currAdjust))
+    {
+        LOG_ERROR("Unable to get tracking adjustment ");
+        return;
+    }
 
 // Convert to a percentage (of Sidereal rate)
 // Need to add current adjustment as the correction is on top of that
-    double adjustRA = slope*100.0 + raCorrection;
-    LOGF_DEBUG("Correction %.3f; Adjustment: %.3f", zynewest, adjustRA);
+    double newAdjust = slope*100.0 + currAdjust;
+    LOGF_DEBUG("Correction %.3f ms Adjustment: %.3e %% sidereal", newcorrection, newAdjust);
 
-    p->setTrackingAdjustment(adjustRA);
-    LOGF_INFO("RA auto adjust rate to %.2f", adjustRA);
-    return true;
+    p->setTrackingAdjustment(newAdjust);
+    LOGF_INFO("RA auto adjust rate from %.2f to %.2f", currAdjust, newAdjust);
+
+}
+catch (std::exception& e)
+{
+    LOGF_ERROR("%s >>> %s", __FUNCTION__, e.what());
+    return;
+}
 }

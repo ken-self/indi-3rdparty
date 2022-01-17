@@ -39,6 +39,7 @@ https://www-users.cs.york.ac.uk/~fisher/mkfilter/
 #include <stdio.h>
 #include <math.h>
 #include <string.h>
+#include <exception>
 
 #include "zfilterfactory.h"
 
@@ -89,8 +90,11 @@ ZFilterFactory::ZFilterFactory(StarGoTelescope* ptr)
 void ZFilterFactory::resetsamples()
 {
     LOG_DEBUG(__FUNCTION__);
+// Need samples to match number of coeffs
     m_xv.clear();
     m_yv.clear();
+    m_xv.insert(m_xv.begin(), rxcoeffs.size(), 0.0);
+    m_yv.insert(m_yv.begin(), rycoeffs.size(), 0.0);
     m_sumCorr = 0.0;
 }
 
@@ -148,7 +152,6 @@ double ZFilterFactory::addsample(double input)
 {
     LOG_DEBUG(__FUNCTION__);
     double dReturn=0;
-
 //    Digital filter designed by mkfilter/mkshape/gencode   A.J. Fisher
     double l_gain = gain();
 
@@ -169,10 +172,12 @@ double ZFilterFactory::addsample(double input)
     {
         m_yv.at(0) += m_yv.at(i) * rycoeffs.at(i);
     }
+    
     dReturn = m_yv.at(0) -  m_sumCorr; // Return the difference from the uncorrected waveform
     m_sumCorr += dReturn;
 
     return dReturn;
+
 }
 
 /*******************************************************************************
