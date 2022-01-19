@@ -172,6 +172,7 @@ double ZFilterFactory::addsample(double input)
     {
         m_yv.at(0) += m_yv.at(i) * rycoeffs.at(i);
     }
+    LOGF_DEBUG("mSumCorr: %.4e yval: %.4e", m_sumCorr, m_yv.at(0));
     
     dReturn = m_yv.at(0) -  m_sumCorr; // Return the difference from the uncorrected waveform
     m_sumCorr += dReturn;

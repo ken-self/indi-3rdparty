@@ -2673,7 +2673,7 @@ void StarGoTelescope::guideTimeout(INDI_EQ_AXIS axis)
     }
     else if (motion[axis] != MOTION_STATIC and motion[axis] != MOTION_TRACK)
     {
-        LOGF_ERROR("Motor is still moving on axis %s", caxis[axis]);
+        LOGF_WARN("Motor is still moving on axis %s", caxis[axis]);
         GuideNP[axis]->s = IPS_ALERT;
     }
     else
@@ -3582,8 +3582,9 @@ StarGoTelescope::AutoAdjust::AutoAdjust(StarGoTelescope *ptr)
     // at which the magnitude of the response is -3 dB.
     // We want the corner to be at around 600s or less so that full attenuation occurs at 1200s.
     // So the corner period vs sample period is 600/20 = 30x
+    // Consider the corner at 400s
     zfilter = new ZFilterFactory(ptr);
-    zfilter->rebuild( BUTTERWORTH, 4, 30 );
+    zfilter->rebuild( BUTTERWORTH, 4, 20 );
 }
 /*******************************************************************************
 **
@@ -3720,6 +3721,7 @@ try{
 // Calculate the correction to long period drift with the zfilter
 // Convert it to a tracking adjustment by dividing by the sampling period
 // i.e. we have sidereal ms correction over duration ms => sidereal adjustment
+// FIXME: the corrections seem to be a factor of 10x too small
     double newcorrection = zfilter->addsample(sumCorr);
     double slope = newcorrection / Z_SAMPLE_DURATION_MS;
 
@@ -3733,11 +3735,21 @@ try{
 
 // Convert to a percentage (of Sidereal rate)
 // Need to add current adjustment as the correction is on top of that
+// The return from addsample is the LP filtered deviation.
+// The correction needs to be in the same direction to take some of the burden
+// of corrections away from guiding
     double newAdjust = slope*100.0 + currAdjust;
-    LOGF_DEBUG("Correction %.3f ms Adjustment: %.3e %% sidereal", newcorrection, newAdjust);
+    LOGF_DEBUG("Correction %.4e ms Adjustment: %.4e %% sidereal", newcorrection, newAdjust);
 
-    p->setTrackingAdjustment(newAdjust);
-    LOGF_INFO("RA auto adjust rate from %.2f to %.2f", currAdjust, newAdjust);
+    if (fabs(newAdjust-currAdjust) > 0.005)
+    {
+        p->setTrackingAdjustment(newAdjust);
+        LOGF_INFO("RA auto adjust rate from %.2f to %.2f", currAdjust, newAdjust);
+    }
+    else
+    {
+        LOGF_INFO("No change in RA auto adjust rate %.2f to %.2f", currAdjust, newAdjust);
+    }
 
 }
 catch (std::exception& e)
