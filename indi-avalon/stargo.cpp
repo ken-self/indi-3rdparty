@@ -3396,7 +3396,7 @@ bool StarGoTelescope::sendQuery(const char* cmd, char* response, char end, int w
         // Convert duration to timespec values
         auto secs = std::chrono::duration_cast<std::chrono::seconds>(delay);
         delay -= secs;
-        timespec sleep_ts{secs.count(), delay.count()};  // int (time_t), long
+        timespec sleep_ts{static_cast<time_t>(secs.count()), static_cast<long>(delay.count())};  // int (time_t), long
         nanosleep(&sleep_ts, nullptr);
     }
     // Update the transmit timer
@@ -3743,8 +3743,18 @@ try{
 
     if (fabs(newAdjust-currAdjust) > 0.005)
     {
-        p->setTrackingAdjustment(newAdjust);
         LOGF_INFO("RA auto adjust rate from %.2f to %.2f", currAdjust, newAdjust);
+        if(p->setTrackingAdjustment(newAdjust))
+        {
+            p->TrackingAdjustmentN[0].value = newAdjust;
+            p->TrackingAdjustmentNP.s      = IPS_OK;
+        }
+        else
+        {
+            LOGF_ERROR("RA tracking adjust from %.2f to %.2f failed", currAdjust, newAdjust);
+            p->TrackingAdjustmentNP.s = IPS_ALERT;
+        }
+        IDSetNumber(&(p->TrackingAdjustmentNP), nullptr);
     }
     else
     {
