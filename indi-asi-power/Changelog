@@ -1,3 +1,6 @@
+v0.96
+* Add voltage sensor readings
+
 v0.95
 * Replace pigpio timer with INDI timer
 

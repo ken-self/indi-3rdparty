@@ -1,3 +1,9 @@
+indi-asi-power (0.96) buster; urgency=medium
+
+  * Add voltage sensor readings
+
+ -- Ken Self <ken.kgself@gmail.com>  Fri, 11 Feb 2022 20:45:00 +1000
+
 indi-asi-power (0.95) buster; urgency=medium
 
   * Replace pigpio timer with INDI timer
