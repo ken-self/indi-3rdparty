@@ -393,6 +393,28 @@
 
 #define DEVICETYPE_QHY5III482C        4101
 #define DEVICETYPE_QHY5III464         4102
+
+#define DEVICETYPE_QHY183A              4105
+#define DEVICETYPE_QHY183A_M            4106
+#define DEVICETYPE_QHY183A_C            4107
+
+#define DEVICETYPE_QHY5III334            4108
+#define DEVICETYPE_QHY5III334M           4109
+#define DEVICETYPE_QHY5III334C           4110
+
+#define DEVICETYPE_QHY991                4111
+#define DEVICETYPE_QHY1253               4112
+#define DEVICETYPE_QHY5III415            4113
+
+#define DEVICETYPE_QHY1920             4114
+#define DEVICETYPE_QHY1920M            4115
+#define DEVICETYPE_QHY1920C            4116
+
+#define DEVICETYPE_QHY9701             4117
+#define DEVICETYPE_QHY530              4118
+
+#define DEVICETYPE_QHY600M_OEM     		4119
+#define DEVICETYPE_QHY533M              4120
 /**
  * Type define for QHY5IIIEND*/
 #define DEVICETYPE_QHY5IIIEND   	4999
@@ -557,6 +579,8 @@
 #define DEVICETYPE_QHY411ERISPCIE  		0X6618c414
 #define DEVICETYPE_QHY600PCIE      		0X6618c603
 #define DEVICETYPE_QHY268PCIE      		0X6618c269
+#define DEVICETYPE_QHY530PCIE      		0X6618c531
+#define DEVICETYPE_QHY990PCIE      		0X6618c991
 #define DEVICETYPE_QHY461PCIE      		0X6618c462
 
 
@@ -977,8 +1001,8 @@
 
 /**
  * Type define for QHY-DevelopDev*/
-#define QHY5IIICOMMON_MAX_WIDTH      2712//3864// 2712// 1408    //8432  	
-#define QHY5IIICOMMON_MAX_HEIGHT     1538//2180// 1538// 1052    //5648	  
+#define QHY5IIICOMMON_MAX_WIDTH      5336//4144//3864//5680//2712//3864// 2712// 1408    //8432  	
+#define QHY5IIICOMMON_MAX_HEIGHT     4908//3064//2192//3710//1538//2180// 1538// 1052    //5648	  
 
 /**
  * Type define for QHY247*/
@@ -1047,6 +1071,9 @@
 #define QHY990_MAX_WIDTH        	1408
 #define QHY990_MAX_HEIGHT        	1052
 
+#define QHY991_MAX_WIDTH        	768
+#define QHY991_MAX_HEIGHT        	540
+
 #define QHY42PRO_MAX_WIDTH        	4096
 #define QHY42PRO_MAX_HEIGHT        	2048
 
@@ -1056,8 +1083,21 @@
 #define QHY411_MAX_WIDTH        	14304
 #define QHY411_MAX_HEIGHT        	10748
 
+// 10802-92-54=10656 max_y-topBlank-bottomBlank=imageHeight
+// 14304-48-48=14208 max_x-leftBlank-rightBlank=imageWidth
+// only y-shift is supported by most sensor
 #define QHY411ERIS_MAX_WIDTH        14304
-#define QHY411ERIS_MAX_HEIGHT       10748
+#define QHY411ERIS_MAX_HEIGHT       10802
+#define QHY411ERIS_Left_Blank       48
+#define QHY411ERIS_right_Blank      48
+#define QHY411ERIS_Top_Blank        92
+//81 is a default shift value, set to 81 can save data size
+#define QHY411ERIS_M_Default_SHIFT  81
+// for color sensor, shift value must be an odd number
+#define QHY411ERIS_C_Default_SHIFT  81
+// bottom can be set to 0 to reduce data size (set bottom to 0 and set max_height to 10748
+#define QHY411ERIS_Bottom_Blank     54
+
 
 #define QHY600_MAX_WIDTH        	9600
 #define QHY600_MAX_HEIGHT        	6422
@@ -1324,6 +1364,13 @@
 
 #define   SINGLE_MODE 								0
 #define   LIVE_MODE 								1
+
+#define   QHYCCDParam_On            1
+#define   QHYCCDParam_Off           0
+#define   QHYCCDParam_AirPump_On           3
+#define   QHYCCDParam_AirPump_Off          4
+
+#define   FLASH_CONFIG_PAGE_INDEX					1
 
 #define   FPGA_MODE_DEFAULT 						99
 #define   FPGA_MODE_12_47M 								12     //14bit rigister= 11M  12bit rigister = 47M

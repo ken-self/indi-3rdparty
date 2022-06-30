@@ -1,5 +1,5 @@
 # Weather Radio
-Weather Radio is an software suite for building your own weather station with [Arduino](https://www.arduino.cc/) using all types of environment sensors for temperature, pressure, humidity etc. It contains also advanced features like **cloud detection**, measuring the **sky quality** and sky observation through a camera device like a **Raspberry Camera**
+Weather Radio is a software suite for building your own weather station with [Arduino](https://www.arduino.cc/) using all types of environment sensors for temperature, pressure, humidity etc. It contains also advanced features like **cloud detection**, measuring the **sky quality** and sky observation through a camera device like a **Raspberry Camera**
 
 Here is an example how a weather station could look like - inspired by the construction of bird nesting boxes:
 
@@ -8,7 +8,7 @@ Here is an example how a weather station could look like - inspired by the const
 
 A wooden housing, attached to my backyard shed gives a Raspberry Zero a weather proof shelter. On the front side there is a acrylic glass dome where a Raspberry Camera continuously observes the sky. On the left side of the housing there is a small grey box hosting all weather sensors. All weather data is open available through my website [weather.openfuture.de](http://weather.openfuture.de/).
 
-This software suiteIt contains:
+This software suite contains:
 * Arduino Firmware (tested on Arduino Nano, Adafruit Metro Mini, Wemos D1 Mini Pro, but should work on most Arduinos) reading out sensor values and publishing them as JSON document.
 * INDI driver for integrating the weather station into your observatory setup.
 * Javascript based web page for displaying current weather data and graphs for historic weather data and weather images.
@@ -57,7 +57,18 @@ For installing the firmware onto a Arduino, you first need the [Arduino IDE](htt
 
 The next step is to install the board definitions for your board of choice (see instructions from the board manufacturer) and the [libraries](https://www.arduino.cc/en/Guide/Libraries) for all sensors you want to connect.
 
-In addition, you need to install the **ArduinoJSON** library, since Weather Radio communicates with JSON documents.
+###Arduino Libraries
+Depending on your selection of sensors, you need some additional libraries. Install them with the **Library Manager** of Arduino.
+
+* **ArduinoJSON** Required, Weather Radio communicates with JSON documents.
+* **SSD1306Ascii** Display ASCII text on the OLED display.
+* **OneButton** Use a simple button to active the OLED display.
+* **Adafruit_TSL2591** TSL 2591 light sensor library
+* **Adafruit_BME280** BME 280 sensor for pressure, temperature and humidity
+* **DHT** DHT 11/22 humidity sensor
+* **Adafruit_MLX90614** Melexis 90614 IR sensor (used for cloud recognition)
+* **ESP8266-ping** Library necessary if you use a ESP8266 board
+* **ArduinoOTA** Nessesary if you want to use the "over the air" feature of ESP8266 boards for updating via WiFi.
 
 ### Firmware Configuration
 There are a few configurations necessary before you upload the firmware to your arduino. Please open `weatherradio.ino` from `devices/Firmwares/weatherradio` and switch to the `config.h` tab.

@@ -7,8 +7,8 @@ LIST(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../cmake_modules/")
 include(GNUInstallDirs)
 
 set (SV305_VERSION_MAJOR 1)
-set (SV305_VERSION_MINOR 2)
-set (SV305_VERSION_PATCH 3)
+set (SV305_VERSION_MINOR 3)
+set (SV305_VERSION_PATCH 0)
 
 find_package(CFITSIO REQUIRED)
 find_package(INDI REQUIRED)
@@ -34,11 +34,11 @@ SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
 
 add_executable(indi_sv305_ccd ${sv305ccd_SRCS})
 
-IF("${CMAKE_SYSTEM}" MATCHES "Linux")
-    target_link_libraries(indi_sv305_ccd ${SV305_LIBRARIES} ${INDI_LIBRARIES} ${CFITSIO_LIBRARIES} m ${ZLIB_LIBRARY})
-ELSE("${CMAKE_SYSTEM}" MATCHES "Linux")
+IF(WIN32)
     message(FATAL_ERROR "Driver only available on Linux.")
-ENDIF("${CMAKE_SYSTEM}" MATCHES "Linux")
+ELSE()
+    target_link_libraries(indi_sv305_ccd ${SV305_LIBRARIES} ${INDI_LIBRARIES} ${CFITSIO_LIBRARIES} m ${ZLIB_LIBRARY})
+ENDIF()
 
 
 install(TARGETS indi_sv305_ccd RUNTIME DESTINATION bin)
