@@ -26,6 +26,7 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/indi_stargo.xml.cmake ${CMAKE_CURRENT
 IF ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 6.3.9)
     SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wformat-overflow=2")
 ENDIF ()
+SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-psabi")
 
 ########### LX200 StarGO ###########
 #SET(lx200stargo_SRCS
