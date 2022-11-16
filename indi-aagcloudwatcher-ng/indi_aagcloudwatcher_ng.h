@@ -42,9 +42,7 @@ class AAGCloudWatcher : public INDI::Weather
         AAGCloudWatcher();
         virtual ~AAGCloudWatcher() override;
 
-        virtual void ISGetProperties(const char *dev) override;
         virtual bool initProperties() override;
-        virtual bool ISNewText(const char *dev, const char *name, char *texts[], char *names[], int n) override;
         virtual bool ISNewNumber(const char *dev, const char *name, double values[], char *names[], int n) override;
         virtual bool ISNewSwitch(const char *dev, const char *name, ISState *states, char *names[], int n) override;
 
@@ -77,4 +75,39 @@ class AAGCloudWatcher : public INDI::Weather
 
         float desiredSensorTemperature;
         float globalRainSensorHeater;
+
+        double m_FirmwareVersion {5};
+
+        enum
+        {
+            RAW_SENSOR_SUPPLY,
+            RAW_SENSOR_SKY,
+            RAW_SENSOR_SENSOR,
+            RAW_SENSOR_AMBIENT,
+            RAW_SENSOR_RAIN,
+            RAW_SENSOR_RAIN_HEATER,
+            RAW_SENSOR_RAIN_TEMPERATURE,
+            RAW_SENSOR_LDR,
+            RAW_SENSOR_READ_CYCLES,
+            RAW_SENSOR_WIND_SPEED,
+            RAW_SENSOR_RELATIVE_HUMIDITY,
+            RAW_SENSOR_PRESSURE,
+            RAW_SENSOR_TOTAL_READINGS
+        };
+
+         enum
+        {
+            SENSOR_INFRARED_SKY, //skyTemperature
+            SENSOR_CORRECTED_INFRARED_SKY, //correctedTemperature
+            SENSOR_INFRARED_SENSOR,
+            SENSOR_RAIN_SENSOR, //data.sensor
+            SENSOR_RAIN_SENSOR_TEMPERATURE, //rainSensorTemperature
+            SENSOR_RAIN_SENSOR_HEATER, //rainSensorHeater
+            SENSOR_BRIGHTNESS_SENSOR, //ambientLight
+            SENSOR_AMBIENT_TEMPERATURE_SENSOR, //ambientTemperature
+            SENSOR_WIND_SPEED, //data.windSpeed;
+            SENSOR_HUMIDITY, //data.humidity;
+            SENSOR_PRESSURE //data.pressure;
+        };
+
 };

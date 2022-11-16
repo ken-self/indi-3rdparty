@@ -31,7 +31,7 @@
 #include <memory>
 #include <deque>
 
-#define TEMP_THRESHOLD       0.05   /* Differential temperature threshold (C)*/
+#define UPDATE_THRESHOLD       0.05   /* Differential temperature threshold (C)*/
 
 //NB Disable for real driver
 //#define USE_SIMULATION
@@ -202,6 +202,11 @@ bool QHYCCD::initProperties()
     IUFillNumberVector(&USBBufferNP, USBBufferN, 1, getDeviceName(), "USB_BUFFER", "USB Buffer", MAIN_CONTROL_TAB,
                        IP_RW, 60, IPS_IDLE);
 
+    // Humidity
+    IUFillNumber(&HumidityN[0], "HUMIDITY", "%", "%.2f", -100, 1000, 0.1, 0);
+    IUFillNumberVector(&HumidityNP, HumidityN, 1, getDeviceName(), "CCD_HUMIDITY", "Humidity", MAIN_CONTROL_TAB,
+                       IP_RO, 60, IPS_IDLE);
+
     // Cooler Mode
     IUFillSwitch(&CoolerModeS[COOLER_AUTOMATIC], "COOLER_AUTOMATIC", "Auto", ISS_ON);
     IUFillSwitch(&CoolerModeS[COOLER_MANUAL], "COOLER_MANUAL", "Manual", ISS_OFF);
@@ -315,7 +320,7 @@ bool QHYCCD::initProperties()
     IUFillTextVector(&GPSDataNowTP, GPSDataNowT, 4, getDeviceName(), "GPS_DATA_NOW", "Now", GPS_DATA_TAB, IP_RO, 60, IPS_IDLE);
 
     addAuxControls();
-    setDriverInterface(getDriverInterface() | FILTER_INTERFACE);
+    setDriverInterface(getDriverInterface());
 
     return true;
 }
@@ -337,6 +342,9 @@ void QHYCCD::ISGetProperties(const char *dev)
 
             defineProperty(&CoolerNP);
         }
+
+        if (HasHumidity)
+            defineProperty(&HumidityNP);
 
         if (HasUSBSpeed)
             defineProperty(&SpeedNP);
@@ -395,6 +403,22 @@ void QHYCCD::ISGetProperties(const char *dev)
 
 bool QHYCCD::updateProperties()
 {
+    // Set format first if connected.
+    if (isConnected())
+    {
+        // N.B. AFAIK, there is no way to switch image formats.
+        CaptureFormat format;
+        if (GetCCDCapability() & CCD_HAS_BAYER)
+        {
+            format = {"INDI_RAW", "RAW", 16, true};
+        }
+        else
+        {
+            format = {"INDI_MONO", "Mono", 16, true};
+        }
+        addCaptureFormat(format);
+    }
+
     // Define parent class properties
     INDI::CCD::updateProperties();
 
@@ -414,6 +438,27 @@ bool QHYCCD::updateProperties()
             m_TemperatureTimerID = IEAddTimer(getCurrentPollingPeriod(), QHYCCD::updateTemperatureHelper, this);
         }
 
+        if (HasHumidity)
+        {
+            if (isSimulation())
+            {
+                HumidityN[0].value = 99.9;
+            }
+            else
+            {
+                double humidity = 0.;
+                uint32_t ret = GetQHYCCDHumidity(m_CameraHandle, &humidity);
+                if (ret == QHYCCD_SUCCESS)
+                {
+                    HumidityN[0].value = humidity;
+                }
+
+                LOGF_INFO("Humidity Sensor: %s", ret == QHYCCD_SUCCESS ? "true" :
+                          "false");
+            }
+
+            defineProperty(&HumidityNP);
+        }
         double min = 0, max = 0, step = 0;
         if (HasUSBSpeed)
         {
@@ -599,6 +644,9 @@ bool QHYCCD::updateProperties()
             RemoveTimer(m_TemperatureTimerID);
         }
 
+        if (HasHumidity)
+            deleteProperty(HumidityNP.name);
+
         if (HasUSBSpeed)
         {
             deleteProperty(SpeedNP.name);
@@ -723,6 +771,31 @@ bool QHYCCD::Connect()
         versionInfo << year << "." << month << "." << day;
         LOGF_INFO("Using QHY SDK version %s", versionInfo.str().c_str());
         IUSaveText(&SDKVersionT[0], versionInfo.str().c_str());
+
+        ////////////////////////////////////////////////////////////////////
+        /// Bin Modes
+        ////////////////////////////////////////////////////////////////////
+
+        m_SupportedBins[Bin1x1] = IsQHYCCDControlAvailable(m_CameraHandle, CAM_BIN1X1MODE) == QHYCCD_SUCCESS;
+        m_SupportedBins[Bin2x2] = IsQHYCCDControlAvailable(m_CameraHandle, CAM_BIN2X2MODE) == QHYCCD_SUCCESS;
+        m_SupportedBins[Bin3x3] = IsQHYCCDControlAvailable(m_CameraHandle, CAM_BIN3X3MODE) == QHYCCD_SUCCESS;
+        m_SupportedBins[Bin4x4] = IsQHYCCDControlAvailable(m_CameraHandle, CAM_BIN4X4MODE) == QHYCCD_SUCCESS;
+
+        auto supported = std::any_of(m_SupportedBins + 1, m_SupportedBins + 4, [](bool value)
+        {
+            return value;
+        });
+
+        if (supported)
+            cap |= CCD_CAN_BIN;
+
+        LOGF_INFO("Binning Control: %s", supported ? "True" : "False");
+        if (supported)
+        {
+            LOGF_DEBUG("Bin2x2: %s, Bin3x3: %s, Bin4x4: %s", m_SupportedBins[Bin2x2] ? "true" : "false",
+                       m_SupportedBins[Bin3x3] ? "true" : "false",
+                       m_SupportedBins[Bin4x4] ? "true" : "false");
+        }
 
         ////////////////////////////////////////////////////////////////////
         /// Read Modes
@@ -869,37 +942,55 @@ bool QHYCCD::Connect()
         ////////////////////////////////////////////////////////////////////
         /// Filter Wheel Support
         ////////////////////////////////////////////////////////////////////
-        ret = IsQHYCCDControlAvailable(m_CameraHandle, CONTROL_CFWPORT);
-        if (ret == QHYCCD_SUCCESS)
-        {
-            HasFilters = true;
 
-            m_MaxFilterCount = GetQHYCCDParam(m_CameraHandle, CONTROL_CFWSLOTSNUM);
-            LOGF_DEBUG("Filter Count (CONTROL_CFWSLOTSNUM): %d", m_MaxFilterCount);
-            // If we get invalid value, check again in 0.5 sec
-            if (m_MaxFilterCount > 16)
+        HasFilters = false;
+        //Using new SDK query
+        // N.B. JM 2022.09.18: Still must retry multiple times as sometimes the filter is not picked up
+        for (int i = 0; i < 3; i++)
+        {
+            ret = IsQHYCCDCFWPlugged(m_CameraHandle);
+            if (ret == QHYCCD_SUCCESS)
             {
-                usleep(500000);
+                HasFilters = true;
                 m_MaxFilterCount = GetQHYCCDParam(m_CameraHandle, CONTROL_CFWSLOTSNUM);
                 LOGF_DEBUG("Filter Count (CONTROL_CFWSLOTSNUM): %d", m_MaxFilterCount);
+                // If we get invalid value, check again in 0.5 sec
+                if (m_MaxFilterCount > 16)
+                {
+                    usleep(500000);
+                    m_MaxFilterCount = GetQHYCCDParam(m_CameraHandle, CONTROL_CFWSLOTSNUM);
+                    LOGF_DEBUG("Filter Count (CONTROL_CFWSLOTSNUM): %d", m_MaxFilterCount);
+                }
+
+                if (m_MaxFilterCount > 16)
+                {
+                    LOG_DEBUG("Camera can support CFW but no filters are present.");
+                    m_MaxFilterCount = -1;
+                    HasFilters = false;
+                }
+
+                if (m_MaxFilterCount > 0)
+                {
+                    HasFilters = true;
+                    updateFilterProperties();
+                    LOGF_INFO("Filter Count (CONTROL_CFWSLOTSNUM): %d", m_MaxFilterCount);
+                }
+                else
+                {
+                    HasFilters = false;
+                }
+
+                break;
             }
 
-            if (m_MaxFilterCount > 16)
-            {
-                LOG_DEBUG("Camera can support CFW but no filters are present.");
-                m_MaxFilterCount = -1;
-            }
-
-            if (m_MaxFilterCount > 0)
-                updateFilterProperties();
-            else
-                HasFilters = false;
+            std::this_thread::sleep_for(std::chrono::milliseconds(200));
         }
 
-        if (HasFilters)
+        if (HasFilters == true)
+        {
             setDriverInterface(getDriverInterface() | FILTER_INTERFACE);
-        else
-            setDriverInterface(getDriverInterface() & ~FILTER_INTERFACE);
+            syncDriverInfo();
+        }
         LOGF_DEBUG("Has Filters: %s", HasFilters ? "True" : "False");
 
         ////////////////////////////////////////////////////////////////////
@@ -908,21 +999,6 @@ bool QHYCCD::Connect()
         ret = IsQHYCCDControlAvailable(m_CameraHandle, CONTROL_TRANSFERBIT);
         HasTransferBit = (ret == QHYCCD_SUCCESS);
         LOGF_DEBUG("Has Transfer Bit control? %s", HasTransferBit ? "True" : "False");
-
-        // Using software binning
-        cap |= CCD_CAN_BIN;
-
-        ret = IsQHYCCDControlAvailable(m_CameraHandle, CAM_BIN1X1MODE);
-        LOGF_DEBUG("Bin 1x1: %s", (ret == QHYCCD_SUCCESS) ? "True" : "False");
-
-        ret &= IsQHYCCDControlAvailable(m_CameraHandle, CAM_BIN2X2MODE);
-        ret &= IsQHYCCDControlAvailable(m_CameraHandle, CAM_BIN3X3MODE);
-        ret &= IsQHYCCDControlAvailable(m_CameraHandle, CAM_BIN4X4MODE);
-
-        // Only use software binning if NOT supported by hardware
-        //useSoftBin = !(ret == QHYCCD_SUCCESS);
-
-        LOGF_DEBUG("Binning Control: %s", (cap & CCD_CAN_BIN) ? "True" : "False");
 
         ////////////////////////////////////////////////////////////////////
         /// USB Traffic Control Support
@@ -947,17 +1023,27 @@ bool QHYCCD::Connect()
         if (ret != QHYCCD_ERROR)
         {
             if (ret == BAYER_GB)
+            {
                 IUSaveText(&BayerT[2], "GBRG");
+                cap |= CCD_HAS_BAYER;
+            }
             else if (ret == BAYER_GR)
+            {
                 IUSaveText(&BayerT[2], "GRBG");
+                cap |= CCD_HAS_BAYER;
+            }
             else if (ret == BAYER_BG)
+            {
                 IUSaveText(&BayerT[2], "BGGR");
-            else
+                cap |= CCD_HAS_BAYER;
+            }
+            else if (ret == BAYER_RG)
+            {
                 IUSaveText(&BayerT[2], "RGGB");
+                cap |= CCD_HAS_BAYER;
+            }
 
             LOGF_DEBUG("Color camera: %s", BayerT[2].text);
-
-            cap |= CCD_HAS_BAYER;
         }
 
         ////////////////////////////////////////////////////////////////////
@@ -988,13 +1074,26 @@ bool QHYCCD::Connect()
         /// GPS Support
         ////////////////////////////////////////////////////////////////////
         ret = IsQHYCCDControlAvailable(m_CameraHandle, CAM_GPS);
-        if (ret == QHYCCD_SUCCESS)
+        // JM 2021.07.25: CAM_GPS is returned as true even when there is no GPS.
+        // This bug was reported to QHY and awaiting a fix. Currently limiting GSP to QHY174 only.
+        if (ret == QHYCCD_SUCCESS && strstr(m_CamID, "174"))
         {
             HasGPS = true;
         }
 
         LOGF_DEBUG("GPS Support: %s", HasGPS ? "True" : "False");
 
+        ////////////////////////////////////////////////////////////////////
+        /// Humidity Support
+        ////////////////////////////////////////////////////////////////////
+        double humidity = 0;
+        ret = GetQHYCCDHumidity(m_CameraHandle, &humidity);
+        if (ret == QHYCCD_SUCCESS)
+        {
+            HasHumidity = true;
+        }
+
+        LOGF_INFO("Humidity Support: %s", HasHumidity ? "True" : "False");
         ////////////////////////////////////////////////////////////////////
         /// Overscan Area Support
         ////////////////////////////////////////////////////////////////////
@@ -1158,7 +1257,7 @@ bool QHYCCD::setupParams()
 int QHYCCD::SetTemperature(double temperature)
 {
     // If there difference, for example, is less than 0.1 degrees, let's immediately return OK.
-    if (fabs(temperature - TemperatureN[0].value) < TEMP_THRESHOLD)
+    if (fabs(temperature - TemperatureN[0].value) < UPDATE_THRESHOLD)
         return 1;
 
     LOGF_DEBUG("Requested temperature is %.f, current temperature is %.f", temperature, TemperatureN[0].value);
@@ -1357,36 +1456,18 @@ bool QHYCCD::UpdateCCDFrame(int x, int y, int w, int h)
 
 bool QHYCCD::UpdateCCDBin(int hor, int ver)
 {
-    int ret = QHYCCD_ERROR;
-
     if (hor != ver)
     {
         LOG_ERROR("Invalid binning mode. Asymmetrical binning not supported.");
         return false;
     }
-
-    if (hor == 3)
+    else if (hor > 4 || ver > 4)
     {
-        LOG_ERROR("Invalid binning mode. Only 1x1, 2x2, and 4x4 binning modes supported.");
+        LOG_ERROR("Invalid binning mode. Maximum theoritical binning is 4x4");
         return false;
     }
 
-    if (hor == 1 && ver == 1)
-    {
-        ret = IsQHYCCDControlAvailable(m_CameraHandle, CAM_BIN1X1MODE);
-    }
-    else if (hor == 2 && ver == 2)
-    {
-        ret = IsQHYCCDControlAvailable(m_CameraHandle, CAM_BIN2X2MODE);
-    }
-    else if (hor == 3 && ver == 3)
-    {
-        ret = IsQHYCCDControlAvailable(m_CameraHandle, CAM_BIN3X3MODE);
-    }
-    else if (hor == 4 && ver == 4)
-    {
-        ret = IsQHYCCDControlAvailable(m_CameraHandle, CAM_BIN4X4MODE);
-    }
+    auto supported = m_SupportedBins[hor - 1];
 
     // Binning ALWAYS succeeds
 #if 0
@@ -1400,7 +1481,7 @@ bool QHYCCD::UpdateCCDBin(int hor, int ver)
     PrimaryCCD.getBinY() = 1;
 #endif
 
-    if (ret != QHYCCD_SUCCESS)
+    if (!supported)
     {
         LOGF_ERROR("%dx%d binning is not supported.", hor, ver);
         return false;
@@ -1841,13 +1922,12 @@ bool QHYCCD::ISNewNumber(const char *dev, const char *name, double values[], cha
         {
             double currentGain = GainN[0].value;
             IUUpdateNumber(&GainNP, values, names, n);
-            m_GainRequest = GainN[0].value;
-            if (fabs(m_LastGainRequest - m_GainRequest) > 0.001)
+            if (fabs(m_LastGainRequest - GainN[0].value) > UPDATE_THRESHOLD)
             {
                 int rc = SetQHYCCDParam(m_CameraHandle, CONTROL_GAIN, GainN[0].value);
                 if (rc == QHYCCD_SUCCESS)
                 {
-                    m_LastGainRequest = m_GainRequest;
+                    m_LastGainRequest = GainN[0].value;
                     GainNP.s = IPS_OK;
                     saveConfig(true, GainNP.name);
                     LOGF_INFO("Gain updated to %.f", GainN[0].value);
@@ -1878,8 +1958,12 @@ bool QHYCCD::ISNewNumber(const char *dev, const char *name, double values[], cha
             if (rc == QHYCCD_SUCCESS)
             {
                 OffsetNP.s = IPS_OK;
-                LOGF_INFO("Offset updated to %.f", OffsetN[0].value);
-                saveConfig(true, OffsetNP.name);
+
+                if (std::abs(currentOffset - OffsetN[0].value) > UPDATE_THRESHOLD)
+                {
+                    LOGF_INFO("Offset updated to %.f", OffsetN[0].value);
+                    saveConfig(true, OffsetNP.name);
+                }
             }
             else
             {
@@ -1903,9 +1987,12 @@ bool QHYCCD::ISNewNumber(const char *dev, const char *name, double values[], cha
 
             if (rc == QHYCCD_SUCCESS)
             {
-                LOGF_INFO("Speed updated to %.f", SpeedN[0].value);
                 SpeedNP.s = IPS_OK;
-                saveConfig(true, SpeedNP.name);
+                if (std::abs(currentSpeed - SpeedN[0].value) > UPDATE_THRESHOLD)
+                {
+                    LOGF_INFO("Speed updated to %.f", SpeedN[0].value);
+                    saveConfig(true, SpeedNP.name);
+                }
             }
             else
             {
@@ -2138,17 +2225,17 @@ void QHYCCD::updateTemperatureHelper(void *p)
 
 void QHYCCD::updateTemperature()
 {
-    double ccdtemp = 0, coolpower = 0;
+    double currentTemperature = 0, currentCoolingPower = 0, currentHumidity = 0;
 
     if (isSimulation())
     {
-        ccdtemp = TemperatureN[0].value;
+        currentTemperature = TemperatureN[0].value;
         if (TemperatureN[0].value < m_TemperatureRequest)
-            ccdtemp += TEMP_THRESHOLD;
+            currentTemperature += UPDATE_THRESHOLD * 10;
         else if (TemperatureN[0].value > m_TemperatureRequest)
-            ccdtemp -= TEMP_THRESHOLD;
+            currentTemperature -= UPDATE_THRESHOLD * 10;
 
-        coolpower = 128;
+        currentCoolingPower = 128;
     }
     else
     {
@@ -2171,21 +2258,49 @@ void QHYCCD::updateTemperature()
             SetQHYCCDParam(m_CameraHandle, CONTROL_MANULPWM, CoolerN[0].value * 255.0 / 100 );
         }
 
-        ccdtemp   = GetQHYCCDParam(m_CameraHandle, CONTROL_CURTEMP);
-        coolpower = GetQHYCCDParam(m_CameraHandle, CONTROL_CURPWM);
+        currentTemperature   = GetQHYCCDParam(m_CameraHandle, CONTROL_CURTEMP);
+        currentCoolingPower = GetQHYCCDParam(m_CameraHandle, CONTROL_CURPWM);
     }
 
-    // No need to spam to log
-    if (fabs(ccdtemp - TemperatureN[0].value) > 0.001 || fabs(CoolerN[0].value - (coolpower / 255.0 * 100)) > 0.001)
+    // Only update if above update threshold
+    if (std::abs(currentTemperature - TemperatureN[0].value) > UPDATE_THRESHOLD)
     {
-        LOGF_DEBUG("CCD T.: %.f (C) Power: %.f (%.2f%%)", ccdtemp, coolpower, coolpower / 255.0 * 100);
+        if (currentTemperature > 100)
+            TemperatureNP.s = IPS_ALERT;
+        else
+            TemperatureN[0].value = currentTemperature;
+        IDSetNumber(&TemperatureNP, nullptr);
+
+        LOGF_DEBUG("CCD T.: %.f (C)", currentTemperature);
+    }
+    // Restart temperature regulation if needed.
+    else if (TemperatureNP.s == IPS_OK && fabs(TemperatureN[0].value - m_TemperatureRequest) > UPDATE_THRESHOLD)
+    {
+        if (currentTemperature > 100)
+            TemperatureNP.s       = IPS_ALERT;
+        else
+        {
+            TemperatureN[0].value = currentTemperature;
+            TemperatureNP.s       = IPS_BUSY;
+        }
+        IDSetNumber(&TemperatureNP, nullptr);
     }
 
-    TemperatureN[0].value = ccdtemp;
+    // Update cooling power if needed.
+    if (std::abs(currentCoolingPower - CoolerN[0].value) > UPDATE_THRESHOLD)
+    {
+        if (currentCoolingPower > 255)
+            CoolerNP.s = IPS_ALERT;
+        else
+        {
+            CoolerN[0].value      = currentCoolingPower / 255.0 * 100;
+            CoolerNP.s = CoolerN[0].value > 0 ? IPS_BUSY : IPS_IDLE;
+        }
+        IDSetNumber(&CoolerNP, nullptr);
+        LOGF_DEBUG("Cooling Power: %.f (%.2f%%)", currentCoolingPower, currentCoolingPower / 255.0 * 100);
+    }
 
-    CoolerN[0].value      = coolpower / 255.0 * 100;
-    CoolerNP.s = CoolerN[0].value > 0 ? IPS_BUSY : IPS_IDLE;
-
+    // Synchronize state of cooling power and cooling switch
     IPState coolerSwitchState = CoolerN[0].value > 0 ? IPS_BUSY : IPS_OK;
     if (coolerSwitchState != CoolerSP.s)
     {
@@ -2193,22 +2308,17 @@ void QHYCCD::updateTemperature()
         IDSetSwitch(&CoolerSP, nullptr);
     }
 
-    //    if (TemperatureNP.s == IPS_BUSY && fabs(TemperatureN[0].value - m_TemperatureRequest) <= TEMP_THRESHOLD)
-    //    {
-    //        TemperatureN[0].value = ccdtemp;
-    //        TemperatureNP.s       = IPS_OK;
-    //    }
-
-    // Restart regulation if needed.
-    else if (TemperatureNP.s == IPS_OK && fabs(TemperatureN[0].value - m_TemperatureRequest) > TEMP_THRESHOLD)
+    // Check humidity and update if necessary
+    if (HasHumidity)
     {
-        TemperatureN[0].value = ccdtemp;
-        TemperatureNP.s       = IPS_BUSY;
+        IPState currentState = (GetQHYCCDHumidity(m_CameraHandle, &currentHumidity) == QHYCCD_SUCCESS) ? IPS_OK : IPS_ALERT;
+        if (currentState != HumidityNP.s || std::abs(currentHumidity - HumidityN[0].value) > UPDATE_THRESHOLD)
+        {
+            HumidityN[0].value = currentHumidity;
+            HumidityNP.s = currentState;
+            IDSetNumber(&HumidityNP, nullptr);
+        }
     }
-
-
-    IDSetNumber(&TemperatureNP, nullptr);
-    IDSetNumber(&CoolerNP, nullptr);
 
     m_TemperatureTimerID = IEAddTimer(getCurrentPollingPeriod(), QHYCCD::updateTemperatureHelper, this);
 }
@@ -2512,7 +2622,7 @@ void QHYCCD::getExposure()
          * about one second, after which decrease the poll interval
          */
         double timeLeft = calcTimeLeft();
-        uint32_t uSecs = 0;
+        uint32_t uSecs = 100000;
         if (timeLeft > 1.1)
         {
             /*
@@ -2521,22 +2631,11 @@ void QHYCCD::getExposure()
              * a full second boundary, which keeps the
              * count down neat
              */
-            double fraction = timeLeft - static_cast<int>(timeLeft);
-            if (fraction >= 0.005)
-            {
-                uSecs = static_cast<uint32_t>(fraction * 1000000.0);
-            }
-            else
-            {
-                uSecs = 1000000;
-            }
-        }
-        else
-        {
-            uSecs = 10000;
+            timeLeft = round(timeLeft);
+            uSecs = 1000000;
         }
 
-        if (timeLeft >= 0.0049)
+        if (timeLeft >= 0)
         {
             PrimaryCCD.setExposureLeft(timeLeft);
         }
@@ -2625,10 +2724,11 @@ bool QHYCCD::updateFilterProperties()
     return false;
 }
 
-void QHYCCD::addFITSKeywords(fitsfile *fptr, INDI::CCDChip *targetChip)
+void QHYCCD::addFITSKeywords(INDI::CCDChip *targetChip)
 {
-    INDI::CCD::addFITSKeywords(fptr, targetChip);
+    INDI::CCD::addFITSKeywords(targetChip);
     int status = 0;
+    auto fptr = *targetChip->fitsFilePointer();
 
     if (HasGain)
     {

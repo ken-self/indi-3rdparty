@@ -1,8 +1,8 @@
 cmake_minimum_required (VERSION 3.0)
 project (libnncam)
 
-# Using Version: 48.18332.20210120
-set(LIBNNCAM_VERSION "1.48.1")
+# Using Version: 49.18939.20210514
+set(LIBNNCAM_VERSION "1.49.1")
 set(LIBNNCAM_SOVERSION "1")
 
 list (APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake_modules/")
@@ -17,6 +17,8 @@ set_target_properties (nncam PROPERTIES VERSION ${LIBNNCAM_VERSION} SOVERSION ${
 if (APPLE)
 
   set_property (TARGET nncam PROPERTY IMPORTED_LOCATION "mac/libnncam.bin")
+
+  FIX_LIBRARY_ID("libnncam" "mac/libnncam.bin" "Levenhuk (libnncam)")
 
 elseif (UNIX AND NOT WIN32)
 

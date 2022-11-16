@@ -1,3 +1,23 @@
+indi-celestronaux (1.2) focal; urgency=medium
+
+  * Initial support for Alt-Az on Celestron Equatorial Wedge.
+
+ -- Jasem Mutlaq <mutlaqja@ikarustech.com>  Fri, 08 Jul 2022 17:00:00 +0300
+
+indi-celestronaux (1.1) focal; urgency=medium
+
+  * Fixed southern hemisphere in Alt-Az mode
+
+ -- Jasem Mutlaq <mutlaqja@ikarustech.com>  Fri, 24 Jun 2022 17:00:00 +0300
+
+indi-celestronaux (0.10) focal; urgency=medium
+
+  * Rework tracking code
+  * Multiple smaller changes
+  * Adapt to 1.9 coordinate types
+
+ -- Pawel T. Jochym <jochym@wolf.ifj.edu.pl>  Mon, 30 Sep 2021 20:58:00 +0200
+
 indi-celestronaux (0.7) focal; urgency=medium
 
   * Add Celestron WiFi alias.
