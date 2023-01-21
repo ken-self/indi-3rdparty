@@ -29,32 +29,38 @@ include_directories("${CMAKE_INSTALL_PREFIX}/include")
 macro(FIX_LIBRARY_ID DYLIB_NAME CURRENT_DYLIB_FILENAME LIBRARY_DISPLAY_NAME)
     # JM 2022.11.09: Disabling macro since it causes build issues on KDE's Binary Factory
     # Once the issue is resolved, we can renable the the macro
-    # execute_process(COMMAND bash "-c" "otool -D ${CMAKE_CURRENT_SOURCE_DIR}/${CURRENT_DYLIB_FILENAME} | tail -n 1 | tr -d '\n'" OUTPUT_VARIABLE DYLIB_ID)
-    # if (NOT ${DYLIB_ID} STREQUAL "@rpath/${DYLIB_NAME}.dylib")
-    #   message (WARNING
-    #       "The Mac library ${DYLIB_NAME}.dylib in the ${LIBRARY_DISPLAY_NAME} source folder has the ID ${DYLIB_ID} which could cause linking problems."
-    #       "Please let the maintainer for ${LIBRARY_DISPLAY_NAME} know about the issue."
-    #       "Changing the library ${DYLIB_NAME}.dylib to have the id @rpath/${DYLIB_NAME}.dylib so it links properly with rpaths."
-    #   )
-    #   execute_process(COMMAND bash "-c" "install_name_tool -id @rpath/${DYLIB_NAME}.dylib ${CMAKE_CURRENT_SOURCE_DIR}/${CURRENT_DYLIB_FILENAME}")
-    # endif (NOT ${DYLIB_ID} STREQUAL "@rpath/${DYLIB_NAME}.dylib")
-    # 
-    # # This section corrects absolute or bad links to libusb
-    # execute_process(COMMAND bash "-c" "otool -L ${CMAKE_CURRENT_SOURCE_DIR}/${CURRENT_DYLIB_FILENAME} | cut -d ' ' -f1" OUTPUT_VARIABLE LINKS_LIST)
-    # string (REPLACE "\t" "" LINKS_LIST "${LINKS_LIST}")
-    # string (REPLACE "\n" ";" LINKS_LIST "${LINKS_LIST}")
-    # foreach(LINK IN LISTS LINKS_LIST)
-    #     if("${LINK}" MATCHES "libusb-1.0.0")
-    #         if (NOT "${LINK}" STREQUAL "@rpath/libusb-1.0.0.dylib")
-    #             message (WARNING
-    #                 "The mac library ${DYLIB_NAME}.dylib in the ${LIBRARY_DISPLAY_NAME} source folder has a link to "
-    #                 "${LINK} which could cause issues if libusb-1.0.0 is not actually at that location. "
-    #                 "Changing the link to @rpath/libusb-1.0.0.dylib for better compatibility."
-    #             )
-    #             execute_process(COMMAND bash "-c" "install_name_tool -change ${LINK} @rpath/libusb-1.0.0.dylib ${CMAKE_CURRENT_SOURCE_DIR}/${CURRENT_DYLIB_FILENAME}")
-    #         endif (NOT "${LINK}" STREQUAL "@rpath/libusb-1.0.0.dylib")
-    #     endif("${LINK}" MATCHES "libusb-1.0.0")
-    # endforeach(LINK IN LISTS LINKS_LIST)
+     execute_process(COMMAND bash "-c" "otool -D ${CMAKE_CURRENT_SOURCE_DIR}/${CURRENT_DYLIB_FILENAME} | tail -n 1 | tr -d '\n'" OUTPUT_VARIABLE DYLIB_ID)
+     if (NOT ${DYLIB_ID} STREQUAL "@rpath/${DYLIB_NAME}.dylib")
+         if (FIX_MACOS_LIBS)
+             execute_process(COMMAND bash "-c" "install_name_tool -id @rpath/${DYLIB_NAME}.dylib ${CMAKE_CURRENT_SOURCE_DIR}/${CURRENT_DYLIB_FILENAME}")
+             message(WARING "The Mac library ${DYLIB_NAME}.dylib in the ${LIBRARY_DISPLAY_NAME} source folder is now fixed. Please push the changes to INDI 3rd party repository")
+         else()
+             message (FATAL_ERROR
+                 "The Mac library ${DYLIB_NAME}.dylib in the ${LIBRARY_DISPLAY_NAME} source folder has the ID ${DYLIB_ID} which could cause linking problems."
+                 "Please let the maintainer for ${LIBRARY_DISPLAY_NAME} know about the issue."
+                 "Changing the library ${DYLIB_NAME}.dylib to have the id @rpath/${DYLIB_NAME}.dylib so it links properly with rpaths."
+             )
+     endif()
+     endif (NOT ${DYLIB_ID} STREQUAL "@rpath/${DYLIB_NAME}.dylib")
+     
+     # # This section corrects absolute or bad links to libusb
+     if (FIX_MACOS_LIBS)
+         execute_process(COMMAND bash "-c" "otool -L ${CMAKE_CURRENT_SOURCE_DIR}/${CURRENT_DYLIB_FILENAME} | cut -d ' ' -f1" OUTPUT_VARIABLE LINKS_LIST)
+         string (REPLACE "\t" "" LINKS_LIST "${LINKS_LIST}")
+         string (REPLACE "\n" ";" LINKS_LIST "${LINKS_LIST}")
+         foreach(LINK IN LISTS LINKS_LIST)
+             if("${LINK}" MATCHES "libusb-1.0.0")
+                 if (NOT "${LINK}" STREQUAL "@rpath/libusb-1.0.0.dylib")
+                     message (WARNING
+                         "The mac library ${DYLIB_NAME}.dylib in the ${LIBRARY_DISPLAY_NAME} source folder has a link to "
+                         "${LINK} which could cause issues if libusb-1.0.0 is not actually at that location. "
+                         "Changing the link to @rpath/libusb-1.0.0.dylib for better compatibility."
+                     )
+                     execute_process(COMMAND bash "-c" "install_name_tool -change ${LINK} @rpath/libusb-1.0.0.dylib ${CMAKE_CURRENT_SOURCE_DIR}/${CURRENT_DYLIB_FILENAME}")
+                 endif (NOT "${LINK}" STREQUAL "@rpath/libusb-1.0.0.dylib")
+             endif("${LINK}" MATCHES "libusb-1.0.0")
+         endforeach(LINK IN LISTS LINKS_LIST)
+  endif(FIX_MACOS_LIBS)
 endmacro(FIX_LIBRARY_ID)
 
 endif(APPLE)
@@ -84,9 +90,10 @@ IF (UNIX OR APPLE)
             STRING(FIND ${SOURCE_FILE} libinovasdk DIR8_FOUND)
             STRING(FIND ${SOURCE_FILE} libsvbony DIR9_FOUND)
             STRING(FIND ${SOURCE_FILE} libahp-xc DIR10_FOUND)
+            STRING(FIND ${SOURCE_FILE} libahp-gt DIR11_FOUND)
             IF (NOT ${DIR1_FOUND} EQUAL -1 OR NOT ${DIR2_FOUND} EQUAL -1 OR NOT ${DIR3_FOUND} EQUAL -1 OR NOT ${DIR4_FOUND} EQUAL -1 OR
                 NOT ${DIR5_FOUND} EQUAL -1 OR NOT ${DIR6_FOUND} EQUAL -1 OR NOT ${DIR7_FOUND} EQUAL -1 OR NOT ${DIR8_FOUND} EQUAL -1 OR
-                NOT ${DIR9_FOUND} EQUAL -1 OR NOT ${DIR10_FOUND})
+                NOT ${DIR9_FOUND} EQUAL -1 OR NOT ${DIR10_FOUND} EQUAL -1 OR NOT ${DIR11_FOUND} EQUAL -1)
                 LIST(REMOVE_ITEM ALL_SOURCE_FILES ${SOURCE_FILE})
             ENDIF ()
         ENDFOREACH ()
@@ -102,6 +109,11 @@ ENDIF ()
 # This is by default OFF, so you must set the option to build them.
 # It is a good idea to run with this option before the 3rd Party build so all the libraries are built first.
 option(BUILD_LIBS "Build 3rd Party Libraries, not 3rd Party Drivers" Off)
+
+# Fix MacOS libraries linking
+# Do not ENABLE on production! Should be enabled by INDI core developers only
+# to fix the affected libraries and push a fix to the repo after a binary update.
+option(FIX_MACOS_LIBS "Fix MacOS Libraries links" Off)
 
 # Define standard set of drivers to build (default linux target)
 option(WITH_EQMOD "Install EQMod Driver" On)
@@ -147,6 +159,7 @@ option(WITH_TALON6 "Install Talon6 Mount Driver" On)
 option(WITH_PENTAX "Install Pentax Driver" On)
 option(WITH_ASTROLINK4 "Install AstroLink4 Driver" On)
 option(WITH_AHP_XC "Install AHP XC Correlators Driver" On)
+option(WITH_AHP_GT "Install AHP GT Controllers Driver" On)
 option(WITH_ORION_SSG3 "Install Orion StarShoot G3 Driver" On)
 option(WITH_SVBONY "Install SVBONY Camera Driver" On)
 option(WITH_BRESSEREXOS2 "Install Bresser Exos 2 GoTo Mount Driver" On)
@@ -191,6 +204,8 @@ IF (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
     set(WITH_PENTAX Off)
     set(WITH_GPSD Off)
     set(WITH_AHP_XC Off)
+    set(WITH_AHP_GT Off)
+    set(WITH_MI Off)
 ENDIF ()
 # Disable apogee, qhy and mi with gcc 4.8 and earlier versions
 IF (CMAKE_COMPILER_IS_GNUCXX AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 4.9)
@@ -198,6 +213,27 @@ IF (CMAKE_COMPILER_IS_GNUCXX AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 4.9)
     SET(WITH_QHY Off)
     SET(WITH_MI Off)
 ENDIF ()
+
+# Disable pre-built SDKs / drivers
+option(NO_PRE_BUILT "Do not install pre-built libraries/drivers" Off)
+if (NO_PRE_BUILT)
+    SET(WITH_AHP_GT Off)
+    SET(WITH_AHP_XC Off)
+    SET(WITH_ASICAM Off)
+    SET(WITH_ATIK Off)
+    SET(WITH_DSI Off)
+    SET(WITH_DUINO Off)
+    SET(WITH_FISHCAMP Off)
+    SET(WITH_INOVAPLX Off)
+    SET(WITH_MI Off)
+    SET(WITH_PENTAX Off)
+    SET(WITH_PLAYERONE Off)
+    SET(WITH_QHY Off)
+    SET(WITH_QSI Off)
+    SET(WITH_SBIG Off)
+    SET(WITH_SVBONY Off)
+    SET(WITH_TOUPBASE Off)
+endif(NO_PRE_BUILT)
 
 # If the Build Libs option is selected, it will just build the required libraries.
 # This should be run before the main 3rd Party Drivers build, so the drivers can find the libraries.
@@ -265,6 +301,11 @@ endif (WITH_PENTAX)
 if (WITH_AHP_XC)
 add_subdirectory(libahp-xc)
 endif(WITH_AHP_XC)
+
+# libahp-gt
+if (WITH_AHP_GT)
+add_subdirectory(libahp-gt)
+endif(WITH_AHP_GT)
 
 #toupbase dependencies
 if (WITH_TOUPBASE)
@@ -734,6 +775,14 @@ endif (WITH_SVBONY AND NOT SVBONY_FOUND)
 if (WITH_PLAYERONE AND NOT PLAYERONE_FOUND)
 message(STATUS "libplayerone was not found and will now be built. Please install this libplayerone first before running cmake again to install indi-playerone.")
 endif (WITH_PLAYERONE AND NOT PLAYERONE_FOUND)
+
+if (WITH_AHPXC AND NOT AHPXC_FOUND)
+message(STATUS "libahp-xc was not found and will now be built. Please install libahp-xc first before running cmake again to install indi-ahp-xc.")
+endif (WITH_AHPXC AND NOT AHPXC_FOUND)
+
+if (WITH_AHPGT AND NOT AHPGT_FOUND)
+message(STATUS "libahp-gt was not found and will now be built. Please install libahp-gt first before running cmake again to install indi-ahpgt.")
+endif (WITH_AHPGT AND NOT AHPGT_FOUND)
 
 message(STATUS "####################################################################################################################################")
 endif (LIBRARIES_FOUND)
