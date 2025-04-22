@@ -88,7 +88,7 @@ class QHYCCD : public INDI::CCD, public INDI::FilterInterface
         virtual void TimerHit() override;
         virtual bool saveConfigItems(FILE *fp) override;
         virtual const char *getDefaultName() override;
-        void addFITSKeywords(INDI::CCDChip *targetChip) override;
+        void addFITSKeywords(INDI::CCDChip *targetChip, std::vector<INDI::FITSRecord> &fitsKeywords) override;
 
         /////////////////////////////////////////////////////////////////////////////
         /// Camera Properties
@@ -105,13 +105,13 @@ class QHYCCD : public INDI::CCD, public INDI::FilterInterface
         /////////////////////////////////////////////////////////////////////////////
 
         bool m_SupportedBins[4];
-		enum
-		{
-		Bin1x1,
-		Bin2x2,
-		Bin3x3,
-		Bin4x4,
-		};
+        enum
+        {
+            Bin1x1,
+            Bin2x2,
+            Bin3x3,
+            Bin4x4,
+        };
 
 
         // Cooler Switch
@@ -314,12 +314,12 @@ class QHYCCD : public INDI::CCD, public INDI::FilterInterface
             uint32_t subH = 0;
         } effectiveROI, sensorROI;  //NEW CODE - Add support for overscan/calibration area, obsolete overscanROI
 
-        typedef struct
+        typedef struct QHYReadModeInfo
         {
-            char label[128] = {0};
-            uint32_t id = 0;
-            uint32_t subW = 0;
-            uint32_t subH = 0;
+            char label[128];  // Will be zero-initialized
+            uint32_t id;
+            uint32_t subW;
+            uint32_t subH;
         } QHYReadModeInfo; // N.R. - Add support for read mode selection
 
         typedef enum GPSState
@@ -342,8 +342,8 @@ class QHYCCD : public INDI::CCD, public INDI::FilterInterface
             uint16_t height = 0;
 
             // Location
-            uint32_t latitude = 0;
-            uint32_t longitude = 0;
+            double latitude = 0;
+            double longitude = 0;
 
             // Start Time
             uint8_t start_flag = 0;
@@ -497,4 +497,5 @@ class QHYCCD : public INDI::CCD, public INDI::FilterInterface
         /////////////////////////////////////////////////////////////////////////////
         static constexpr const char * GPS_CONTROL_TAB = "GPS Control";
         static constexpr const char * GPS_DATA_TAB = "GPS Data";
+        static constexpr uint64_t QHY_SER_US_EPOCH = 62948880000000000; // offset to SER epoch January 1, 1 AD
 };

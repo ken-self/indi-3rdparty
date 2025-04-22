@@ -231,6 +231,8 @@ const char * AUXCommand::commandName(AUXCommands command) const
                 return "MC_SLEW_DONE";
             case MC_GOTO_SLOW:
                 return "MC_GOTO_SLOW";
+            case MC_SEEK_DONE:
+                return "MC_SEEK_DONE";
             case MC_SEEK_INDEX:
                 return "MC_SEEK_INDEX";
             case MC_MOVE_POS:
@@ -249,6 +251,18 @@ const char * AUXCommand::commandName(AUXCommands command) const
                 return "MC_GET_CORDWRAP_POS";
             case GET_VER:
                 return "GET_VER";
+            case MC_LEVEL_DONE:
+                return "MC_LEVEL_DONE";
+            case MC_AUX_GUIDE:
+                return "MC_AUX_GUIDE";
+            case MC_AUX_GUIDE_ACTIVE:
+                return "MC_AUX_GUIDE_ACTIVE";
+            case MC_SET_AUTOGUIDE_RATE:
+                return "MC_SET_AUTOGUIDE_RATE";
+            case MC_GET_AUTOGUIDE_RATE:
+                return "MC_GET_AUTOGUIDE_RATE";
+            case FOC_GET_HS_POSITIONS:
+                return "FOC_GET_HS_POSITIONS";
             default :
                 return nullptr;
         }
@@ -283,17 +297,21 @@ int AUXCommand::responseDataSize()
     {
         switch (m_Command)
         {
+            case FOC_GET_HS_POSITIONS:
+                return 8;
             case MC_GET_POSITION:
             case MC_GET_CORDWRAP_POS:
                 return 3;
             case GET_VER:
                 return 4;
-            case MC_SLEW_DONE:
+            case MC_GET_MODEL:
+                return 2;
+	    case MC_SLEW_DONE:
             case MC_SEEK_DONE:
             case MC_LEVEL_DONE:
             case MC_POLL_CORDWRAP:
-            case MC_AUX_GUIDE:
             case MC_AUX_GUIDE_ACTIVE:
+            case MC_GET_AUTOGUIDE_RATE:
                 return 1;
             case MC_GOTO_FAST:
             case MC_SET_POSITION:
@@ -306,6 +324,8 @@ int AUXCommand::responseDataSize()
             case MC_ENABLE_CORDWRAP:
             case MC_DISABLE_CORDWRAP:
             case MC_SET_CORDWRAP_POS:
+            case MC_SET_AUTOGUIDE_RATE:
+            case MC_AUX_GUIDE:
                 return 0;
             case MC_SEEK_INDEX:
                 return -1;
@@ -338,6 +358,8 @@ const char * AUXCommand::moduleName(AUXTargets n)
             return "APP";
         case GPS :
             return "GPS";
+        case FOCUS :
+            return "FOCUS";
         case WiFi:
             return "WiFi";
         case BAT :

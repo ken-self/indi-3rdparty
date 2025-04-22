@@ -62,6 +62,7 @@ static class Loader
                 return;
             }
             int num_wheels_ok = 0;
+            char *envDev = getenv("INDIDEV");
             for (int i = 0; i < num_wheels; i++)
             {
                 int id;
@@ -78,22 +79,19 @@ static class Loader
                     IDLog("ERROR: ASI EFW %d EFWGetProperty error %d.", i + 1, result);
                     continue;
                 }
-                std::string name = "ASI " + std::string(info.Name);
+                std::string name = "ZWO " + std::string(info.Name);
+                if (envDev && envDev[0])
+                    name = envDev;
 
                 // If we only have a single device connected
                 // then favor the INDIDEV driver label over the auto-generated name above
-                if (num_wheels == 1)
-                {
-                    char *envDev = getenv("INDIDEV");
-                    if (envDev && envDev[0])
-                        name = envDev;
-                }
-                else
-                    name += " " + std::to_string(i);
+                if (num_wheels > 1)
+                    name += " " + std::to_string(i + 1);
+
                 wheels.push_back(std::unique_ptr<ASIWHEEL>(new ASIWHEEL(info, name.c_str())));
                 num_wheels_ok++;
             }
-            IDLog("%d ASI EFW attached out of %d detected.", num_wheels_ok, num_wheels);
+            IDLog("%d ZWO EFW attached out of %d detected.", num_wheels_ok, num_wheels);
 #endif
         }
 } loader;
@@ -102,8 +100,8 @@ ASIWHEEL::ASIWHEEL(const EFW_INFO &info, const char *name)
 {
     fw_id              = info.ID;
     CurrentFilter      = 0;
-    FilterSlotN[0].min = 0;
-    FilterSlotN[0].max = 0;
+    FilterSlotNP[0].setMin(0);
+    FilterSlotNP[0].setMax(0);
     setDeviceName(name);
     setVersion(ASI_VERSION_MAJOR, ASI_VERSION_MINOR);
 }
@@ -115,7 +113,7 @@ ASIWHEEL::~ASIWHEEL()
 
 const char *ASIWHEEL::getDefaultName()
 {
-    return "ASI EFW";
+    return "ZWO EFW";
 }
 
 bool ASIWHEEL::Connect()
@@ -124,8 +122,8 @@ bool ASIWHEEL::Connect()
     {
         LOG_INFO("Simulation connected.");
         fw_id = 0;
-        FilterSlotN[0].min = 1;
-        FilterSlotN[0].max = 8;
+        FilterSlotNP[0].setMin(1);
+        FilterSlotNP[0].setMax(8);
     }
     else if (fw_id >= 0)
     {
@@ -146,8 +144,8 @@ bool ASIWHEEL::Connect()
 
         LOGF_INFO("Detected %d-position filter wheel.", info.slotNum);
 
-        FilterSlotN[0].min = 1;
-        FilterSlotN[0].max = info.slotNum;
+        FilterSlotNP[0].setMin(1);
+        FilterSlotNP[0].setMax(info.slotNum);
 
         // get current filter
         int current;
@@ -269,8 +267,8 @@ bool ASIWHEEL::ISNewSwitch(const char *dev, const char *name, ISState *states, c
             IDSetSwitch(&CalibrateSP, nullptr);
 
             // make the set filter number busy
-            FilterSlotNP.s = IPS_BUSY;
-            IDSetNumber(&FilterSlotNP, nullptr);
+            FilterSlotNP.setState(IPS_BUSY);
+            FilterSlotNP.apply();
 
             LOGF_DEBUG("Calibrating EFW %d", fw_id);
             EFW_ERROR_CODE rc = EFWCalibrate(fw_id);
@@ -287,8 +285,8 @@ bool ASIWHEEL::ISNewSwitch(const char *dev, const char *name, ISState *states, c
                 IDSetSwitch(&CalibrateSP, nullptr);
 
                 // reset filter slot state
-                FilterSlotNP.s = IPS_OK;
-                IDSetNumber(&FilterSlotNP, nullptr);
+                FilterSlotNP.setState(IPS_OK);
+                FilterSlotNP.apply();
                 return false;
             }
         }
@@ -416,7 +414,7 @@ void ASIWHEEL::TimerCalibrate()
         IDSetSwitch(&CalibrateSP, nullptr);
     }
 
-    FilterSlotNP.s = IPS_OK;
-    IDSetNumber(&FilterSlotNP, nullptr);
+    FilterSlotNP.setState(IPS_OK);
+    FilterSlotNP.apply();
     return;
 }

@@ -23,6 +23,7 @@
 #pragma once
 
 #include <ASICamera2.h>
+#include <libusb-1.0/libusb.h>
 
 #include "indipropertyswitch.h"
 #include "indipropertynumber.h"
@@ -73,7 +74,7 @@ class ASIBase : public INDI::CCD
         virtual IPState GuideWest(uint32_t ms) override;
 
         // ASI specific keywords
-        virtual void addFITSKeywords(INDI::CCDChip *targetChip) override;
+        virtual void addFITSKeywords(INDI::CCDChip *targetChip, std::vector<INDI::FITSRecord> &fitsKeywords) override;
 
         // Save config
         virtual bool saveConfigItems(FILE *fp) override;
@@ -131,6 +132,9 @@ class ASIBase : public INDI::CCD
 
         /** Can the camera flip the image horizontally and vertically */
         bool hasFlipControl();
+
+        /** Reset USB device when camera gets stuck */
+        void resetUSBDevice();
 
         /** Additional Properties to INDI::CCD */
         INDI::PropertyNumber  CoolerNP {1};

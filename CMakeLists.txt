@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.0)
+cmake_minimum_required(VERSION 3.16)
 
 PROJECT(libindi-3rdparty CXX C)
 LIST(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake_modules/")
@@ -12,56 +12,93 @@ include(GNUInstallDirs)
 ## <libnova/ln_types.h> is resolved. But on Mac it its not already in the path and has to be explicitly added.
 
 if (APPLE)
-    ##This one is needed for homebrew
+    ##This one is needed for x86_64 homebrew
 include_directories( "/usr/local/include")
+    ##This one is needed for arm64 homebrew
+include_directories( "/opt/homebrew/include")
     ## This one is needed for Craft
 include_directories("${CMAKE_INSTALL_PREFIX}/include")
 
+# FIX_LIBRARY_LINK Macro
+# This macro will check MacOS Binary Libraries provided by third parties for external links that could cause linking and packaging problems 
+# If the FIX_MACOS_LIBS option is enabled when building, it will also attempt to fix the problems, which should then allow the build to continue.
+# This macro should be called by the FIX_MACOS_LIBRARIES macro below
+macro(FIX_LIBRARY_LINK PACKAGE_NAME CURRENT_DYLIB_FILENAME LIBRARY_DISPLAY_NAME LINK)
+	if("${LINK}" MATCHES "${PACKAGE_NAME}")
+		if (NOT "${LINK}" STREQUAL "@rpath/${PACKAGE_NAME}.dylib")
+			if (FIX_MACOS_LIBS)
+				execute_process(COMMAND bash "-c" "install_name_tool -change ${LINK} @rpath/${PACKAGE_NAME}.dylib ${CMAKE_CURRENT_SOURCE_DIR}/${CURRENT_DYLIB_FILENAME}")
+				message(WARNING "The mac library ${CURRENT_DYLIB_FILENAME} in the ${LIBRARY_DISPLAY_NAME} source folder has a link to ${PACKAGE_NAME}.dylib that says ${LINK}. "
+					"The issue is now fixed by changing the link to @rpath/${PACKAGE_NAME}.dylib for better compatibility."
+					"Please push the changes to INDI 3rd party repository if you have write access, make a pull request, or let the maintainer know to fix the issue. "
+				)
+			else(FIX_MACOS_LIBS)
+				message (FATAL_ERROR
+					"The mac library ${CURRENT_DYLIB_FILENAME} in the ${LIBRARY_DISPLAY_NAME} source folder has a link to ${PACKAGE_NAME}.dylib that says ${LINK}. "
+					"This could cause issues if ${PACKAGE_NAME}.dylib is not actually at that location. "
+					"If you would like to attempt to fix the problem on your machine and continue the build, please enable the FIX_MACOS_LIBS option. "
+				)
+			endif(FIX_MACOS_LIBS)
+		endif (NOT "${LINK}" STREQUAL "@rpath/${PACKAGE_NAME}.dylib")
+    endif("${LINK}" MATCHES "${PACKAGE_NAME}")
+endmacro(FIX_LIBRARY_LINK)
+
+
 # FIX_LIBRARY_ID Macro
+# This macro will check MacOS Binary Libraries provided by third parties for Install IDs that cold cause linking and packaging problems.
+# If the FIX_MACOS_LIBS option is enabled when building, it will also attempt to fix the problems, which should then allow the build to continue.
+# This macro should be called by the FIX_MACOS_LIBRARIES macro below
+macro(FIX_LIBRARY_ID DYLIB_NAME CURRENT_DYLIB_FILENAME LIBRARY_DISPLAY_NAME)
+	execute_process(COMMAND bash "-c" "otool -D ${CMAKE_CURRENT_SOURCE_DIR}/${CURRENT_DYLIB_FILENAME} | tail -n 1 | tr -d '\n'" OUTPUT_VARIABLE DYLIB_ID)
+     if (NOT ${DYLIB_ID} STREQUAL "@rpath/${DYLIB_NAME}.dylib")
+         if (FIX_MACOS_LIBS)
+             execute_process(COMMAND bash "-c" "install_name_tool -id @rpath/${DYLIB_NAME}.dylib ${CMAKE_CURRENT_SOURCE_DIR}/${CURRENT_DYLIB_FILENAME}")
+             message(WARNING  "The Mac library ${DYLIB_NAME}.dylib in the ${LIBRARY_DISPLAY_NAME} source folder had the ID ${DYLIB_ID} which could cause linking problems. "
+             	"The issue is now fixed by changing the library ${DYLIB_NAME}.dylib to have the id @rpath/${DYLIB_NAME}.dylib so it links properly with rpaths. "
+            	"Please push the changes to INDI 3rd party repository if you have write access, make a pull request, or let the maintainer know to fix the issue. "
+             )
+         else(FIX_MACOS_LIBS)
+             message (FATAL_ERROR
+                 "The Mac library ${DYLIB_NAME}.dylib in the ${LIBRARY_DISPLAY_NAME} source folder has the ID ${DYLIB_ID} which could cause linking problems. "
+                 "Please let the maintainer for ${LIBRARY_DISPLAY_NAME} know about the issue."
+                 "If you would like to attempt to fix the problem on your machine and continue the build, please enable the FIX_MACOS_LIBS option. "
+             )
+     	endif(FIX_MACOS_LIBS)
+     endif (NOT ${DYLIB_ID} STREQUAL "@rpath/${DYLIB_NAME}.dylib")
+endmacro(FIX_LIBRARY_ID)
+
+# FIX_MACOS_LIBRARIES Macro
 # On MacOS, the Install ID of the library is used for linking with the programs that need them.
-# If a version number is used in the install ID, linking could fail.  (Example: @rpath/libqhyccd.20.dylib)
+# If a version number is used in the install ID, linking could fail because sometimes the numbers don't match.  (Example: @rpath/libqhyccd.20.dylib)
 # If @loader_path, @executable_path, or an absolute path are used and the library is installed or packaged differently than that,
 # linking could fail (Example: @loader_path/libASICamera2.dylib or /usr/local/lib/libsbig.dylib).
 # It is easiest to make the Install ID with just rpath and the name of the library (Examples: @rpath/libqhyccd.dylib and @rpath/libASICamera2.dylib).
 # Then when linking, it will use that path for linking, and the program just has to have the right rpath.
 # It will not matter then if the library is located in /usr/local/lib or bundled in an app bundle.
-# This code will check the library for these errors, correct them and give warnings.
-macro(FIX_LIBRARY_ID DYLIB_NAME CURRENT_DYLIB_FILENAME LIBRARY_DISPLAY_NAME)
-    # JM 2022.11.09: Disabling macro since it causes build issues on KDE's Binary Factory
-    # Once the issue is resolved, we can renable the the macro
-     execute_process(COMMAND bash "-c" "otool -D ${CMAKE_CURRENT_SOURCE_DIR}/${CURRENT_DYLIB_FILENAME} | tail -n 1 | tr -d '\n'" OUTPUT_VARIABLE DYLIB_ID)
-     if (NOT ${DYLIB_ID} STREQUAL "@rpath/${DYLIB_NAME}.dylib")
-         if (FIX_MACOS_LIBS)
-             execute_process(COMMAND bash "-c" "install_name_tool -id @rpath/${DYLIB_NAME}.dylib ${CMAKE_CURRENT_SOURCE_DIR}/${CURRENT_DYLIB_FILENAME}")
-             message(WARING "The Mac library ${DYLIB_NAME}.dylib in the ${LIBRARY_DISPLAY_NAME} source folder is now fixed. Please push the changes to INDI 3rd party repository")
-         else()
-             message (FATAL_ERROR
-                 "The Mac library ${DYLIB_NAME}.dylib in the ${LIBRARY_DISPLAY_NAME} source folder has the ID ${DYLIB_ID} which could cause linking problems."
-                 "Please let the maintainer for ${LIBRARY_DISPLAY_NAME} know about the issue."
-                 "Changing the library ${DYLIB_NAME}.dylib to have the id @rpath/${DYLIB_NAME}.dylib so it links properly with rpaths."
-             )
-     endif()
-     endif (NOT ${DYLIB_ID} STREQUAL "@rpath/${DYLIB_NAME}.dylib")
+# This code will check the library for these errors, correct them or give warnings asking that they get fixed.
+# The warnings do have to be fatal errors because if this problem does not get fixed, it will appear to be right, but linking will have failed and it won't work.
+
+macro(FIX_MACOS_LIBRARIES DYLIB_NAME CURRENT_DYLIB_FILENAME LIBRARY_DISPLAY_NAME)
+
+	 # This section will use the FIX_LIBRARY_ID macro to check and optionally fix Install IDs that could cause linking issues.
+	 FIX_LIBRARY_ID(${DYLIB_NAME} ${CURRENT_DYLIB_FILENAME} ${LIBRARY_DISPLAY_NAME})
      
-     # # This section corrects absolute or bad links to libusb
-     if (FIX_MACOS_LIBS)
-         execute_process(COMMAND bash "-c" "otool -L ${CMAKE_CURRENT_SOURCE_DIR}/${CURRENT_DYLIB_FILENAME} | cut -d ' ' -f1" OUTPUT_VARIABLE LINKS_LIST)
-         string (REPLACE "\t" "" LINKS_LIST "${LINKS_LIST}")
-         string (REPLACE "\n" ";" LINKS_LIST "${LINKS_LIST}")
-         foreach(LINK IN LISTS LINKS_LIST)
-             if("${LINK}" MATCHES "libusb-1.0.0")
-                 if (NOT "${LINK}" STREQUAL "@rpath/libusb-1.0.0.dylib")
-                     message (WARNING
-                         "The mac library ${DYLIB_NAME}.dylib in the ${LIBRARY_DISPLAY_NAME} source folder has a link to "
-                         "${LINK} which could cause issues if libusb-1.0.0 is not actually at that location. "
-                         "Changing the link to @rpath/libusb-1.0.0.dylib for better compatibility."
-                     )
-                     execute_process(COMMAND bash "-c" "install_name_tool -change ${LINK} @rpath/libusb-1.0.0.dylib ${CMAKE_CURRENT_SOURCE_DIR}/${CURRENT_DYLIB_FILENAME}")
-                 endif (NOT "${LINK}" STREQUAL "@rpath/libusb-1.0.0.dylib")
-             endif("${LINK}" MATCHES "libusb-1.0.0")
-         endforeach(LINK IN LISTS LINKS_LIST)
-  endif(FIX_MACOS_LIBS)
-endmacro(FIX_LIBRARY_ID)
+     # This section gets all the current links to other libraries then checks and optionally corrects absolute or bad links to libraries including libusb and opencv
+	 execute_process(COMMAND bash "-c" "otool -L ${CMAKE_CURRENT_SOURCE_DIR}/${CURRENT_DYLIB_FILENAME} | cut -d ' ' -f1" OUTPUT_VARIABLE LINKS_LIST)
+	 string (REPLACE "\t" "" LINKS_LIST "${LINKS_LIST}")
+	 string (REPLACE "\n" ";" LINKS_LIST "${LINKS_LIST}")
+	 foreach(LINK IN LISTS LINKS_LIST)
+	 	if(NOT ${LINK} STREQUAL "")
+	 		FIX_LIBRARY_LINK("libusb-1.0.0" ${CURRENT_DYLIB_FILENAME} ${LIBRARY_DISPLAY_NAME} ${LINK})
+			FIX_LIBRARY_LINK("libopencv_highgui" ${CURRENT_DYLIB_FILENAME} ${LIBRARY_DISPLAY_NAME} ${LINK})
+			FIX_LIBRARY_LINK("libopencv_videoio" ${CURRENT_DYLIB_FILENAME} ${LIBRARY_DISPLAY_NAME} ${LINK})
+			FIX_LIBRARY_LINK("libopencv_imgcodecs" ${CURRENT_DYLIB_FILENAME} ${LIBRARY_DISPLAY_NAME} ${LINK})
+			FIX_LIBRARY_LINK("libopencv_imgproc" ${CURRENT_DYLIB_FILENAME} ${LIBRARY_DISPLAY_NAME} ${LINK})
+			FIX_LIBRARY_LINK("libopencv_core" ${CURRENT_DYLIB_FILENAME} ${LIBRARY_DISPLAY_NAME} ${LINK})
+		endif(NOT ${LINK} STREQUAL "")
+	 endforeach(LINK IN LISTS LINKS_LIST)
+  
+endmacro(FIX_MACOS_LIBRARIES)
 
 endif(APPLE)
 
@@ -89,11 +126,9 @@ IF (UNIX OR APPLE)
             STRING(FIND ${SOURCE_FILE} libsbig DIR6_FOUND)            
             STRING(FIND ${SOURCE_FILE} libinovasdk DIR8_FOUND)
             STRING(FIND ${SOURCE_FILE} libsvbony DIR9_FOUND)
-            STRING(FIND ${SOURCE_FILE} libahp-xc DIR10_FOUND)
-            STRING(FIND ${SOURCE_FILE} libahp-gt DIR11_FOUND)
             IF (NOT ${DIR1_FOUND} EQUAL -1 OR NOT ${DIR2_FOUND} EQUAL -1 OR NOT ${DIR3_FOUND} EQUAL -1 OR NOT ${DIR4_FOUND} EQUAL -1 OR
                 NOT ${DIR5_FOUND} EQUAL -1 OR NOT ${DIR6_FOUND} EQUAL -1 OR NOT ${DIR7_FOUND} EQUAL -1 OR NOT ${DIR8_FOUND} EQUAL -1 OR
-                NOT ${DIR9_FOUND} EQUAL -1 OR NOT ${DIR10_FOUND} EQUAL -1 OR NOT ${DIR11_FOUND} EQUAL -1)
+                NOT ${DIR9_FOUND} EQUAL -1)
                 LIST(REMOVE_ITEM ALL_SOURCE_FILES ${SOURCE_FILE})
             ENDIF ()
         ENDFOREACH ()
@@ -152,19 +187,24 @@ option(WITH_ATIK "Install Atik Driver" On)
 option(WITH_TOUPBASE "Install Toupbase Driver" On)
 option(WITH_DREAMFOCUSER "Install DreamFocuser Driver" On)
 option(WITH_AVALON "Install Avalon StarGO Driver" On)
+option(WITH_AVALONUD "Install AvalonUD Drivers" On)
 option(WITH_BEEFOCUS "Install Bee Focuser Driver" On)
 option(WITH_SHELYAK "Install Shelyak Spectrograph Driver" On)
 option(WITH_SKYWALKER "Install AOK SkyWalker Mount Driver" On)
 option(WITH_TALON6 "Install Talon6 Mount Driver" On)
 option(WITH_PENTAX "Install Pentax Driver" On)
 option(WITH_ASTROLINK4 "Install AstroLink4 Driver" On)
-option(WITH_AHP_XC "Install AHP XC Correlators Driver" On)
-option(WITH_AHP_GT "Install AHP GT Controllers Driver" On)
+option(WITH_AHP_XC "Install AHP XC Correlators Driver" Off)
+option(WITH_AHP_GT "Install AHP GT Controllers Driver" Off)
 option(WITH_ORION_SSG3 "Install Orion StarShoot G3 Driver" On)
 option(WITH_SVBONY "Install SVBONY Camera Driver" On)
 option(WITH_BRESSEREXOS2 "Install Bresser Exos 2 GoTo Mount Driver" On)
 option(WITH_PLAYERONE "Install Player One Astronomy's Camera Driver" On)
 option(WITH_WEEWX_JSON "Install Weewx JSON Driver" On)
+option(WITH_ROLLOFFINO "Install RollOff ino Dome Driver" On)
+option(WITH_ASTROASIS "Install Astroasis Driver" On)
+option(WITH_OCS "Install OCS Driver" On)
+option(WITH_GPIO "Install GPIO Driver" On)
 
 # FFMPEG required for INDI Webcam driver
 find_package(FFmpeg)
@@ -181,12 +221,6 @@ ENDIF(FFMPEG_FOUND)
 if (CMAKE_SYSTEM_PROCESSOR MATCHES "armv+" OR CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64")
 find_package(MMAL)
 endif()
-
-IF (MMAL_FOUND)
-option(WITH_RPICAM "Install Raspberry Pi High Quality Camera Driver" On)
-ELSE ()
-option(WITH_RPICAM "Install Raspberry Pi High Quality Camera Driver" Off)
-ENDIF(MMAL_FOUND)
 
 find_package(NUTClient)
 if (NUTCLIENT_FOUND)
@@ -205,7 +239,16 @@ IF (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
     set(WITH_GPSD Off)
     set(WITH_AHP_XC Off)
     set(WITH_AHP_GT Off)
-    set(WITH_MI Off)
+    # The drivers below are not yet compatible with Apple Silicon since their libraries are not universal binaries
+    if(CMAKE_SYSTEM_PROCESSOR STREQUAL "arm64")
+        SET(WITH_ASICAM Off)
+        SET(WITH_SBIG Off)
+        SET(WITH_ATIK Off)
+        SET(WITH_TOUPBASE Off)
+        SET(WITH_QHY Off)
+        SET(WITH_SVBONY Off)
+        SET(WITH_ASTROASIS Off)
+    endif()
 ENDIF ()
 # Disable apogee, qhy and mi with gcc 4.8 and earlier versions
 IF (CMAKE_COMPILER_IS_GNUCXX AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 4.9)
@@ -233,6 +276,7 @@ if (NO_PRE_BUILT)
     SET(WITH_SBIG Off)
     SET(WITH_SVBONY Off)
     SET(WITH_TOUPBASE Off)
+    SET(WITH_ASTROASIS Off)
 endif(NO_PRE_BUILT)
 
 # If the Build Libs option is selected, it will just build the required libraries.
@@ -297,24 +341,19 @@ endif()
 add_subdirectory(libpktriggercord)
 endif (WITH_PENTAX)
 
-# libahp-xc
-if (WITH_AHP_XC)
-add_subdirectory(libahp-xc)
-endif(WITH_AHP_XC)
-
-# libahp-gt
-if (WITH_AHP_GT)
-add_subdirectory(libahp-gt)
-endif(WITH_AHP_GT)
-
 #toupbase dependencies
 if (WITH_TOUPBASE)
+add_subdirectory(libmeadecam)
 add_subdirectory(libtoupcam)
 add_subdirectory(libaltaircam)
+add_subdirectory(libbressercam)
+add_subdirectory(libogmacam)
 add_subdirectory(libstarshootg)
 add_subdirectory(libnncam)
 add_subdirectory(libmallincam)
 add_subdirectory(libomegonprocam)
+add_subdirectory(libtscam)
+add_subdirectory(libsvbonycam)
 endif (WITH_TOUPBASE)
 
 #libsvbiny
@@ -327,6 +366,11 @@ if (WITH_PLAYERONE)
 add_subdirectory(libplayerone)
 endif(WITH_PLAYERONE)
 
+#libastroasis
+if (WITH_ASTROASIS)
+add_subdirectory(libastroasis)
+endif(WITH_ASTROASIS)
+
 # This is the main 3rd Party build.  It runs if the Build Libs option is not selected.
 ELSE(BUILD_LIBS)
 
@@ -334,11 +378,6 @@ ELSE(BUILD_LIBS)
 if (WITH_EQMOD)
 add_subdirectory(indi-eqmod)
 endif(WITH_EQMOD)
-
-## AstroLink4
-if (WITH_ASTROLINK4)
-add_subdirectory(indi-astrolink4)
-endif(WITH_ASTROLINK4)
 
 ## SkyWalker
 if (WITH_SKYWALKER)
@@ -375,10 +414,10 @@ if (WITH_TALON6)
 add_subdirectory(indi-talon6)
 endif(WITH_TALON6)
 
-## SpectraCyber
-if (WITH_SPECTRACYBER)
-add_subdirectory(indi-spectracyber)
-endif(WITH_SPECTRACYBER)
+## Rolloffino
+if (WITH_ROLLOFFINO)
+add_subdirectory(indi-rolloffino)
+endif(WITH_ROLLOFFINO)
 
 ## Shelyak
 if (WITH_SHELYAK)
@@ -437,18 +476,35 @@ endif (WITH_ATIK)
 if (WITH_TOUPBASE)
 find_package(TOUPCAM)
 find_package(ALTAIRCAM)
+find_package(BRESSERCAM)
+find_package(OGMACAM)
+find_package(TSCAM)
+find_package(SVBONYCAM)
 find_package(STARSHOOTG)
 find_package(NNCAM)
 find_package(MALLINCAM)
 find_package(OMEGONPROCAM)
-if (TOUPCAM_FOUND AND ALTAIRCAM_FOUND AND STARSHOOTG_FOUND AND NNCAM_FOUND AND MALLINCAM_FOUND AND OMEGONPROCAM_FOUND)
+find_package(MEADECAM)
+if (TOUPCAM_FOUND AND ALTAIRCAM_FOUND AND BRESSERCAM_FOUND AND OGMACAM_FOUND AND TSCAM_FOUND AND SVBONYCAM_FOUND AND STARSHOOTG_FOUND AND NNCAM_FOUND AND MALLINCAM_FOUND AND OMEGONPROCAM_FOUND AND MEADECAM_FOUND)
 add_subdirectory(indi-toupbase)
-else (TOUPCAM_FOUND AND ALTAIRCAM_FOUND AND STARSHOOTG_FOUND AND NNCAM_FOUND AND OMEGONPROCAM_FOUND)
+else (TOUPCAM_FOUND AND ALTAIRCAM_FOUND AND BRESSERCAM_FOUND AND OGMACAM_FOUND AND TSCAM_FOUND AND SVBONYCAM_FOUND AND STARSHOOTG_FOUND AND NNCAM_FOUND AND MALLINCAM_FOUND AND OMEGONPROCAM_FOUND AND MEADECAM_FOUND)
 if (NOT TOUPCAM_FOUND)
 add_subdirectory(libtoupcam)
 endif()
 if (NOT ALTAIRCAM_FOUND)
 add_subdirectory(libaltaircam)
+endif()
+if (NOT BRESSERCAM_FOUND)
+add_subdirectory(libbressercam)
+endif()
+if (NOT OGMACAM_FOUND)
+add_subdirectory(libogmacam)
+endif()
+if (NOT TSCAM_FOUND)
+add_subdirectory(libtscam)
+endif()
+if (NOT SVBONYCAM_FOUND)
+add_subdirectory(libsvbonycam)
 endif()
 if (NOT STARSHOOTG_FOUND)
 add_subdirectory(libstarshootg)
@@ -462,8 +518,11 @@ endif()
 if (NOT OMEGONPROCAM_FOUND)
 add_subdirectory(libomegonprocam)
 endif()
+if (NOT MEADECAM_FOUND)
+add_subdirectory(libmeadecam)
+endif()
 SET(LIBRARIES_FOUND FALSE)
-endif (TOUPCAM_FOUND AND ALTAIRCAM_FOUND AND STARSHOOTG_FOUND AND NNCAM_FOUND AND MALLINCAM_FOUND AND OMEGONPROCAM_FOUND)
+endif (TOUPCAM_FOUND AND ALTAIRCAM_FOUND AND BRESSERCAM_FOUND AND OGMACAM_FOUND AND TSCAM_FOUND AND SVBONYCAM_FOUND AND STARSHOOTG_FOUND AND NNCAM_FOUND AND MALLINCAM_FOUND AND OMEGONPROCAM_FOUND AND MEADECAM_FOUND)
 endif (WITH_TOUPBASE)
 
 ## Bee Focuser
@@ -589,11 +648,6 @@ if (WITH_MGEN)
 add_subdirectory(indi-mgen)
 endif (WITH_MGEN)
 
-# Astromechanics Focuser
-if (WITH_ASTROMECHFOC)
-add_subdirectory(indi-astromechfoc)
-endif(WITH_ASTROMECHFOC)
-
 ## LIME-SDR
 if (WITH_LIMESDR)
 find_package(LIMESUITE)
@@ -620,14 +674,15 @@ if (WITH_NIGHTSCAPE)
 add_subdirectory(indi-nightscape)
 endif(WITH_NIGHTSCAPE)
 
-if (WITH_DREAMFOCUSER)
-add_subdirectory(indi-dreamfocuser)
-endif()
-
 # Avalon StarGO
 if (WITH_AVALON)
 add_subdirectory(indi-avalon)
 endif(WITH_AVALON)
+
+# AvalonUD
+if (WITH_AVALONUD)
+add_subdirectory(indi-avalonud)
+endif(WITH_AVALONUD)
 
 # Pentax
 if (WITH_PENTAX)
@@ -646,11 +701,9 @@ endif(WITH_PENTAX)
 # AHP
 if (WITH_AHP_XC)
 find_package(AHPXC)
-if(AHPXC_FOUND)
+if(AHP_XC_FOUND)
 add_subdirectory(indi-ahp-xc)
-else(AHPXC_FOUND)
-add_subdirectory(libahp-xc)
-endif(AHPXC_FOUND)
+endif(AHP_XC_FOUND)
 endif(WITH_AHP_XC)
 
 # svbony
@@ -663,11 +716,6 @@ add_subdirectory(libsvbony)
 SET(LIBRARIES_FOUND FALSE)
 endif(SVBONY_FOUND)
 endif(WITH_SVBONY)
-
-# rpi_cam
-if (WITH_RPICAM)
-add_subdirectory(indi-rpicam)
-endif(WITH_RPICAM)
 
 # Bresser Exos 2 GoTo
 if (WITH_BRESSEREXOS2)
@@ -693,6 +741,30 @@ endif(WITH_PLAYERONE)
 # NUT
 if (WITH_NUT)
 add_subdirectory(indi-nut)
+endif()
+
+# Astroasis
+if (WITH_ASTROASIS)
+find_package(ASTROASIS)
+if (ASTROASIS_FOUND)
+add_subdirectory(indi-astroasis)
+else (ASTROASIS_FOUND)
+add_subdirectory(libastroasis)
+SET(LIBRARIES_FOUND FALSE)
+endif(ASTROASIS_FOUND)
+endif(WITH_ASTROASIS)
+
+# OCS
+if (WITH_OCS)
+add_subdirectory(indi-ocs)
+endif()
+
+# GPIO
+if (WITH_GPIO)
+find_package(GPIOD)
+if (GPIOD_FOUND)
+add_subdirectory(indi-gpio)
+endif(GPIOD_FOUND)
 endif()
 
 # Check if libraries are found. If not, we must build them, install them, THEN run CMake again to build and instal the drivers. If all the libraraies are installed, then we build and install the drivers only now.
@@ -728,6 +800,22 @@ if (WITH_TOUPBASE AND NOT ALTAIRCAM_FOUND)
 message(STATUS "libaltaircam was not found and will now be built. Please install libaltaircam first before running cmake again to install indi-toupbase.")
 endif (WITH_TOUPBASE AND NOT ALTAIRCAM_FOUND)
 
+if (WITH_TOUPBASE AND NOT BRESSERCAM_FOUND)
+message(STATUS "libbressercam was not found and will now be built. Please install libbressercam first before running cmake again to install indi-toupbase.")
+endif (WITH_TOUPBASE AND NOT BRESSERCAM_FOUND)
+
+if (WITH_TOUPBASE AND NOT OGMACAM_FOUND)
+message(STATUS "libogmacam was not found and will now be built. Please install libogmacam first before running cmake again to install indi-toupbase.")
+endif (WITH_TOUPBASE AND NOT OGMACAM_FOUND)
+
+if (WITH_TOUPBASE AND NOT TSCAM_FOUND)
+message(STATUS "libtscam was not found and will now be built. Please install libtscam first before running cmake again to install indi-toupbase.")
+endif (WITH_TOUPBASE AND NOT TSCAM_FOUND)
+
+if (WITH_TOUPBASE AND NOT SVBONYCAM_FOUND)
+message(STATUS "libsvbonycam was not found and will now be built. Please install libsvbonycam first before running cmake again to install indi-toupbase.")
+endif (WITH_TOUPBASE AND NOT SVBONYCAM_FOUND)
+
 if (WITH_TOUPBASE AND NOT STARSHOOTG_FOUND)
 message(STATUS "libstarshootg was not found and will now be built. Please install libstarshootg first before running cmake again to install indi-toupbase.")
 endif (WITH_TOUPBASE AND NOT STARSHOOTG_FOUND)
@@ -743,6 +831,10 @@ endif (WITH_TOUPBASE AND NOT MALLINCAM_FOUND)
 if (WITH_TOUPBASE AND NOT OMEGONPROCAM_FOUND)
 message(STATUS "libomegonprocam was not found and will now be built. Please install libomegonprocam first before running cmake again to install indi-toupbase.")
 endif (WITH_TOUPBASE AND NOT OMEGONPROCAM_FOUND)
+
+if (WITH_TOUPBASE AND NOT MEADECAM_FOUND)
+message(STATUS "libmeadecam was not found and will now be built. Please install libmeadecam first before running cmake again to install indi-toupbase.")
+endif (WITH_TOUPBASE AND NOT MEADECAM_FOUND)
 
 if (WITH_INOVAPLX AND NOT INOVASDK_FOUND)
 message(STATUS "libinovasdk was not found and will now be built. Please install libinovasdk first before running cmake again to install indi-inovaplx.")
@@ -776,13 +868,9 @@ if (WITH_PLAYERONE AND NOT PLAYERONE_FOUND)
 message(STATUS "libplayerone was not found and will now be built. Please install this libplayerone first before running cmake again to install indi-playerone.")
 endif (WITH_PLAYERONE AND NOT PLAYERONE_FOUND)
 
-if (WITH_AHPXC AND NOT AHPXC_FOUND)
-message(STATUS "libahp-xc was not found and will now be built. Please install libahp-xc first before running cmake again to install indi-ahp-xc.")
-endif (WITH_AHPXC AND NOT AHPXC_FOUND)
-
-if (WITH_AHPGT AND NOT AHPGT_FOUND)
-message(STATUS "libahp-gt was not found and will now be built. Please install libahp-gt first before running cmake again to install indi-ahpgt.")
-endif (WITH_AHPGT AND NOT AHPGT_FOUND)
+if (WITH_ASTROASIS AND NOT ASTROASIS_FOUND)
+message(STATUS "libastroasis was not found and will now be built. Please install libastroasis first before running cmake again to install indi-astroasis.")
+endif (WITH_ASTROASIS AND NOT ASTROASIS_FOUND)
 
 message(STATUS "####################################################################################################################################")
 endif (LIBRARIES_FOUND)
