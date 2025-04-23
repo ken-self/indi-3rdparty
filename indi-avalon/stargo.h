@@ -104,78 +104,97 @@ public:
 protected:
 
     // Sync Home Position
-    ISwitchVectorProperty SyncHomeSP;
-    ISwitch SyncHomeS[1];
+    INDI::PropertySwitch SyncHomeSP { 1 };
+//    ISwitchVectorProperty SyncHomeSP;
+//    ISwitch SyncHomeS[1];
 
     // firmware info
-    ITextVectorProperty MountFirmwareInfoTP;
-    IText MountFirmwareInfoT[3] = {};
+    INDI::PropertyText MountFirmwareInfoTP { 3 };
+//    ITextVectorProperty MountFirmwareInfoTP;
+//    IText MountFirmwareInfoT[3] = {};
 
     // goto home
-    ISwitchVectorProperty MountGotoHomeSP;
-    ISwitch MountGotoHomeS[1];
+    INDI::PropertySwitch MountGotoHomeSP { 1 };
+//    ISwitchVectorProperty MountGotoHomeSP;
+//    ISwitch MountGotoHomeS[1];
 
     // Guiding
-    INumberVectorProperty GuidingSpeedNP;
-    INumber GuidingSpeedN[2];
+    INDI::PropertyNumber GuidingSpeedNP { 2 };
+//    INumberVectorProperty GuidingSpeedNP;
+//    INumber GuidingSpeedN[2];
 
     // ST4 status
-    ISwitchVectorProperty ST4StatusSP;
-    ISwitch ST4StatusS[2];
+    INDI::PropertySwitch ST4StatusSP { 1 };
+//    ISwitchVectorProperty ST4StatusSP;
+//    ISwitch ST4StatusS[2];
 
     // Keypad
-    ISwitchVectorProperty KeypadStatusSP;
-    ISwitch KeypadStatusS[2];
+    INDI::PropertySwitch KeypadStatusSP { 1 };
+//    ISwitchVectorProperty KeypadStatusSP;
+//    ISwitch KeypadStatusS[2];
 
     // Max slew speed
-    ISwitchVectorProperty MaxSlewSpeedSP;
-    ISwitch MaxSlewSpeedS[4];
+    INDI::PropertySwitch MaxSlewSpeedSP { 4 };
+//    ISwitchVectorProperty MaxSlewSpeedSP;
+//    ISwitch MaxSlewSpeedS[4];
 
     // Center speeds
-    ISwitchVectorProperty CenterSpeedSP;
-    ISwitch CenterSpeedS[6];
+    INDI::PropertySwitch CenterSpeedSP { 6 };
+//    ISwitchVectorProperty CenterSpeedSP;
+//    ISwitch CenterSpeedS[6];
 
     // Center and Find speeds
-    ISwitchVectorProperty FindSpeedSP;
-    ISwitch FindSpeedS[8];
+    INDI::PropertySwitch FindSpeedSP { 8 };
+//    ISwitchVectorProperty FindSpeedSP;
+//    ISwitch FindSpeedS[8];
 
     // RA Track Adjust
-    INumberVectorProperty TrackingAdjustmentNP;
-    INumber TrackingAdjustmentN[1];
+    INDI::PropertyNumber TrackingAdjustmentNP { 1 };
+//    INumberVectorProperty TrackingAdjustmentNP;
+//    INumber TrackingAdjustmentN[1];
 
     // Auto RA Tracking Adjustment
-    ISwitchVectorProperty RaAutoAdjustSP;
-    ISwitch RaAutoAdjustS[2];
+    INDI::PropertySwitch RaAutoAdjustSP { 1 };
+//    ISwitchVectorProperty RaAutoAdjustSP;
+//    ISwitch RaAutoAdjustS[2];
 
     // meridian flip
-    ISwitchVectorProperty MeridianFlipModeSP;
-    ISwitch MeridianFlipModeS[3];
+    INDI::PropertySwitch MeridianFlipModeSP { 3 };
+//    ISwitchVectorProperty MeridianFlipModeSP;
+//    ISwitch MeridianFlipModeS[3];
 
     // configurable delay between two commands to avoid flooding StarGO
-    INumberVectorProperty MountRequestDelayNP;
-    INumber MountRequestDelayN[1];
+    INDI::PropertyNumber MountRequestDelayNP { 1 };
+//    INumberVectorProperty MountRequestDelayNP;
+//    INumber MountRequestDelayN[1];
 
     // Gear ratios
-    INumberVectorProperty GearRatioNP;
-    INumber GearRatioN[2];
+    INDI::PropertyNumber GearRatioNP  { 2 };
+//    INumberVectorProperty GearRatioNP;
+//    INumber GearRatioN[2];
 
     // Torque
-    INumberVectorProperty TorqueNP;
-    INumber TorqueN[1];
+    INDI::PropertyNumber TorqueNP { 1 };
+//    INumberVectorProperty TorqueNP;
+//    INumber TorqueN[1];
 
     // MotorReverse section
-    ISwitchVectorProperty RaMotorReverseSP;
-    ISwitch RaMotorReverseS[2];
-    ISwitchVectorProperty DecMotorReverseSP;
-    ISwitch DecMotorReverseS[2];
+    INDI::PropertySwitch RaMotorReverseSP { 2 };
+//    ISwitchVectorProperty RaMotorReverseSP;
+//    ISwitch RaMotorReverseS[2];
+    INDI::PropertySwitch DecMotorReverseSP { 2 };
+//    ISwitchVectorProperty DecMotorReverseSP;
+//    ISwitch DecMotorReverseS[2];
 
     // Motor Step Position
-    INumberVectorProperty MotorStepNP;
-    INumber MotorStepN[2];
+    INDI::PropertyNumber MotorStepNP { 2 };
+//    INumberVectorProperty MotorStepNP;
+//    INumber MotorStepN[2];
 
     // HA and LST
-    INumberVectorProperty HaLstNP;
-    INumber HaLstN[2];
+    INDI::PropertyNumber HaLstNP { 2 };
+//    INumberVectorProperty HaLstNP;
+//    INumber HaLstN[2];
 
     bool usePulseCommand { true };
     std::chrono::time_point<std::chrono::system_clock>  lastXmit = {};
@@ -331,7 +350,7 @@ protected:
 
 // ******************************************************************************
 inline bool StarGoTelescope::isGuiding(){
-    return (GuideNSNP.s == IPS_BUSY || GuideWENP.s == IPS_BUSY);
+    return (GuideNSNP.getState() == IPS_BUSY || GuideWENP.getState() == IPS_BUSY);
 }
 
 // ******************************************************************************

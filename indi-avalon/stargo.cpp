@@ -41,7 +41,7 @@
 *******************************************************************************/
 const char *ADVANCED_TAB = "Advanced";
 
-StarGoTelescope::StarGoTelescope()
+StarGoTelescope::StarGoTelescope(): GI(this)
 {
     LOG_DEBUG(__FUNCTION__);
     setVersion(AVALON_VERSION_MAJOR, AVALON_VERSION_MINOR);
@@ -144,36 +144,39 @@ bool StarGoTelescope::ISNewSwitch(const char *dev, const char *name, ISState *st
     if (dev != nullptr && strcmp(dev, getDeviceName()) == 0)
     {
         // sync home position
-        if (!strcmp(name, SyncHomeSP.name))
+        if (SyncHomeSP.isNameMatch(name))
         {
             return setHomeSync();
         }
 
         // goto home position
-        if (!strcmp(name, MountGotoHomeSP.name))
+        if (MountGotoHomeSP.isNameMatch(name))
         {
-            IUUpdateSwitch(&MountGotoHomeSP, states, names, n);
+            MountGotoHomeSP.update(states, names, n);
             if (setGotoHome())
             {
-                MountGotoHomeSP.s = IPS_BUSY;
+                MountGotoHomeSP.setState(IPS_BUSY);
                 TrackState = SCOPE_SLEWING;
             }
             else
             {
-                MountGotoHomeSP.s = IPS_ALERT;
+                MountGotoHomeSP.setState(IPS_ALERT);
             }
-            MountGotoHomeS[0].s = ISS_OFF;
-            IDSetSwitch(&MountGotoHomeSP, nullptr);
+            MountGotoHomeSP[0].setState(ISS_OFF);
+            MountGotoHomeSP.apply();
 
             LOG_INFO("Slewing to home position...");
             return true;
         }
         // tracking mode
-        else if (!strcmp(name, TrackModeSP.name))
+//        else if (!strcmp(name, TrackModeSP.name))
+        else if (TrackModeSP.isNameMatch(name))
         {
-            if (IUUpdateSwitch(&TrackModeSP, states, names, n) < 0)
+//            if (IUUpdateSwitch(&TrackModeSP, states, names, n) < 0)
+            if (!TrackModeSP.update(states, names, n))
                 return false;
-            uint8_t trackMode = static_cast<uint8_t>(IUFindOnSwitchIndex(&TrackModeSP));
+//            uint8_t trackMode = static_cast<uint8_t>(IUFindOnSwitchIndex(&TrackModeSP));
+            uint8_t trackMode = TrackModeSP.findOnSwitchIndex();
             bool result = SetTrackMode(trackMode);
 
             switch (trackMode)
@@ -188,52 +191,54 @@ bool StarGoTelescope::ISNewSwitch(const char *dev, const char *name, ISState *st
                 LOG_INFO("Lunar tracking rate selected");
                 break;
             }
-            TrackModeSP.s = result ? IPS_OK : IPS_ALERT;
+//            TrackModeSP.s = result ? IPS_OK : IPS_ALERT;
+//            IDSetSwitch(&TrackModeSP, nullptr);
+            TrackModeSP.setState(result ? IPS_OK : IPS_ALERT);
+            TrackModeSP.apply(nullptr);
 
-            IDSetSwitch(&TrackModeSP, nullptr);
             return result;
         }
-        else if (!strcmp(name, ST4StatusSP.name))
+        else if (ST4StatusSP.isNameMatch(name))
         {
-            bool enabled = !strcmp(IUFindOnSwitchName(states, names, n), ST4StatusS[INDI_ENABLED].name);
+            bool enabled = !strcmp(IUFindOnSwitchName(states, names, n), ST4StatusSP[INDI_ENABLED].name);
             bool result = setST4Enabled(enabled);
 
             if (result)
             {
-                ST4StatusS[INDI_ENABLED].s = enabled ? ISS_ON : ISS_OFF;
-                ST4StatusS[INDI_DISABLED].s = enabled ? ISS_OFF : ISS_ON;
-                ST4StatusSP.s = IPS_OK;
+                ST4StatusSP[INDI_ENABLED].setState(enabled ? ISS_ON : ISS_OFF);
+                ST4StatusSP[INDI_DISABLED].setState(enabled ? ISS_OFF : ISS_ON);
+                ST4StatusSP.setState(IPS_OK);
             }
             else
             {
-                ST4StatusSP.s = IPS_ALERT;
+                ST4StatusSP.setState(IPS_ALERT);
             }
-            IDSetSwitch(&ST4StatusSP, nullptr);
+            ST4StatusSP.apply();
             return result;
         }
-        else if (!strcmp(name, KeypadStatusSP.name))
+        else if (KeypadStatusSP.isNameMatch(name))
         {
-            bool enabled = !strcmp(IUFindOnSwitchName(states, names, n), KeypadStatusS[INDI_ENABLED].name);
+            bool enabled = !strcmp(IUFindOnSwitchName(states, names, n), KeypadStatusSP[INDI_ENABLED].name);
             bool result = setKeyPadEnabled(enabled);
 
             if (result)
             {
-                KeypadStatusS[INDI_ENABLED].s = enabled ? ISS_ON : ISS_OFF;
-                KeypadStatusS[INDI_DISABLED].s = enabled ? ISS_OFF : ISS_ON;
-                KeypadStatusSP.s = IPS_OK;
+                KeypadStatusSP[INDI_ENABLED].setState(enabled ? ISS_ON : ISS_OFF);
+                KeypadStatusSP[INDI_DISABLED].setState(enabled ? ISS_OFF : ISS_ON);
+                KeypadStatusSP.setState(IPS_OK);
             }
             else
             {
-                KeypadStatusSP.s = IPS_ALERT;
+                KeypadStatusSP.setState(IPS_ALERT);
             }
-            IDSetSwitch(&KeypadStatusSP, nullptr);
+            KeypadStatusSP.apply();
             return result;
         }
-        else if (!strcmp(name, MaxSlewSpeedSP.name))
+        else if (MaxSlewSpeedSP.isNameMatch(name))
         {
-            if (IUUpdateSwitch(&MaxSlewSpeedSP, states, names, n) < 0)
+            if (!MaxSlewSpeedSP.update(states, names, n))
                 return false;
-            int index = IUFindOnSwitchIndex(&MaxSlewSpeedSP);
+            int index = MaxSlewSpeedSP.findOnSwitchIndex();
 
             bool result = setMaxSlewSpeed(index);
 
@@ -256,16 +261,16 @@ bool StarGoTelescope::ISNewSwitch(const char *dev, const char *name, ISState *st
                     result = false;
                     break;
             }
-            MaxSlewSpeedSP.s = result ? IPS_OK : IPS_ALERT;
-            IDSetSwitch(&MaxSlewSpeedSP, nullptr);
+            MaxSlewSpeedSP.setState(result ? IPS_OK : IPS_ALERT);
+            MaxSlewSpeedSP.apply();
             return result;
         }
-        else if (!strcmp(name, CenterSpeedSP.name))
+        else if (CenterSpeedSP.isNameMatch(name))
         {
-            if (IUUpdateSwitch(&CenterSpeedSP, states, names, n) < 0)
+            if (!CenterSpeedSP.update(states, names, n))
                 return false;
-            int index = IUFindOnSwitchIndex(&CenterSpeedSP);
-            int find = IUFindOnSwitchIndex(&CenterSpeedSP);
+            int index = CenterSpeedSP.findOnSwitchIndex();
+            int find = FindSpeedSP.findOnSwitchIndex();
 
             bool result = setCenterFindSpeed(index, find);
             if (!result)
@@ -273,16 +278,16 @@ bool StarGoTelescope::ISNewSwitch(const char *dev, const char *name, ISState *st
                 LOGF_WARN("Set Center speed failed Center: %d Find: %d", index, find);
                 result = false;
             }
-            CenterSpeedSP.s = result ? IPS_OK : IPS_ALERT;
-            IDSetSwitch(&CenterSpeedSP, nullptr);
+            CenterSpeedSP.setState(result ? IPS_OK : IPS_ALERT);
+            CenterSpeedSP.apply();
             return result;
         }
-        else if (!strcmp(name, FindSpeedSP.name))
+        else if (FindSpeedSP.isNameMatch(name))
         {
-            if (IUUpdateSwitch(&FindSpeedSP, states, names, n) < 0)
+            if (!FindSpeedSP.update(states, names, n))
                 return false;
-            int index = IUFindOnSwitchIndex(&FindSpeedSP);
-            int center = IUFindOnSwitchIndex(&CenterSpeedSP);
+            int index = FindSpeedSP.findOnSwitchIndex();
+            int center = CenterSpeedSP.findOnSwitchIndex();
 
             bool result = setCenterFindSpeed(center, index);
             if (!result)
@@ -290,76 +295,76 @@ bool StarGoTelescope::ISNewSwitch(const char *dev, const char *name, ISState *st
                 LOGF_WARN("Set Find speed failed Center: %d Find: %d", center, index);
                 result = false;
             }
-            FindSpeedSP.s = result ? IPS_OK : IPS_ALERT;
-            IDSetSwitch(&FindSpeedSP, nullptr);
+            FindSpeedSP.setState(result ? IPS_OK : IPS_ALERT);
+            FindSpeedSP.apply();
             return result;
         }
-        else if (!strcmp(name, MeridianFlipModeSP.name))
+        else if (MeridianFlipModeSP.isNameMatch(name))
         {
-            int preIndex = IUFindOnSwitchIndex(&MeridianFlipModeSP);
-            IUUpdateSwitch(&MeridianFlipModeSP, states, names, n);
-            int nowIndex = IUFindOnSwitchIndex(&MeridianFlipModeSP);
+            int preIndex = MeridianFlipModeSP.findOnSwitchIndex();
+            MeridianFlipModeSP.update(states, names, n);
+            int nowIndex = MeridianFlipModeSP.findOnSwitchIndex();
             if (SetMeridianFlipMode(nowIndex) == false)
             {
-                IUResetSwitch(&MeridianFlipModeSP);
-                MeridianFlipModeS[preIndex].s = ISS_ON;
-                MeridianFlipModeSP.s          = IPS_ALERT;
+                MeridianFlipModeSP.reset();
+                MeridianFlipModeSP[preIndex].setState(ISS_ON);
+                MeridianFlipModeSP.setState(IPS_ALERT);
             }
             else
-                MeridianFlipModeSP.s = IPS_OK;
-            IDSetSwitch(&MeridianFlipModeSP, nullptr);
+                MeridianFlipModeSP.setState(IPS_OK);
+            MeridianFlipModeSP.apply();
             return true;
         }
-        else if (!strcmp(name, RaMotorReverseSP.name))
+        else if (RaMotorReverseSP.isNameMatch(name))
         {
-            int preIndex = IUFindOnSwitchIndex(&RaMotorReverseSP);
-            int decIndex = IUFindOnSwitchIndex(&DecMotorReverseSP);
-            IUUpdateSwitch(&RaMotorReverseSP, states, names, n);
-            int raIndex = IUFindOnSwitchIndex(&RaMotorReverseSP);
+            int preIndex = RaMotorReverseSP.findOnSwitchIndex();
+            int decIndex = DecMotorReverseSP.findOnSwitchIndex();
+            RaMotorReverseSP.update(states, names, n);
+            int raIndex = RaMotorReverseSP.findOnSwitchIndex();
             if (setMotorReverse(raIndex, decIndex) == false)
             {
-                IUResetSwitch(&RaMotorReverseSP);
-                RaMotorReverseS[preIndex].s = ISS_ON;
-                RaMotorReverseSP.s          = IPS_ALERT;
+                RaMotorReverseSP.reset();
+                RaMotorReverseSP[preIndex].setState(ISS_ON);
+                RaMotorReverseSP.setState(IPS_ALERT);
             }
             else
-                RaMotorReverseSP.s = IPS_OK;
-            IDSetSwitch(&RaMotorReverseSP, nullptr);
+                RaMotorReverseSP.setState(IPS_OK);
+            RaMotorReverseSP.apply();
             return true;
         }
-        else if (!strcmp(name, DecMotorReverseSP.name))
+        else if (DecMotorReverseSP.isNameMatch(name))
         {
-            int preIndex = IUFindOnSwitchIndex(&DecMotorReverseSP);
-            int raIndex = IUFindOnSwitchIndex(&RaMotorReverseSP);
-            IUUpdateSwitch(&DecMotorReverseSP, states, names, n);
-            int decIndex = IUFindOnSwitchIndex(&DecMotorReverseSP);
+            int preIndex = DecMotorReverseSP.findOnSwitchIndex();
+            int raIndex = RaMotorReverseSP.findOnSwitchIndex();
+            DecMotorReverseSP.update(states, names, n);
+            int decIndex = DecMotorReverseSP.findOnSwitchIndex();
             if (setMotorReverse(raIndex, decIndex) == false)
             {
-                IUResetSwitch(&DecMotorReverseSP);
-                DecMotorReverseS[preIndex].s = ISS_ON;
-                DecMotorReverseSP.s          = IPS_ALERT;
+                DecMotorReverseSP.reset();
+                DecMotorReverseSP[preIndex].setState(ISS_ON);
+                DecMotorReverseSP.setState(IPS_ALERT);
             }
             else
-                DecMotorReverseSP.s = IPS_OK;
-            IDSetSwitch(&DecMotorReverseSP, nullptr);
+                DecMotorReverseSP.setState(IPS_OK);
+            DecMotorReverseSP.apply();
             return true;
         }
-        else if (!strcmp(name, RaAutoAdjustSP.name))
+        else if (RaAutoAdjustSP.isNameMatch(name))
         {
-            bool enabled = !strcmp(IUFindOnSwitchName(states, names, n), RaAutoAdjustS[INDI_ENABLED].name);
+            bool enabled = !strcmp(IUFindOnSwitchName(states, names, n), RaAutoAdjustSP[INDI_ENABLED].name);
             bool result = autoRa->setEnabled(enabled);
 
             if (result)
             {
-                RaAutoAdjustS[INDI_ENABLED].s = enabled ? ISS_ON : ISS_OFF;
-                RaAutoAdjustS[INDI_DISABLED].s = enabled ? ISS_OFF : ISS_ON;
-                RaAutoAdjustSP.s = IPS_OK;
+                RaAutoAdjustSP[INDI_ENABLED].setState(enabled ? ISS_ON : ISS_OFF);
+                RaAutoAdjustSP[INDI_DISABLED].setState(enabled ? ISS_OFF : ISS_ON);
+                RaAutoAdjustSP.setState(IPS_OK);
             }
             else
             {
-                RaAutoAdjustSP.s = IPS_ALERT;
+                RaAutoAdjustSP.setState(IPS_ALERT);
             }
-            IDSetSwitch(&RaAutoAdjustSP, nullptr);
+            RaAutoAdjustSP.apply();
             return result;
         }
     }
@@ -375,9 +380,10 @@ bool StarGoTelescope::ISNewNumber(const char *dev, const char *name, double valu
 {
     if (dev != nullptr && strcmp(dev, getDeviceName()) == 0)
     {
-        processGuiderProperties(name, values, names, n);
+        if (GI::processNumber(dev, name, values, names, n))
+            return true;
         // sync home position
-        if (!strcmp(name, GuidingSpeedNP.name))
+        if (GuidingSpeedNP.isNameMatch(name))
         {
             int raSpeed  = static_cast<int>(round(values[0] * 100.0));
             int decSpeed = static_cast<int>(round(values[1] * 100.0));
@@ -385,32 +391,32 @@ bool StarGoTelescope::ISNewNumber(const char *dev, const char *name, double valu
 
             if (result)
             {
-                GuidingSpeedN[0].value = static_cast<double>(raSpeed) / 100.0;
-                GuidingSpeedN[1].value = static_cast<double>(decSpeed) / 100.0;
-                GuidingSpeedNP.s = IPS_OK;
+                GuidingSpeedNP[0].value = static_cast<double>(raSpeed) / 100.0;
+                GuidingSpeedNP[1].value = static_cast<double>(decSpeed) / 100.0;
+                GuidingSpeedNP.setState(IPS_OK);
             }
             else
             {
-                GuidingSpeedNP.s = IPS_ALERT;
+                GuidingSpeedNP.setState(IPS_ALERT);
             }
-            IDSetNumber(&GuidingSpeedNP, nullptr);
+            GuidingSpeedNP.apply();
             return result;
         }
-        else if (!strcmp(name, MountRequestDelayNP.name))
+        else if (MountRequestDelayNP.isNameMatch(name))
         {
             setMountRequestDelay(values[0]);
-            MountRequestDelayN[0].value = values[0];
-            MountRequestDelayNP.s = IPS_OK;
-            IDSetNumber(&MountRequestDelayNP, nullptr);
+            MountRequestDelayNP[0].value = values[0];
+            MountRequestDelayNP.setState(IPS_OK);
+            MountRequestDelayNP.apply();
             return true;
         }
-        else if (!strcmp(name, TrackingAdjustmentNP.name))
+        else if (TrackingAdjustmentNP.isNameMatch(name))
         {
             if( autoRa->isEnabled() )
             {
                 LOG_ERROR("Cannot adjust tracking rate when auto-adjustment is enabled");
-                TrackingAdjustmentNP.s = IPS_ALERT;
-                IDSetNumber(&TrackingAdjustmentNP, nullptr);
+                TrackingAdjustmentNP.setState(IPS_ALERT);
+                TrackingAdjustmentNP.apply();
                 return false;
             }
             // change tracking adjustment
@@ -419,30 +425,30 @@ bool StarGoTelescope::ISNewNumber(const char *dev, const char *name, double valu
             {
                 double adjust;
                 success = getTrackingAdjustment(&adjust);  // Get the value set in the mount
-                TrackingAdjustmentN[0].value = adjust;
-                TrackingAdjustmentNP.s       = IPS_OK;
+                TrackingAdjustmentNP[0].value = adjust;
+                TrackingAdjustmentNP.setState(IPS_OK);
             }
             else
-                TrackingAdjustmentNP.s = IPS_ALERT;
+                TrackingAdjustmentNP.setState(IPS_ALERT);
 
-            IDSetNumber(&TrackingAdjustmentNP, nullptr);
+            TrackingAdjustmentNP.apply();
             return success;
         }
-        else if (!strcmp(name, TorqueNP.name))
+        else if (TorqueNP.isNameMatch(name))
         {
             int torque  = static_cast<int>(values[0]);
             bool result  = setTorque(torque);
             if (result)
             {
                 result = getTorque(&torque);  // Get the value set in the mount
-                TorqueN[0].value = torque;
-                TorqueNP.s = IPS_OK;
+                TorqueNP[0].value = torque;
+                TorqueNP.setState(IPS_OK);
             }
             else
             {
-                TorqueNP.s = IPS_ALERT;
+                TorqueNP.setState(IPS_ALERT);
             }
-            IDSetNumber(&TorqueNP, nullptr);
+            TorqueNP.apply();
             return result;
         }
     }
@@ -465,131 +471,131 @@ bool StarGoTelescope::initProperties()
 
     TrackState = SCOPE_IDLE;
 
-    initGuiderProperties(getDeviceName(), GUIDE_TAB);
+    GI::initProperties(GUIDE_TAB);
 
     // Add debug/simulation/config controls so we may debug driver if necessary
     addAuxControls();
 
     setDriverInterface(getDriverInterface() | GUIDER_INTERFACE);
 
-    IUFillSwitch(&MountGotoHomeS[0], "MOUNT_GOTO_HOME_VALUE", "Goto Home", ISS_OFF);
-    IUFillSwitchVector(&MountGotoHomeSP, MountGotoHomeS, 1, getDeviceName(), "MOUNT_GOTO_HOME", "Goto Home", MAIN_CONTROL_TAB,
+    MountGotoHomeSP[0].fill("MOUNT_GOTO_HOME_VALUE", "Goto Home", ISS_OFF);
+    MountGotoHomeSP.fill(getDeviceName(), "MOUNT_GOTO_HOME", "Goto Home", MAIN_CONTROL_TAB,
                        IP_RW, ISR_ATMOST1, 60, IPS_OK);
 
     SetParkDataType(PARK_HA_DEC);
 
-    IUFillSwitch(&SyncHomeS[0], "SYNC_HOME", "Sync Home", ISS_OFF);
-    IUFillSwitchVector(&SyncHomeSP, SyncHomeS, 1, getDeviceName(), "TELESCOPE_SYNC_HOME", "Home Position", MAIN_CONTROL_TAB,
+    SyncHomeSP[0].fill("SYNC_HOME", "Sync Home", ISS_OFF);
+    SyncHomeSP.fill(getDeviceName(), "TELESCOPE_SYNC_HOME", "Home Position", MAIN_CONTROL_TAB,
                        IP_RW, ISR_ATMOST1, 60, IPS_IDLE);
 
-    IUFillText(&MountFirmwareInfoT[0], "MOUNT_FIRMWARE_INFO", "Firmware", "");
-    IUFillText(&MountFirmwareInfoT[1], "MOUNT_TYPE", "Mount Type", "");
-    IUFillText(&MountFirmwareInfoT[2], "MOUNT_TCB", "TCB", "");
-    IUFillTextVector(&MountFirmwareInfoTP, MountFirmwareInfoT, 3, getDeviceName(), "MOUNT_INFO", "Mount Info", INFO_TAB, IP_RO,
+    MountFirmwareInfoTP[0].fill("MOUNT_FIRMWARE_INFO", "Firmware", "");
+    MountFirmwareInfoTP[1].fill("MOUNT_TYPE", "Mount Type", "");
+    MountFirmwareInfoTP[2].fill("MOUNT_TCB", "TCB", "");
+    MountFirmwareInfoTP.fill(getDeviceName(), "MOUNT_INFO", "Mount Info", INFO_TAB, IP_RO,
                      60, IPS_OK);
 
     // Guiding settings
-    IUFillNumber(&GuidingSpeedN[0], "GUIDE_RATE_WE", "RA Speed", "%.2f", 0.0, 2.0, 0.1, 0);
-    IUFillNumber(&GuidingSpeedN[1], "GUIDE_RATE_NS", "DEC Speed", "%.2f", 0.0, 2.0, 0.1, 0);
-    IUFillNumberVector(&GuidingSpeedNP, GuidingSpeedN, 2, getDeviceName(), "GUIDE_RATE","Autoguiding", GUIDE_TAB, IP_RW, 60,
+    GuidingSpeedNP[0].fill("GUIDE_RATE_WE", "RA Speed", "%.2f", 0.0, 2.0, 0.1, 0);
+    GuidingSpeedNP[1].fill("GUIDE_RATE_NS", "DEC Speed", "%.2f", 0.0, 2.0, 0.1, 0);
+    GuidingSpeedNP.fill(getDeviceName(), "GUIDE_RATE","Autoguiding", GUIDE_TAB, IP_RW, 60,
                        IPS_IDLE);
 
     // ST4 guiding enabled / disabled
-    IUFillSwitch(&ST4StatusS[INDI_ENABLED], "INDI_ENABLED", "Enabled", ISS_OFF);
-    IUFillSwitch(&ST4StatusS[INDI_DISABLED], "INDI_DISABLED", "Disabled", ISS_ON);
-    IUFillSwitchVector(&ST4StatusSP, ST4StatusS, 2, getDeviceName(), "ST4", "ST4", GUIDE_TAB, IP_RW, ISR_1OFMANY, 60,
+    ST4StatusSP[INDI_ENABLED].fill("INDI_ENABLED", "Enabled", ISS_OFF);
+    ST4StatusSP[INDI_DISABLED].fill("INDI_DISABLED", "Disabled", ISS_ON);
+    ST4StatusSP.fill(getDeviceName(), "ST4", "ST4", GUIDE_TAB, IP_RW, ISR_1OFMANY, 60,
                        IPS_IDLE);
 
     // keypad enabled / disabled
-    IUFillSwitch(&KeypadStatusS[INDI_ENABLED], "INDI_ENABLED", "Enabled", ISS_ON);
-    IUFillSwitch(&KeypadStatusS[INDI_DISABLED], "INDI_DISABLED", "Disabled", ISS_OFF);
-    IUFillSwitchVector(&KeypadStatusSP, KeypadStatusS, 2, getDeviceName(), "Keypad", "Keypad", MOTION_TAB, IP_RW, ISR_1OFMANY,
+    KeypadStatusSP[INDI_ENABLED].fill("INDI_ENABLED", "Enabled", ISS_ON);
+    KeypadStatusSP[INDI_DISABLED].fill("INDI_DISABLED", "Disabled", ISS_OFF);
+    KeypadStatusSP.fill(getDeviceName(), "Keypad", "Keypad", MOTION_TAB, IP_RW, ISR_1OFMANY,
                        60, IPS_IDLE);
 
     // Max Slew Speeds
-    IUFillSwitch(&MaxSlewSpeedS[0], "MAX_SLEW_SPEED_LOW", "Low", ISS_OFF);
-    IUFillSwitch(&MaxSlewSpeedS[1], "MAX_SLEW_SPEED_MEDIUM", "Medium", ISS_OFF);
-    IUFillSwitch(&MaxSlewSpeedS[2], "MAX_SLEW_SPEED_FAST", "Fast", ISS_ON);
-    IUFillSwitch(&MaxSlewSpeedS[3], "MAX_SLEW_SPEED_HIGH", "High", ISS_OFF);
-    IUFillSwitchVector(&MaxSlewSpeedSP, MaxSlewSpeedS, 4, getDeviceName(), "MAX_SLEW_SPEED", "Max Slew Speed", MOTION_TAB,
+    MaxSlewSpeedSP[0].fill("MAX_SLEW_SPEED_LOW", "Low", ISS_OFF);
+    MaxSlewSpeedSP[1].fill("MAX_SLEW_SPEED_MEDIUM", "Medium", ISS_OFF);
+    MaxSlewSpeedSP[2].fill("MAX_SLEW_SPEED_FAST", "Fast", ISS_ON);
+    MaxSlewSpeedSP[3].fill("MAX_SLEW_SPEED_HIGH", "High", ISS_OFF);
+    MaxSlewSpeedSP.fill(getDeviceName(), "MAX_SLEW_SPEED", "Max Slew Speed", MOTION_TAB,
                        IP_RW, ISR_1OFMANY, 60, IPS_IDLE);
 
     // Center Speeds
-    IUFillSwitch(&CenterSpeedS[0], "CENTER_SPEED_2X",  "2x", ISS_OFF);
-    IUFillSwitch(&CenterSpeedS[1], "CENTER_SPEED_3X",  "3x", ISS_OFF);
-    IUFillSwitch(&CenterSpeedS[2], "CENTER_SPEED_4X",  "4x", ISS_OFF);
-    IUFillSwitch(&CenterSpeedS[3], "CENTER_SPEED_6X",  "6x", ISS_OFF);
-    IUFillSwitch(&CenterSpeedS[4], "CENTER_SPEED_8X",  "8x", ISS_ON);
-    IUFillSwitch(&CenterSpeedS[5], "CENTER_SPEED_10X", "10x", ISS_OFF);
-    IUFillSwitchVector(&CenterSpeedSP, CenterSpeedS, 6, getDeviceName(), "CENTER_SPEED", "Center Speed", MOTION_TAB,
+    CenterSpeedSP[0].fill("CENTER_SPEED_2X",  "2x", ISS_OFF);
+    CenterSpeedSP[1].fill("CENTER_SPEED_3X",  "3x", ISS_OFF);
+    CenterSpeedSP[2].fill("CENTER_SPEED_4X",  "4x", ISS_OFF);
+    CenterSpeedSP[3].fill("CENTER_SPEED_6X",  "6x", ISS_OFF);
+    CenterSpeedSP[4].fill("CENTER_SPEED_8X",  "8x", ISS_ON);
+    CenterSpeedSP[5].fill("CENTER_SPEED_10X", "10x", ISS_OFF);
+    CenterSpeedSP.fill(getDeviceName(), "CENTER_SPEED", "Center Speed", MOTION_TAB,
                        IP_RW, ISR_1OFMANY, 60, IPS_IDLE);
 
     // Find Speeds
-    IUFillSwitch(&FindSpeedS[0], "FIND_SPEED_10X",  "10x", ISS_OFF);
-    IUFillSwitch(&FindSpeedS[1], "FIND_SPEED_15X",  "15x", ISS_OFF);
-    IUFillSwitch(&FindSpeedS[2], "FIND_SPEED_20X",  "20x", ISS_OFF);
-    IUFillSwitch(&FindSpeedS[3], "FIND_SPEED_30X",  "30x", ISS_OFF);
-    IUFillSwitch(&FindSpeedS[4], "FIND_SPEED_50X",  "50x", ISS_OFF);
-    IUFillSwitch(&FindSpeedS[5], "FIND_SPEED_75X",  "75x", ISS_ON);
-    IUFillSwitch(&FindSpeedS[6], "FIND_SPEED_100X", "100x", ISS_OFF);
-    IUFillSwitch(&FindSpeedS[7], "FIND_SPEED_150X", "150x", ISS_OFF);
-    IUFillSwitchVector(&FindSpeedSP, FindSpeedS, 8, getDeviceName(), "FIND_SPEED", "Find Speed", MOTION_TAB,
+    FindSpeedSP[0].fill("FIND_SPEED_10X",  "10x", ISS_OFF);
+    FindSpeedSP[1].fill("FIND_SPEED_15X",  "15x", ISS_OFF);
+    FindSpeedSP[2].fill("FIND_SPEED_20X",  "20x", ISS_OFF);
+    FindSpeedSP[3].fill("FIND_SPEED_30X",  "30x", ISS_OFF);
+    FindSpeedSP[4].fill("FIND_SPEED_50X",  "50x", ISS_OFF);
+    FindSpeedSP[5].fill("FIND_SPEED_75X",  "75x", ISS_ON);
+    FindSpeedSP[6].fill("FIND_SPEED_100X", "100x", ISS_OFF);
+    FindSpeedSP[7].fill("FIND_SPEED_150X", "150x", ISS_OFF);
+    FindSpeedSP.fill(getDeviceName(), "FIND_SPEED", "Find Speed", MOTION_TAB,
                        IP_RW, ISR_1OFMANY, 60, IPS_IDLE);
 
     // Tracking Adjustment
-    IUFillNumber(&TrackingAdjustmentN[0], "RA_TRACK_ADJ", "RA Tracking Adjust (%)", "%.2f", -5.0, 5.0, 0.01, 0);
-    IUFillNumberVector(&TrackingAdjustmentNP, TrackingAdjustmentN, 1, getDeviceName(), "Track Adjust","Tracking", MOTION_TAB,
+    TrackingAdjustmentNP[0].fill("RA_TRACK_ADJ", "RA Tracking Adjust (%)", "%.2f", -5.0, 5.0, 0.01, 0);
+    TrackingAdjustmentNP.fill(getDeviceName(), "Track Adjust","Tracking", MOTION_TAB,
                        IP_RW, 60, IPS_IDLE);
 
     // meridian flip
-    IUFillSwitch(&MeridianFlipModeS[0], "MERIDIAN_FLIP_AUTO", "Auto", ISS_OFF);
-    IUFillSwitch(&MeridianFlipModeS[1], "MERIDIAN_FLIP_DISABLED", "Disabled", ISS_OFF);
-    IUFillSwitch(&MeridianFlipModeS[2], "MERIDIAN_FLIP_FORCED", "Forced", ISS_OFF);
-    IUFillSwitchVector(&MeridianFlipModeSP, MeridianFlipModeS, 3, getDeviceName(), "MERIDIAN_FLIP_MODE", "Meridian Flip",
+    MeridianFlipModeSP[0].fill("MERIDIAN_FLIP_AUTO", "Auto", ISS_OFF);
+    MeridianFlipModeSP[1].fill("MERIDIAN_FLIP_DISABLED", "Disabled", ISS_OFF);
+    MeridianFlipModeSP[2].fill("MERIDIAN_FLIP_FORCED", "Forced", ISS_OFF);
+    MeridianFlipModeSP.fill(getDeviceName(), "MERIDIAN_FLIP_MODE", "Meridian Flip",
                        MOTION_TAB, IP_RW, ISR_1OFMANY, 60, IPS_IDLE);
 
     // mount command delay
     /*
     default delay is static_cast<double>(xmitDelay.count())/1000.0;
     */
-    IUFillNumber(&MountRequestDelayN[0], "MOUNT_REQUEST_DELAY", "Request Delay (ms)", "%.0f", 0.0, 1000, 1.0, 50.0);
-    IUFillNumberVector(&MountRequestDelayNP, MountRequestDelayN, 1, getDeviceName(), "REQUEST_DELAY", "StarGO", OPTIONS_TAB,
+    MountRequestDelayNP[0].fill("MOUNT_REQUEST_DELAY", "Request Delay (ms)", "%.0f", 0.0, 1000, 1.0, 50.0);
+    MountRequestDelayNP.fill(getDeviceName(), "REQUEST_DELAY", "StarGO", OPTIONS_TAB,
                        IP_RW, 60, IPS_OK);
 
     // HA and LST for reference
-    IUFillNumber(&HaLstN[0], "HA", "HA (hh:mm:ss)", "%010.6m", 0, 24, 0, 0);
-    IUFillNumber(&HaLstN[1], "LST", "LST (hh:mm:ss)", "%010.6m", 0, 24, 0, 0);
-    IUFillNumberVector(&HaLstNP, HaLstN, 2, getDeviceName(), "HA-LST", "Hour Angle", SITE_TAB, IP_RO, 60, IPS_IDLE);
+    HaLstNP[0].fill("HA", "HA (hh:mm:ss)", "%010.6m", 0, 24, 0, 0);
+    HaLstNP[1].fill("LST", "LST (hh:mm:ss)", "%010.6m", 0, 24, 0, 0);
+    HaLstNP.fill(getDeviceName(), "HA-LST", "Hour Angle", SITE_TAB, IP_RO, 60, IPS_IDLE);
 
     // Gear Ratios
-    IUFillNumber(&GearRatioN[0], "GEAR_RATIO_RA", "RA Gearing", "%.2f", 0.0, 1000.0, 1, 0);
-    IUFillNumber(&GearRatioN[1], "GEAR_RATIO_DEC", "DEC Gearing", "%.2f", 0.0, 1000.0, 1, 0);
-    IUFillNumberVector(&GearRatioNP, GearRatioN, 2, getDeviceName(), "Gear Ratio","Gearing", INFO_TAB, IP_RO, 60, IPS_IDLE);
+    GearRatioNP[0].fill("GEAR_RATIO_RA", "RA Gearing", "%.2f", 0.0, 1000.0, 1, 0);
+    GearRatioNP[1].fill("GEAR_RATIO_DEC", "DEC Gearing", "%.2f", 0.0, 1000.0, 1, 0);
+    GearRatioNP.fill(getDeviceName(), "Gear Ratio","Gearing", INFO_TAB, IP_RO, 60, IPS_IDLE);
 
     // RA and Dec motor direction
-    IUFillSwitch(&RaMotorReverseS[INDI_ENABLED], "INDI_ENABLED", "Reverse", ISS_OFF);
-    IUFillSwitch(&RaMotorReverseS[INDI_DISABLED], "INDI_DISABLED", "Normal", ISS_OFF);
-    IUFillSwitchVector(&RaMotorReverseSP, RaMotorReverseS, 2, getDeviceName(), "RA_REVERSE", "RA Reverse", MOTION_TAB, IP_RW,
+    RaMotorReverseSP[INDI_ENABLED].fill("INDI_ENABLED", "Reverse", ISS_OFF);
+    RaMotorReverseSP[INDI_DISABLED].fill("INDI_DISABLED", "Normal", ISS_OFF);
+    RaMotorReverseSP.fill(getDeviceName(), "RA_REVERSE", "RA Reverse", MOTION_TAB, IP_RW,
                        ISR_1OFMANY, 60, IPS_IDLE);
 
-    IUFillSwitch(&DecMotorReverseS[INDI_ENABLED], "INDI_ENABLED", "Reverse", ISS_OFF);
-    IUFillSwitch(&DecMotorReverseS[INDI_DISABLED], "INDI_DISABLED", "Normal", ISS_OFF);
-    IUFillSwitchVector(&DecMotorReverseSP, DecMotorReverseS, 2, getDeviceName(), "DEC_REVERSE", "Dec Reverse", MOTION_TAB,
+    DecMotorReverseSP[INDI_ENABLED].fill("INDI_ENABLED", "Reverse", ISS_OFF);
+    DecMotorReverseSP[INDI_DISABLED].fill("INDI_DISABLED", "Normal", ISS_OFF);
+    DecMotorReverseSP.fill(getDeviceName(), "DEC_REVERSE", "Dec Reverse", MOTION_TAB,
                        IP_RW, ISR_1OFMANY, 60, IPS_IDLE);
 
     // Torque
-    IUFillNumber(&TorqueN[0], "TORQUE_RA", "Motor Torque", "%.0f", 0.0, 100.0, 10.0, 0);
-    IUFillNumberVector(&TorqueNP, TorqueN, 1, getDeviceName(), "Torque","Torque", MOTION_TAB, IP_RW, 60, IPS_IDLE);
+    TorqueNP[0].fill("TORQUE_RA", "Motor Torque", "%.0f", 0.0, 100.0, 10.0, 0);
+    TorqueNP.fill(getDeviceName(), "Torque","Torque", MOTION_TAB, IP_RW, 60, IPS_IDLE);
 
     // Motor Step Position
-    IUFillNumber(&MotorStepN[0], "MOTOR_STEP_RA", "RA Step Pos", "%.2f", -100000.0, 100000.0, 1, 0);
-    IUFillNumber(&MotorStepN[1], "MOTOR_STEP_DEC", "DEC Step Pos", "%.2f", -100000.0, 100000.0, 1, 0);
-    IUFillNumberVector(&MotorStepNP, MotorStepN, 2, getDeviceName(), "Motor Steps","Position", INFO_TAB, IP_RO, 60, IPS_IDLE);
+    MotorStepNP[0].fill("MOTOR_STEP_RA", "RA Step Pos", "%.2f", -100000.0, 100000.0, 1, 0);
+    MotorStepNP[1].fill("MOTOR_STEP_DEC", "DEC Step Pos", "%.2f", -100000.0, 100000.0, 1, 0);
+    MotorStepNP.fill(getDeviceName(), "Motor Steps","Position", INFO_TAB, IP_RO, 60, IPS_IDLE);
 
     // Auto Tracking Adjustment
-    IUFillSwitch(&RaAutoAdjustS[INDI_ENABLED], "INDI_ENABLED", "Enabled", ISS_OFF);
-    IUFillSwitch(&RaAutoAdjustS[INDI_DISABLED], "INDI_DISABLED", "Disabled", ISS_ON);
-    IUFillSwitchVector(&RaAutoAdjustSP, RaAutoAdjustS, 2, getDeviceName(), "RA_AUTO_ADJ", "RA Auto Adjust", GUIDE_TAB, IP_RW,
+    RaAutoAdjustSP[INDI_ENABLED].fill("INDI_ENABLED", "Enabled", ISS_OFF);
+    RaAutoAdjustSP[INDI_DISABLED].fill("INDI_DISABLED", "Disabled", ISS_ON);
+    RaAutoAdjustSP.fill(getDeviceName(), "RA_AUTO_ADJ", "RA Auto Adjust", GUIDE_TAB, IP_RW,
                        ISR_1OFMANY, 60, IPS_IDLE);
 
     return true;
@@ -604,52 +610,49 @@ bool StarGoTelescope::updateProperties()
 
     if (isConnected())
     {
-        defineProperty(&GuideNSNP);
-        defineProperty(&GuideWENP);
-        defineProperty(&SyncHomeSP);
-        defineProperty(&MountGotoHomeSP);
-        defineProperty(&GuidingSpeedNP);
-        defineProperty(&ST4StatusSP);
-        defineProperty(&KeypadStatusSP);
-        defineProperty(&MaxSlewSpeedSP);
-        defineProperty(&CenterSpeedSP);
-        defineProperty(&FindSpeedSP);
-        defineProperty(&TrackingAdjustmentNP);
-        defineProperty(&MeridianFlipModeSP);
-        defineProperty(&MountRequestDelayNP);
-        defineProperty(&MountFirmwareInfoTP);
-        defineProperty(&RaAutoAdjustSP);
-        defineProperty(&GearRatioNP);
-        defineProperty(&TorqueNP);
-        defineProperty(&RaMotorReverseSP);
-        defineProperty(&DecMotorReverseSP);
-        defineProperty(&MotorStepNP);
-        defineProperty(&HaLstNP);
+        defineProperty(SyncHomeSP);
+        defineProperty(MountGotoHomeSP);
+        defineProperty(GuidingSpeedNP);
+        defineProperty(ST4StatusSP);
+        defineProperty(KeypadStatusSP);
+        defineProperty(MaxSlewSpeedSP);
+        defineProperty(CenterSpeedSP);
+        defineProperty(FindSpeedSP);
+        defineProperty(TrackingAdjustmentNP);
+        defineProperty(MeridianFlipModeSP);
+        defineProperty(MountRequestDelayNP);
+        defineProperty(MountFirmwareInfoTP);
+        defineProperty(RaAutoAdjustSP);
+        defineProperty(GearRatioNP);
+        defineProperty(TorqueNP);
+        defineProperty(RaMotorReverseSP);
+        defineProperty(DecMotorReverseSP);
+        defineProperty(MotorStepNP);
+        defineProperty(HaLstNP);
     }
     else
     {
-        deleteProperty(GuideNSNP.name);
-        deleteProperty(GuideWENP.name);
-        deleteProperty(SyncHomeSP.name);
-        deleteProperty(MountGotoHomeSP.name);
-        deleteProperty(GuidingSpeedNP.name);
-        deleteProperty(ST4StatusSP.name);
-        deleteProperty(KeypadStatusSP.name);
-        deleteProperty(MaxSlewSpeedSP.name);
-        deleteProperty(CenterSpeedSP.name);
-        deleteProperty(FindSpeedSP.name);
-        deleteProperty(TrackingAdjustmentNP.name);
-        deleteProperty(MeridianFlipModeSP.name);
-        deleteProperty(MountRequestDelayNP.name);
-        deleteProperty(MountFirmwareInfoTP.name);
-        deleteProperty(RaAutoAdjustSP.name);
-        deleteProperty(GearRatioNP.name);
-        deleteProperty(TorqueNP.name);
-        deleteProperty(RaMotorReverseSP.name);
-        deleteProperty(DecMotorReverseSP.name);
-        deleteProperty(MotorStepNP.name);
-        deleteProperty(HaLstNP.name);
+        deleteProperty(SyncHomeSP);
+        deleteProperty(MountGotoHomeSP);
+        deleteProperty(GuidingSpeedNP);
+        deleteProperty(ST4StatusSP);
+        deleteProperty(KeypadStatusSP);
+        deleteProperty(MaxSlewSpeedSP);
+        deleteProperty(CenterSpeedSP);
+        deleteProperty(FindSpeedSP);
+        deleteProperty(TrackingAdjustmentNP);
+        deleteProperty(MeridianFlipModeSP);
+        deleteProperty(MountRequestDelayNP);
+        deleteProperty(MountFirmwareInfoTP);
+        deleteProperty(RaAutoAdjustSP);
+        deleteProperty(GearRatioNP);
+        deleteProperty(TorqueNP);
+        deleteProperty(RaMotorReverseSP);
+        deleteProperty(DecMotorReverseSP);
+        deleteProperty(MotorStepNP);
+        deleteProperty(HaLstNP);
     }
+    GI::updateProperties();
 
     return true;
 }
@@ -661,9 +664,9 @@ bool StarGoTelescope::saveConfigItems(FILE *fp)
 {
     LOG_DEBUG(__FUNCTION__);
 // There is no get function for Center and Find speeds so save in config
-    IUSaveConfigSwitch(fp, &CenterSpeedSP);
-    IUSaveConfigSwitch(fp, &FindSpeedSP);
-    IUSaveConfigSwitch(fp, &RaAutoAdjustSP);
+    CenterSpeedSP.save(fp);
+    FindSpeedSP.save(fp);
+    RaAutoAdjustSP.save(fp);
 
     INDI::Telescope::saveConfigItems(fp);
     return true;
@@ -763,10 +766,10 @@ bool StarGoTelescope::ReadScopeStatus()
             if (TrackState != newTrackState)
                 LOGF_INFO("%sTracking is off.", TrackState == SCOPE_PARKING ? "Scope parked. ": "");
 
-            if (MountGotoHomeSP.s == IPS_BUSY)
+            if (MountGotoHomeSP.getState() == IPS_BUSY)
             {
-                MountGotoHomeSP.s = IPS_OK;
-                IDSetSwitch(&MountGotoHomeSP, nullptr);
+                MountGotoHomeSP.setState(IPS_OK);
+                MountGotoHomeSP.apply();
             }
         }
         else if (x == 1 && y == 0)
@@ -780,15 +783,15 @@ bool StarGoTelescope::ReadScopeStatus()
     double raStep, decStep;
     if (getMotorSteps(&raStep, &decStep))
     {
-        MotorStepN[0].value =  raStep;
-        MotorStepN[1].value =  decStep;
-        MotorStepNP.s = IPS_OK;
+        MotorStepNP[0].value =  raStep;
+        MotorStepNP[1].value =  decStep;
+        MotorStepNP.setState(IPS_OK);
     }
     else
     {
-        MotorStepNP.s = IPS_ALERT;
+        MotorStepNP.setState(IPS_ALERT);
     }
-    IDSetNumber(&MotorStepNP, nullptr);
+    MotorStepNP.apply();
 
     double r, d;
     if (!getEqCoordinates(&r, &d))
@@ -803,16 +806,16 @@ bool StarGoTelescope::ReadScopeStatus()
     if (getLST(&lst))
     {
         ha = lst - r;
-        HaLstN[0].value =  fmod(ha, 24.0);
-        HaLstN[1].value =  fmod(lst, 24.0);
-        HaLstNP.s = IPS_OK;
+        HaLstNP[0].value =  fmod(ha, 24.0);
+        HaLstNP[1].value =  fmod(lst, 24.0);
+        HaLstNP.setState(IPS_OK);
     }
     else
     {
         LOG_ERROR("Retrieving scope LST failed.");
-        HaLstNP.s = IPS_ALERT;
+        HaLstNP.setState(IPS_ALERT);
     }
-    IDSetNumber(&HaLstNP, nullptr);
+    HaLstNP.apply();
 
     WaitParkOptionReady();
 
@@ -876,13 +879,18 @@ bool StarGoTelescope::Sync(double ra, double dec)
 
     if (!isSimulation() && !sendQuery(":CM#", response))
     {
-        EqNP.s = IPS_ALERT;
-        IDSetNumber(&EqNP, "Synchronization failed.");
+//        EqNP.s = IPS_ALERT;
+        EqNP.setState(IPS_ALERT);
+//        IDSetNumber(&EqNP, "Synchronization failed.");
+        LOG_ERROR("Synchronization failed.");
+        EqNP.apply();
         return false;
     }
     LOG_INFO("Synchronization successful.");
 
-    EqNP.s     = IPS_OK;
+//    EqNP.s     = IPS_OK;
+    EqNP.setState(IPS_OK);
+    EqNP.apply();
     NewRaDec(ra, dec);
 
     return true;
@@ -1026,13 +1034,15 @@ bool StarGoTelescope::SetSlewRate(int index)
 
     if (!isSimulation() && !setSlewMode(index))
     {
-        SlewRateSP.s = IPS_ALERT;
-        IDSetSwitch(&SlewRateSP, "Error setting slew mode.");
+        SlewRateSP.setState(IPS_ALERT);
+        SlewRateSP.apply();
+        LOG_ERROR( "Error setting slew mode.");
         return false;
     }
 
-    SlewRateSP.s = IPS_OK;
-    IDSetSwitch(&SlewRateSP, nullptr);
+    SlewRateSP.setState(IPS_OK);
+    SlewRateSP.apply();
+//    IDSetSwitch(&SlewRateSP, nullptr);
     return true;
 }
 
@@ -1047,28 +1057,38 @@ bool StarGoTelescope::Goto(double ra, double dec)
     const struct timespec timeout = {0, 100000000L};
 
     // If moving, let's stop it first.
-    if (EqNP.s == IPS_BUSY)
+//    if (EqNP.s == IPS_BUSY)
+    if (EqNP.getState() == IPS_BUSY)
     {
         if (!isSimulation() && !Abort())
         {
-            AbortSP.s = IPS_ALERT;
-            IDSetSwitch(&AbortSP, "Abort slew failed.");
+            AbortSP.setState(IPS_ALERT);
+            AbortSP.apply();
+            LOG_ERROR("Abort slew failed.");
             return false;
         }
 
-        AbortSP.s = IPS_OK;
-        EqNP.s    = IPS_IDLE;
-        IDSetSwitch(&AbortSP, "Slew aborted.");
-        IDSetNumber(&EqNP, nullptr);
+        AbortSP.setState(IPS_OK);
+        AbortSP.apply();
+        EqNP.setState(IPS_IDLE);
+        EqNP.apply();
+        
+        LOG_INFO("Slew aborted.");
+//        IDSetNumber(&EqNP, nullptr);
 
-        if (MovementNSSP.s == IPS_BUSY || MovementWESP.s == IPS_BUSY)
+//        if (MovementNSSP.s == IPS_BUSY || MovementWESP.s == IPS_BUSY)
+        if (MovementNSSP.getState() == IPS_BUSY || MovementWESP.getState() == IPS_BUSY)
         {
-            MovementNSSP.s = MovementWESP.s = IPS_IDLE;
-            EqNP.s                          = IPS_IDLE;
-            IUResetSwitch(&MovementNSSP);
-            IUResetSwitch(&MovementWESP);
-            IDSetSwitch(&MovementNSSP, nullptr);
-            IDSetSwitch(&MovementWESP, nullptr);
+            MovementNSSP.setState(IPS_IDLE);
+            MovementWESP.setState(IPS_IDLE);
+            EqNP.setState(IPS_IDLE);
+            EqNP.apply();
+//            IUResetSwitch(&MovementNSSP);
+//            IUResetSwitch(&MovementWESP);
+            MovementNSSP.reset();
+            MovementWESP.reset();
+            MovementNSSP.apply();
+            MovementWESP.apply();
         }
 
         // sleep for 100 mseconds
@@ -1086,14 +1106,16 @@ bool StarGoTelescope::Goto(double ra, double dec)
         if (!sendQuery(":MS#", response))
         {
             LOG_ERROR("Error Slewing");
-            EqNP.s = IPS_ALERT;
-            IDSetNumber(&EqNP, nullptr);
+            EqNP.setState(IPS_ALERT);
+            EqNP.apply();
+//            IDSetNumber(&EqNP, nullptr);
             return false;
         }
     }
 
     TrackState = SCOPE_SLEWING;
-    EqNP.s     = IPS_BUSY;
+    EqNP.setState(IPS_BUSY);
+    EqNP.apply();
 
 //    LOGF_INFO("Slewing to RA: %s - DEC: %s", RAStr, DecStr);
 
@@ -1115,15 +1137,18 @@ bool StarGoTelescope::Abort()
         return false;
     }
 
-    if (GuideNSNP.s == IPS_BUSY || GuideWENP.s == IPS_BUSY)
+    if (GuideNSNP.getState() == IPS_BUSY || GuideWENP.getState() == IPS_BUSY)
     {
-        GuideNSNP.s = GuideWENP.s = IPS_IDLE;
-        GuideNSN[0].value = GuideNSN[1].value = 0.0;
-        GuideWEN[0].value = GuideWEN[1].value = 0.0;
+        GuideNSNP.setState(IPS_IDLE);
+        GuideWENP.setState(IPS_IDLE);
+        GuideNSNP[0].setValue(0.0);
+        GuideNSNP[1].setValue(0.0);
+        GuideWENP[0].setValue(0.0);
+        GuideWENP[1].setValue(0.0);
 
         LOG_INFO("Guide aborted.");
-        IDSetNumber(&GuideNSNP, nullptr);
-        IDSetNumber(&GuideWENP, nullptr);
+        GuideNSNP.apply();
+        GuideWENP.apply();
 
         return true;
     }
@@ -1283,14 +1308,15 @@ bool StarGoTelescope::MoveNS(INDI_DIR_NS dir, TelescopeMotionCommand command)
 
 // Any other goto prior to this command sets the slew speed to MAX
 // Set the slew speed as requested by the client
-    int premode = IUFindOnSwitchIndex(&SlewRateSP);
+//    int premode = IUFindOnSwitchIndex(&SlewRateSP);
+    int premode = SlewRateSP.findOnSwitchIndex();
     if (SetSlewRate(premode) == false)
     {
-        SlewRateSP.s          = IPS_ALERT;
+        SlewRateSP.setState(IPS_ALERT);
     }
     else
-        SlewRateSP.s = IPS_OK;
-    IDSetSwitch(&SlewRateSP, nullptr);
+        SlewRateSP.setState(IPS_OK);
+    SlewRateSP.apply();
 
     sprintf(cmd, ":%s%s#", command==MOTION_START?"M":"Q", dir == DIRECTION_NORTH?"n":"s");
     if (!isSimulation() && !sendQuery(cmd, response, 0))
@@ -1313,14 +1339,15 @@ bool StarGoTelescope::MoveWE(INDI_DIR_WE dir, TelescopeMotionCommand command)
 
 // Any other goto prior to this command sets the slew speed to MAX
 // Set the slew speed as requested by the client
-    int premode = IUFindOnSwitchIndex(&SlewRateSP);
+//    int premode = IUFindOnSwitchIndex(&SlewRateSP);
+    int premode = SlewRateSP.findOnSwitchIndex();
     if (SetSlewRate(premode) == false)
     {
-        SlewRateSP.s          = IPS_ALERT;
+        SlewRateSP.setState(IPS_ALERT);
     }
     else
-        SlewRateSP.s = IPS_OK;
-    IDSetSwitch(&SlewRateSP, nullptr);
+        SlewRateSP.setState(IPS_OK);
+    SlewRateSP.apply();
 
     sprintf(cmd, ":%s%s#", command==MOTION_START?"M":"Q", dir == DIRECTION_WEST?"w":"e");
 
@@ -1343,11 +1370,11 @@ bool StarGoTelescope::getScopeLocation()
     LOG_DEBUG(__FUNCTION__);
     if (isSimulation())
     {
-        LocationNP.np[LOCATION_LATITUDE].value = 29.5;
-        LocationNP.np[LOCATION_LONGITUDE].value = 48.0;
-        LocationNP.np[LOCATION_ELEVATION].value = 10;
-        LocationNP.s           = IPS_OK;
-        IDSetNumber(&LocationNP, nullptr);
+        LocationNP[LOCATION_LATITUDE].value = 29.5;
+        LocationNP[LOCATION_LONGITUDE].value = 48.0;
+        LocationNP[LOCATION_ELEVATION].value = 10;
+        LocationNP.setState(IPS_OK);
+        LocationNP.apply();
         return true;
     }
 
@@ -1362,13 +1389,13 @@ bool StarGoTelescope::getScopeLocation()
         LOG_WARN("Failed to get site longitude from device.");
         return false;
     }
-    LocationNP.np[LOCATION_LATITUDE].value = siteLat;
-    LocationNP.np[LOCATION_LONGITUDE].value = siteLong;
+    LocationNP[LOCATION_LATITUDE].value = siteLat;
+    LocationNP[LOCATION_LONGITUDE].value = siteLong;
 
-    LOGF_DEBUG("Mount Controller Latitude: %lg Longitude: %lg", LocationN[LOCATION_LATITUDE].value,
-               LocationN[LOCATION_LONGITUDE].value);
+    LOGF_DEBUG("Mount Controller Latitude: %lg Longitude: %lg", LocationNP[LOCATION_LATITUDE].value,
+               LocationNP[LOCATION_LONGITUDE].value);
 
-    IDSetNumber(&LocationNP, nullptr);
+    LocationNP.apply();
 // Not sure why the driver does this in a get function
 //    if (!setLocalSiderealTime(siteLong))
 //    {
@@ -1564,7 +1591,7 @@ bool StarGoTelescope::getScopeTime()
     {
         char utcStr[8]={0};
         snprintf(utcStr, 8, "%.2f", offset);
-        IUSaveText(&TimeT[1], utcStr);
+        TimeTP[1].setText(utcStr);
     }
     else
     {
@@ -1607,14 +1634,14 @@ bool StarGoTelescope::getScopeTime()
 
     // Format it into the final UTC ISO 8601
     strftime(cdate, MAXINDINAME, "%Y-%m-%dT%H:%M:%S", &utm);
-    IUSaveText(&TimeT[0], cdate);
+    TimeTP[0].setText(cdate);
 
-    LOGF_DEBUG("Mount controller UTC Time: %s", TimeT[0].text);
-    LOGF_DEBUG("Mount controller UTC Offset: %s", TimeT[1].text);
+    LOGF_DEBUG("Mount controller UTC Time: %s", TimeTP[0].text);
+    LOGF_DEBUG("Mount controller UTC Offset: %s", TimeTP[1].text);
 
     // Let's send everything to the client
-    TimeTP.s = IPS_OK;
-    IDSetText(&TimeTP, nullptr);
+    TimeTP.setState(IPS_OK);
+    TimeTP.apply();
 
     return true;
 }
@@ -1774,9 +1801,9 @@ bool StarGoTelescope::setHomeSync()
     if (!getLST_String(input))
     {
         LOG_WARN("Synching home get LST failed.");
-        SyncHomeSP.s = IPS_ALERT;
-        SyncHomeS[0].s = ISS_OFF;
-        IDSetSwitch(&SyncHomeSP, nullptr);
+        SyncHomeSP.setState(IPS_ALERT);
+        SyncHomeSP[0].setState(ISS_OFF);
+        SyncHomeSP.apply();
         return false;
     }
 
@@ -1786,18 +1813,18 @@ bool StarGoTelescope::setHomeSync()
     if (sendQuery(cmd, response))
     {
         LOG_INFO("Synching home position succeeded.");
-        SyncHomeSP.s = IPS_OK;
+        SyncHomeSP.setState(IPS_OK);
     }
     else
     {
         LOG_WARN("Synching home position failed.");
-        SyncHomeSP.s = IPS_ALERT;
-        SyncHomeS[0].s = ISS_OFF;
-        IDSetSwitch(&SyncHomeSP, nullptr);
+        SyncHomeSP.setState(IPS_ALERT);
+        SyncHomeSP[0].setState(ISS_OFF);
+        SyncHomeSP.apply();
         return false;
     }
-    SyncHomeS[0].s = ISS_OFF;
-    IDSetSwitch(&SyncHomeSP, nullptr);
+    SyncHomeSP[0].setState(ISS_OFF);
+    SyncHomeSP.apply();
 
 // Confirm by getting RA/Dec (X590) and mount LST (GS)
 // Calculate HA = LST-RA
@@ -1890,7 +1917,7 @@ void StarGoTelescope::WaitParkOptionReady()
     if (TrackState != SCOPE_IDLE &&
        TrackState != SCOPE_TRACKING ) return;
 
-    ParkOptionSP.s = IPS_ALERT;
+    ParkOptionSP.setState(IPS_ALERT);
     if (!setParkPosition())
     {
         LOG_WARN("Unable to set Park Position.");
@@ -1898,9 +1925,9 @@ void StarGoTelescope::WaitParkOptionReady()
     else
     {
         updateParkPosition();
-        ParkOptionSP.s = IPS_OK;
+        ParkOptionSP.setState(IPS_OK);
     }
-    IDSetSwitch(&ParkOptionSP, nullptr);
+    ParkOptionSP.apply();
     ParkOptionBusy = false;
     return;
 }
@@ -1924,8 +1951,8 @@ void StarGoTelescope::updateParkPosition()
     else
     {
     // Update HA and Dec of parking position
-        SetAxis1Park(lst - EqN[AXIS_RA].value);
-        SetAxis2Park(EqN[AXIS_DE].value);
+        SetAxis1Park(lst - EqNP[AXIS_RA].value);
+        SetAxis2Park(EqNP[AXIS_DE].value);
     }
     return;
 }
@@ -2057,7 +2084,7 @@ valid find speeds:
 
 }
 /*******************************************************************************
- * @brief Set the centering and findign speeds for RA and DEC axis
+ * @brief Set the centering and finding speeds for RA and DEC axis
  * @param raSpeed factor for RA axis
  * @param decSpeed factor for DEC axis
  * @return
@@ -2210,8 +2237,9 @@ bool StarGoTelescope::setObjectCoords(double ra, double dec)
 // These commands receive a response without a terminating #
     if (!sendQuery(RAStr, response, '1', 2)  || !sendQuery(DecStr, response, '1', 2) )
     {
-        EqNP.s = IPS_ALERT;
-        IDSetNumber(&EqNP, "Error setting RA/DEC.");
+        EqNP.setState(IPS_ALERT);
+        EqNP.apply();
+        LOG_ERROR("Error setting RA/DEC.");
         return false;
     }
 
@@ -2328,8 +2356,8 @@ bool StarGoTelescope::SetMeridianFlipMode(int index)
 
     if (isSimulation())
     {
-        MeridianFlipModeSP.s = IPS_OK;
-        IDSetSwitch(&MeridianFlipModeSP, nullptr);
+        MeridianFlipModeSP.setState(IPS_OK);
+        MeridianFlipModeSP.apply();
         return true;
     }
     if ( index > 2)
@@ -2577,7 +2605,7 @@ bool StarGoTelescope::SendPulseCmd(TDirection direction, uint32_t duration_msec)
         return false;
     }
 
-    if (MovementNSSP.s == IPS_BUSY || MovementWESP.s == IPS_BUSY)
+    if (MovementNSSP.getState() == IPS_BUSY || MovementWESP.getState() == IPS_BUSY)
     {
         LOG_ERROR("Cannot guide while moving.");
         return false;
@@ -2633,7 +2661,7 @@ bool StarGoTelescope::SendPulseCmd(TDirection direction, uint32_t duration_msec)
     GuideTID[laxis] = IEAddTimer(static_cast<int>(duration_msec), guideTimeoutHelper, &timeoutArgs[laxis]);
 
 // Assume the guide pulse was issued and acted upon.
-    bool adjEnabled = (IUFindOnSwitchIndex(&RaAutoAdjustSP) == DefaultDevice::INDI_ENABLED);
+    bool adjEnabled = (RaAutoAdjustSP.findOnSwitchIndex() == DefaultDevice::INDI_ENABLED);
 // or autoRa->isEnabled()
 // We could possibly move this to the timer handler
     if (laxis == AXIS_RA && adjEnabled)
@@ -2662,30 +2690,36 @@ void StarGoTelescope::guideTimeout(INDI_EQ_AXIS axis)
 // Check motor status
     int motion[2] = {-1,-1};
     
-    INumberVectorProperty* GuideNP[2] = {&GuideWENP, &GuideNSNP};
+    INDI::PropertyNumber GuideNP[2] = {GuideWENP, GuideNSNP};
+//    INumberVectorProperty* GuideNP[2] = {&GuideWENP, &GuideNSNP};
     const int direction[2][2] = {{DIRECTION_WEST, DIRECTION_EAST},
                                 {DIRECTION_NORTH, DIRECTION_SOUTH} };
 
     if (!getMotorStatus(&motion[AXIS_RA], &motion[AXIS_DE]))
     {
         LOG_ERROR("Cannot determine motor status.");
-        GuideNP[axis]->s = IPS_ALERT;
+//        GuideNP[axis]->s = IPS_ALERT;
+        GuideNP[axis].setState(IPS_ALERT);
     }
     else if (motion[axis] != MOTION_STATIC and motion[axis] != MOTION_TRACK)
     {
         LOGF_WARN("Motor is still moving on axis %s", caxis[axis]);
-        GuideNP[axis]->s = IPS_ALERT;
+        GuideNP[axis].setState(IPS_ALERT);
+//        GuideNP[axis]->s = IPS_ALERT;
     }
     else
     {
-        (GuideNP[axis]->np)[direction[axis][0]].value = 0;
-        (GuideNP[axis]->np)[direction[axis][1]].value = 0;
+        (GuideNP[axis])[direction[axis][0]].value = 0;
+        (GuideNP[axis])[direction[axis][1]].value = 0;
+//        (GuideNP[axis]->np)[direction[axis][0]].value = 0;
+//        (GuideNP[axis]->np)[direction[axis][1]].value = 0;
 
         GuideComplete(axis);
         LOGF_DEBUG("Guiding completed on axis %s", caxis[axis]);
         return;
     }
-    IDSetNumber(GuideNP[axis], nullptr);
+//    IDSetNumber(GuideNP[axis], nullptr);
+    GuideNP[axis].apply();
     GuideTID[axis] = 0;     // Cancel the timer
 }
  /**************************************************************************************
@@ -2699,15 +2733,15 @@ void StarGoTelescope::getBasicData()
 
     if (!isSimulation())
     {
-        MountFirmwareInfoT[0].text = new char[64];
-        MountFirmwareInfoT[1].text = new char[64];
-        MountFirmwareInfoT[2].text = new char[64];
-        if (!getFirmwareInfo(MountFirmwareInfoT[0].text,
-                MountFirmwareInfoT[1].text,
-                MountFirmwareInfoT[2].text ))
+        MountFirmwareInfoTP[0].text = new char[64];
+        MountFirmwareInfoTP[1].text = new char[64];
+        MountFirmwareInfoTP[2].text = new char[64];
+        if (!getFirmwareInfo(MountFirmwareInfoTP[0].text,
+                MountFirmwareInfoTP[1].text,
+                MountFirmwareInfoTP[2].text ))
             LOG_ERROR("Failed to get firmware from device.");
         else
-            IDSetText(&MountFirmwareInfoTP, nullptr);
+            MountFirmwareInfoTP.apply();
 
         char parkHomeStatus[2] = {'\0','\0'};
         if (getParkHomeStatus(parkHomeStatus))
@@ -2715,149 +2749,149 @@ void StarGoTelescope::getBasicData()
             SetParked(strcmp(parkHomeStatus, "2") == 0);
             if (strcmp(parkHomeStatus, "1") == 0)
             {
-                SyncHomeSP.s = IPS_OK;
-                IDSetSwitch(&SyncHomeSP, nullptr);
+                SyncHomeSP.setState(IPS_OK);
+                SyncHomeSP.apply();
             }
         }
         bool isEnabled;
         if (getST4Status(&isEnabled))
         {
-            ST4StatusS[INDI_ENABLED].s = isEnabled ? ISS_ON : ISS_OFF;
-            ST4StatusS[INDI_DISABLED].s = isEnabled ? ISS_OFF : ISS_ON;
-            ST4StatusSP.s = IPS_OK;
+            ST4StatusSP[INDI_ENABLED].setState(isEnabled ? ISS_ON : ISS_OFF);
+            ST4StatusSP[INDI_DISABLED].setState(isEnabled ? ISS_OFF : ISS_ON);
+            ST4StatusSP.setState(IPS_OK);
         }
         else
         {
-            ST4StatusSP.s = IPS_ALERT;
+            ST4StatusSP.setState(IPS_ALERT);
         }
-        IDSetSwitch(&ST4StatusSP, nullptr);
+        ST4StatusSP.apply();
 
         double raCorrection;
         if (getTrackingAdjustment(&raCorrection))
         {
-            TrackingAdjustmentN[0].value = raCorrection;
-            TrackingAdjustmentNP.s      = IPS_OK;
+            TrackingAdjustmentNP[0].value = raCorrection;
+            TrackingAdjustmentNP.setState(IPS_OK);
         }
         else
         {
-            TrackingAdjustmentNP.s = IPS_ALERT;
+            TrackingAdjustmentNP.setState(IPS_ALERT);
         }
-        IDSetNumber(&TrackingAdjustmentNP, nullptr);
+        TrackingAdjustmentNP.apply();
 
         if (getKeypadStatus(&isEnabled))
         {
-            KeypadStatusS[INDI_ENABLED].s = isEnabled ? ISS_ON : ISS_OFF;
-            KeypadStatusS[INDI_DISABLED].s = isEnabled ? ISS_OFF : ISS_ON;
-            KeypadStatusSP.s = IPS_OK;
+            KeypadStatusSP[INDI_ENABLED].setState(isEnabled ? ISS_ON : ISS_OFF);
+            KeypadStatusSP[INDI_DISABLED].setState(isEnabled ? ISS_OFF : ISS_ON);
+            KeypadStatusSP.setState( IPS_OK);
         }
         else
         {
-            KeypadStatusSP.s = IPS_ALERT;
+            KeypadStatusSP.setState(IPS_ALERT);
         }
-        IDSetSwitch(&KeypadStatusSP, nullptr);
+        KeypadStatusSP.apply();
 
         int index;
         if (GetMeridianFlipMode(&index))
         {
-            IUResetSwitch(&MeridianFlipModeSP);
-            MeridianFlipModeS[index].s = ISS_ON;
-            MeridianFlipModeSP.s   = IPS_OK;
+            MeridianFlipModeSP.reset();
+            MeridianFlipModeSP[index].setState(ISS_ON);
+            MeridianFlipModeSP.setState(IPS_OK);
         }
         else
         {
-            MeridianFlipModeSP.s = IPS_ALERT;
+            MeridianFlipModeSP.setState(IPS_ALERT);
         }
-        IDSetSwitch(&MeridianFlipModeSP, nullptr);
+        MeridianFlipModeSP.apply();
 
         int raSlew;
         if (getMaxSlewSpeed(&raSlew))
         {
-            IUResetSwitch(&MaxSlewSpeedSP);
-            MaxSlewSpeedS[raSlew].s = ISS_ON;
-            MaxSlewSpeedSP.s   = IPS_OK;
+            MaxSlewSpeedSP.reset();
+            MaxSlewSpeedSP[raSlew].setState(ISS_ON);
+            MaxSlewSpeedSP.setState(IPS_OK);
         }
         else
         {
-            MaxSlewSpeedSP.s = IPS_ALERT;
+            MaxSlewSpeedSP.setState(IPS_ALERT);
         }
-        IDSetSwitch(&MaxSlewSpeedSP, nullptr);
+        MaxSlewSpeedSP.apply();
 
         int centerSpeed, findSpeed;
         if (getCenterFindSpeed(&centerSpeed, &findSpeed ))
         {
-            IUResetSwitch(&CenterSpeedSP);
-            IUResetSwitch(&FindSpeedSP);
-            CenterSpeedS[centerSpeed].s = ISS_ON;
-            FindSpeedS[findSpeed].s = ISS_ON;
-            CenterSpeedSP.s   = IPS_OK;
-            FindSpeedSP.s   = IPS_OK;
+            CenterSpeedSP.reset();
+            FindSpeedSP.reset();
+            CenterSpeedSP[centerSpeed].setState(ISS_ON);
+            FindSpeedSP[findSpeed].setState(ISS_ON);
+            CenterSpeedSP.setState(IPS_OK);
+            FindSpeedSP.setState(IPS_OK);
         }
         else
         {
-            CenterSpeedSP.s   = IPS_ALERT;
-            FindSpeedSP.s   = IPS_ALERT;
+            CenterSpeedSP.setState(IPS_ALERT);
+            FindSpeedSP.setState(IPS_ALERT);
         }
-        IDSetSwitch(&CenterSpeedSP, nullptr);
-        IDSetSwitch(&FindSpeedSP, nullptr);
+        CenterSpeedSP.apply();
+        FindSpeedSP.apply();
 
 // Get the guiding speed
         int raSpeed, decSpeed;
         if (getGuidingSpeeds(&raSpeed, &decSpeed))
         {
-            GuidingSpeedN[0].value =  static_cast<double>(raSpeed / 100.0);
-            GuidingSpeedN[1].value =  static_cast<double>(decSpeed / 100.0);
-            GuidingSpeedNP.s = IPS_OK;
+            GuidingSpeedNP[0].value =  static_cast<double>(raSpeed / 100.0);
+            GuidingSpeedNP[1].value =  static_cast<double>(decSpeed / 100.0);
+            GuidingSpeedNP.setState(IPS_OK);
         }
         else
         {
             LOG_ERROR("Unable to get guiding speed");
-            GuidingSpeedNP.s = IPS_ALERT;
+            GuidingSpeedNP.setState(IPS_ALERT);
         }
-        IDSetNumber(&GuidingSpeedNP, nullptr);
+        GuidingSpeedNP.apply();
 
         int raRatio, decRatio;
         if (getGearRatios(&raRatio, &decRatio))
         {
-            GearRatioN[0].value = static_cast<double>(raRatio);
-            GearRatioN[1].value = static_cast<double>(decRatio);
-            GearRatioNP.s = IPS_OK;
+            GearRatioNP[0].value = static_cast<double>(raRatio);
+            GearRatioNP[1].value = static_cast<double>(decRatio);
+            GearRatioNP.setState(IPS_OK);
         }
         else
         {
-            GearRatioNP.s = IPS_ALERT;
+            GearRatioNP.setState(IPS_ALERT);
         }
-        IDSetNumber(&GearRatioNP, nullptr);
+        GearRatioNP.apply();
 
         int torque;
         if (getTorque(&torque))
         {
-            TorqueN[0].value =  static_cast<double>(torque);
-            TorqueNP.s = IPS_OK;
+            TorqueNP[0].value =  static_cast<double>(torque);
+            TorqueNP.setState(IPS_OK);
         }
         else
         {
             LOG_ERROR("Unable to get torque");
-            TorqueNP.s = IPS_ALERT;
+            TorqueNP.setState(IPS_ALERT);
         }
-        IDSetNumber(&TorqueNP, nullptr);
+        TorqueNP.apply();
 
         bool raDir, decDir;
         if (getMotorReverse(&raDir, &decDir))
         {
-            RaMotorReverseS[INDI_ENABLED].s = raDir ? ISS_ON : ISS_OFF;
-            RaMotorReverseS[INDI_DISABLED].s = raDir ? ISS_OFF : ISS_ON;
-            RaMotorReverseSP.s = IPS_OK;
-            DecMotorReverseS[INDI_ENABLED].s = decDir ? ISS_ON : ISS_OFF;
-            DecMotorReverseS[INDI_DISABLED].s = decDir ? ISS_OFF : ISS_ON;
-            DecMotorReverseSP.s = IPS_OK;
+            RaMotorReverseSP[INDI_ENABLED].setState(raDir ? ISS_ON : ISS_OFF);
+            RaMotorReverseSP[INDI_DISABLED].setState(raDir ? ISS_OFF : ISS_ON);
+            RaMotorReverseSP.setState(IPS_OK);
+            DecMotorReverseSP[INDI_ENABLED].setState(decDir ? ISS_ON : ISS_OFF);
+            DecMotorReverseSP[INDI_DISABLED].setState( decDir ? ISS_OFF : ISS_ON);
+            DecMotorReverseSP.setState(IPS_OK);
         }
         else
         {
-            RaMotorReverseSP.s = IPS_ALERT;
-            DecMotorReverseSP.s = IPS_ALERT;
+            RaMotorReverseSP.setState(IPS_ALERT);
+            DecMotorReverseSP.setState(IPS_ALERT);
         }
-        IDSetSwitch(&RaMotorReverseSP, nullptr);
-        IDSetSwitch(&DecMotorReverseSP, nullptr);
+        RaMotorReverseSP.apply();
+        DecMotorReverseSP.apply();
     }
 
 // Time and Location capabilites are hard coded in this driver
@@ -3091,10 +3125,10 @@ void StarGoTelescope::mountSim()
     ltv = tv;
     da  = STARGO_GENERIC_SLEWRATE * dt;
 
-    double currentRA = EqN[AXIS_RA].value;
-    double currentDEC = EqN[AXIS_DE].value;
-    double targetRA = TargetN[AXIS_RA].value;
-    double targetDEC = TargetN[AXIS_DE].value;
+    double currentRA = EqNP[AXIS_RA].value;
+    double currentDEC = EqNP[AXIS_DE].value;
+    double targetRA = TargetNP[AXIS_RA].value;
+    double targetDEC = TargetNP[AXIS_DE].value;
 
     /* Process per current state. We check the state of EQUATORIAL_COORDS and act acoordingly */
     switch (TrackState)
@@ -3105,7 +3139,7 @@ void StarGoTelescope::mountSim()
         break;
 
     case SCOPE_TRACKING:
-        switch (IUFindOnSwitchIndex(&TrackModeSP))
+        switch (TrackModeSP.findOnSwitchIndex())
         {
         case TRACK_SIDEREAL:
             da = 0;
@@ -3123,8 +3157,8 @@ void StarGoTelescope::mountSim()
             break;
 
         case TRACK_CUSTOM:
-            da = ((TrackRateN[AXIS_RA].value-TRACKRATE_SIDEREAL)/3600.0 * dt / 15.);
-            dx = (TrackRateN[AXIS_DE].value/3600.0 * dt);
+            da = ((TrackRateNP[AXIS_RA].value-TRACKRATE_SIDEREAL)/3600.0 * dt / 15.);
+            dx = (TrackRateNP[AXIS_DE].value/3600.0 * dt);
             break;
 
         }
@@ -3662,7 +3696,7 @@ try{
     double ddir = direction == STARGO_EAST ? -1.0 : 1.0;
     
 //  Get the guiding speed
-    double guidingSpeed = p->GuidingSpeedN[0].value;
+    double guidingSpeed = p->GuidingSpeedNP[0].value;
     int raSpeed, decSpeed;
 
     if (!p->getGuidingSpeeds(&raSpeed, &decSpeed))
@@ -3726,7 +3760,7 @@ try{
     double slope = newcorrection / Z_SAMPLE_DURATION_MS;
 
 //  get trackrate adjustment percentage
-    double currAdjust = p->TrackingAdjustmentN[0].value;
+    double currAdjust = p->TrackingAdjustmentNP[0].value;
     if (!p->getTrackingAdjustment(&currAdjust))
     {
         LOG_ERROR("Unable to get tracking adjustment ");
@@ -3746,15 +3780,15 @@ try{
         LOGF_INFO("RA auto adjust rate from %.2f to %.2f", currAdjust, newAdjust);
         if(p->setTrackingAdjustment(newAdjust))
         {
-            p->TrackingAdjustmentN[0].value = newAdjust;
-            p->TrackingAdjustmentNP.s      = IPS_OK;
+            p->TrackingAdjustmentNP[0].value = newAdjust;
+            p->TrackingAdjustmentNP.setState(IPS_OK);
         }
         else
         {
             LOGF_ERROR("RA tracking adjust from %.2f to %.2f failed", currAdjust, newAdjust);
-            p->TrackingAdjustmentNP.s = IPS_ALERT;
+            p->TrackingAdjustmentNP.setState(IPS_ALERT);
         }
-        IDSetNumber(&(p->TrackingAdjustmentNP), nullptr);
+        p->TrackingAdjustmentNP.apply();
     }
     else
     {
