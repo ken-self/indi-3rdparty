@@ -36,6 +36,8 @@
     \author Eric Dejouhanet
 */
 
+#pragma GCC diagnostic ignored "-Warray-bounds"
+
 #include <stdio.h>
 #include <unistd.h>
 
@@ -229,6 +231,9 @@ bool MGenAutoguider::initProperties()
     _D("initiating properties", "");
 
     INDI::CCD::initProperties();
+
+    CaptureFormat raw = {"INDI_RAW", "RAW", 16, true};
+    addCaptureFormat(raw);
 
     addDebugControl();
 

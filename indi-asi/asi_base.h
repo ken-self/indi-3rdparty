@@ -23,6 +23,7 @@
 #pragma once
 
 #include <ASICamera2.h>
+#include <libusb-1.0/libusb.h>
 
 #include "indipropertyswitch.h"
 #include "indipropertynumber.h"
@@ -73,10 +74,12 @@ class ASIBase : public INDI::CCD
         virtual IPState GuideWest(uint32_t ms) override;
 
         // ASI specific keywords
-        virtual void addFITSKeywords(fitsfile *fptr, INDI::CCDChip *targetChip) override;
+        virtual void addFITSKeywords(INDI::CCDChip *targetChip, std::vector<INDI::FITSRecord> &fitsKeywords) override;
 
         // Save config
         virtual bool saveConfigItems(FILE *fp) override;
+
+        virtual bool SetCaptureFormat(uint8_t index) override;
 
         /** Get the current Bayer string used */
         const char *getBayerString() const;
@@ -127,6 +130,12 @@ class ASIBase : public INDI::CCD
         /** Get if MonoBin is active, thus Bayer is irrelevant */
         bool isMonoBinActive();
 
+        /** Can the camera flip the image horizontally and vertically */
+        bool hasFlipControl();
+
+        /** Reset USB device when camera gets stuck */
+        void resetUSBDevice();
+
         /** Additional Properties to INDI::CCD */
         INDI::PropertyNumber  CoolerNP {1};
         INDI::PropertySwitch  CoolerSP {2};
@@ -137,6 +146,8 @@ class ASIBase : public INDI::CCD
 
         INDI::PropertyNumber  ADCDepthNP   {1};
         INDI::PropertyText    SDKVersionSP {1};
+        INDI::PropertyText    SerialNumberTP {1};
+        INDI::PropertyText    NicknameTP {1};
 
         INDI::PropertyNumber  BlinkNP {2};
         enum
@@ -145,7 +156,14 @@ class ASIBase : public INDI::CCD
             BLINK_DURATION
         };
 
-        std::string mCameraName, mCameraID;
+        INDI::PropertySwitch  FlipSP {2};
+        enum
+        {
+            FLIP_HORIZONTAL,
+            FLIP_VERTICAL
+        };
+
+        std::string mCameraName, mCameraID, mSerialNumber, mNickname;
         ASI_CAMERA_INFO mCameraInfo;
         uint8_t mExposureRetry {0};
         ASI_IMG_TYPE mCurrentVideoFormat;

@@ -100,17 +100,17 @@ bool Beaver::updateProperties()
     {
         InitPark();
 
-        defineProperty(&FirmwareVersionTP);
-        defineProperty(&RotatorCalibrationSP);
+        defineProperty(FirmwareVersionTP);
+        defineProperty(RotatorCalibrationSP);
         defineProperty(ShutterCalibrationSP);
         defineProperty(ShutterSettingsNP);
     }
     else
     {
-        deleteProperty(FirmwareVersionTP.getName());
-        deleteProperty(RotatorCalibrationSP.getName());
-        deleteProperty(ShutterCalibrationSP.getName());
-        deleteProperty(ShutterSettingsNP.getName());
+        deleteProperty(FirmwareVersionTP);
+        deleteProperty(RotatorCalibrationSP);
+        deleteProperty(ShutterCalibrationSP);
+        deleteProperty(ShutterSettingsNP);
     }
 
     return true;
@@ -287,12 +287,12 @@ IPState Beaver::MoveAbs(double az)
 //////////////////////////////////////////////////////////////////////////////
 IPState Beaver::MoveRel(double azDiff)
 {
-    m_TargetRotatorAz = DomeAbsPosN[0].value + azDiff;
+    m_TargetRotatorAz = DomeAbsPosNP[0].getValue() + azDiff;
 
-    if (m_TargetRotatorAz < DomeAbsPosN[0].min)
-        m_TargetRotatorAz += DomeAbsPosN[0].max;
-    if (m_TargetRotatorAz > DomeAbsPosN[0].max)
-        m_TargetRotatorAz -= DomeAbsPosN[0].max;
+    if (m_TargetRotatorAz < DomeAbsPosNP[0].getMin())
+        m_TargetRotatorAz += DomeAbsPosNP[0].getMax();
+    if (m_TargetRotatorAz > DomeAbsPosNP[0].getMax())
+        m_TargetRotatorAz -= DomeAbsPosNP[0].getMax();
 
     // It will take a few cycles to reach final position
     return MoveAbs(m_TargetRotatorAz);
@@ -355,7 +355,7 @@ IPState Beaver::UnPark()
 bool Beaver::saveConfigItems(FILE *fp)
 {
     INDI::Dome::saveConfigItems(fp);
-    IUSaveConfigNumber(fp, &ShutterSettingsNP);
+    ShutterSettingsNP.save(fp);
     return true;
 }
 
@@ -378,7 +378,7 @@ bool Beaver::rotatorGetAz()
     double res = 0;
     if (sendCommand("!dome getaz#", res))
     {
-        DomeAbsPosN[0].value = res;
+        DomeAbsPosNP[0].setValue(res);
         return true;
     }
 

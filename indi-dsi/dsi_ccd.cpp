@@ -111,6 +111,10 @@ bool DSICCD::Connect()
         IDSetNumber(&CCDTempNP, nullptr);
     }
 
+    CaptureFormat mono = {"INDI_MONO", "Mono", 16, true};
+    CaptureFormat color = {"INDI_RAW", "RAW", 16, true};
+    addCaptureFormat(dsi->isColor() ? color : mono);
+
     return true;
 }
 
@@ -247,7 +251,7 @@ bool DSICCD::UpdateCCDBin(int hor, int ver)
         dsi->set1x1Binning();
         // DSI III 1x1 binning results in a GBRG frame
         if (dsi->getCcdChipName() == "ICX285AQ")
-            IUSaveText(&BayerT[2], "GBRG");
+            BayerTP[2].setText("GBRG");
         return true;
     }
     else if ((hor == 2) && (ver == 2)) // ... and 2x2 binning is supported
@@ -256,7 +260,7 @@ bool DSICCD::UpdateCCDBin(int hor, int ver)
         dsi->set2x2Binning();
         // DSI III 1x1 binning results in a consolidated mono frame
         if (dsi->getCcdChipName() == "ICX285AQ")
-            IUSaveText(&BayerT[2], "");
+            BayerTP[2].setText("");
         return true;
     }
     else

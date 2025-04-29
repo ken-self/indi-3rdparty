@@ -34,7 +34,7 @@
 #include <stdio.h>
 #include <pthread.h>
 #include <libftdi1/ftdi.h>
-#include <libusb-1.0/libusb.h>
+#include <libusb.h>
 #include <unistd.h>
 
 #include "indilogger.h"
@@ -42,6 +42,16 @@
 #include "mgen.h"
 #include "mgenautoguider.h"
 #include "mgen_device.h"
+
+// There is no official way to detect the version of the FTDI library from headers, hence this ugly method
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+int ftdi_tcioflush() __attribute__((weak));
+int ftdi_tcioflush(struct ftdi_context *ftdi)
+{
+    return ftdi_usb_purge_buffers(ftdi);
+}
+#pragma GCC diagnostic pop
 
 MGenDevice::MGenDevice()
     : _lock(), ftdi(NULL), is_device_connected(false), tried_turn_on(false), mode(OPM_UNKNOWN), vid(0), pid(0)
@@ -140,7 +150,7 @@ int MGenDevice::Connect(unsigned short vid, unsigned short pid)
                         for (struct ftdi_device_list const *dev_index = devlist; dev_index; dev_index = dev_index->next)
                         {
                             struct libusb_device_descriptor desc;
-                            memset(&desc,0,sizeof(desc));
+                            memset(&desc, 0, sizeof(desc));
 
                             if (libusb_get_device_descriptor(dev_index->dev, &desc) < 0)
                             {
@@ -252,7 +262,7 @@ int MGenDevice::setOpMode(IOMode const _mode)
             _E("failed setting device line properties to 8-N-1 (%d: %s)", res, ftdi_get_error_string(ftdi));
         }
         /* Purge I/O buffers */
-        else if ((res = ftdi_usb_purge_buffers(ftdi)) < 0)
+        else if ((res = ftdi_tcioflush(ftdi)) < 0)
         {
             _E("failed purging I/O buffers (%d: %s)", res, ftdi_get_error_string(ftdi));
         }

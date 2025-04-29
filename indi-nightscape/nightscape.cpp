@@ -34,7 +34,7 @@
 #include <math.h>
 
 /* Macro shortcut to CCD temperature value */
-#define currentCCDTemperature TemperatureN[0].value
+#define currentCCDTemperature TemperatureNP[0]
 
 static std::unique_ptr<NightscapeCCD> nightscapeCCD(new NightscapeCCD());
 
@@ -226,6 +226,9 @@ bool NightscapeCCD::initProperties()
     setpriority(PRIO_PROCESS, getpid(), -20);
     drop_root_privileges();
 
+    CaptureFormat mono = {"INDI_MONO", "Mono", 16, true};
+    addCaptureFormat(mono);
+
     // Must init parent properties first!
     INDI::CCD::initProperties();
     IUFillSwitch(&CoolerS[0], "COOLER_ON", "ON", cooler ? ISS_ON : ISS_OFF);
@@ -283,9 +286,9 @@ bool NightscapeCCD::initProperties()
     if (bayer)
     {
         cap |= CCD_HAS_BAYER;
-        IUSaveText(&BayerT[0], "0");
-        IUSaveText(&BayerT[1], "0");
-        IUSaveText(&BayerT[2], "BGGR");
+        BayerTP[0].setText("0");
+        BayerTP[1].setText("0");
+        BayerTP[2].setText("BGGR");
 
     }
     SetCCDCapability(cap);
@@ -502,7 +505,7 @@ void NightscapeCCD::TimerHit()
 
 
     // TemperatureNP is defined in INDI::CCD
-    switch (TemperatureNP.s)
+    switch (TemperatureNP.getState())
     {
         case IPS_IDLE:
         case IPS_OK:
@@ -512,12 +515,12 @@ void NightscapeCCD::TimerHit()
             if (InDownload || InReadout || InExposure) break;
             if(ntemps % backoffs == 0)
             {
-                currentCCDTemperature = m->rcvtemp();
+                currentCCDTemperature.setValue(m->rcvtemp());
                 backoffs *= 2;
                 if(backoffs > 32) backoffs = 32;
             }
             ntemps++;
-            dn->setActTemp(currentCCDTemperature);
+            dn->setActTemp(currentCCDTemperature.getValue());
 
             /* If target temperature is higher, then increase current CCD temperature */
             //            if (fabs(currentCCDTemperature - TemperatureRequest)  < 0.1)
@@ -529,7 +532,7 @@ void NightscapeCCD::TimerHit()
             //                break;
             //            }
 
-            IDSetNumber(&TemperatureNP, nullptr);
+            TemperatureNP.apply();
 
             break;
 
@@ -626,7 +629,7 @@ bool NightscapeCCD::ISNewSwitch (const char *dev, const char *name, ISState *sta
             CoolerSP.s = IPS_OK;
             IDSetSwitch(&CoolerSP, nullptr);
             m->sendtemp(setTemp, cooler);
-            dn->setActTemp(currentCCDTemperature);
+            dn->setActTemp(currentCCDTemperature.getValue());
             return true;
 
         }
@@ -691,16 +694,16 @@ bool NightscapeCCD::ISNewNumber(const char *dev, const char *name, double values
 
 bool NightscapeCCD::saveConfigItems(FILE *fp)
 {
-    currentCCDTemperature = setTemp;
+    currentCCDTemperature.setValue(setTemp);
     IUSaveConfigSwitch(fp, &FanSP);
     IUSaveConfigSwitch(fp, &CoolerSP);
     IUSaveConfigNumber(fp, &CamNumNP);
     IUSaveConfigSwitch(fp, &D2xxSP);
-    float tTemp = currentCCDTemperature;
+    float tTemp = currentCCDTemperature.getValue();
 
-    IUSaveConfigNumber(fp, &TemperatureNP);
+    TemperatureNP.save(fp);
 
-    currentCCDTemperature = tTemp;
+    currentCCDTemperature.setValue(tTemp);
 
     return INDI::CCD::saveConfigItems(fp);
 };

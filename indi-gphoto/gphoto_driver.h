@@ -97,7 +97,7 @@ int gphoto_get_iso_current(gphoto_driver *gphoto);
 gphoto_driver *gphoto_open(Camera *camera, GPContext *context, const char *model, const char *port,
                            const char *shutter_release_port);
 int gphoto_close(gphoto_driver *gphoto);
-void gphoto_get_buffer(gphoto_driver *gphoto, const char **buffer, size_t *size);
+void gphoto_get_buffer(gphoto_driver *gphoto, const char **buffer, unsigned long *size);
 void gphoto_free_buffer(gphoto_driver *gphoto);
 const char *gphoto_get_file_extension(gphoto_driver *gphoto);
 void gphoto_show_options(gphoto_driver *gphoto);
@@ -125,3 +125,4 @@ bool gphoto_supports_temperature(gphoto_driver *gphoto);
 float gphoto_get_last_sensor_temperature(gphoto_driver *gphoto);
 void gphoto_force_bulb(gphoto_driver *gphoto, bool enabled);
 void gphoto_set_view_finder(gphoto_driver *gphoto, bool enabled);
+void gphoto_set_download_timeout(gphoto_driver *gphoto, int timeout);

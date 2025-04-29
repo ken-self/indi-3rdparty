@@ -2,7 +2,7 @@
     Weather Radio - a universal driver for weather stations that
     transmit their raw sensor data as JSON documents.
 
-    Copyright (C) 2019 Wolfgang Reissenberger <sterne-jaeger@t-online.de>
+    Copyright (C) 2019-2022 Wolfgang Reissenberger <sterne-jaeger@openfuture.de>
 
     This library is free software; you can redistribute it and/or
     modify it under the terms of the GNU Lesser General Public
@@ -318,8 +318,6 @@ bool WeatherRadio::updateProperties()
             defineProperty(&rawDevices[i]);
         LOG_INFO("Raw sensors added.");
 
-        // Load the configuration
-        loadConfig();
         result = INDI::Weather::updateProperties();
 
         defineProperty(&resetArduinoSP);
@@ -356,29 +354,6 @@ bool WeatherRadio::updateProperties()
         deleteProperty(FirmwareConfigTP.name);
 
         result = INDI::Weather::updateProperties();
-
-        // clean up weather interface parameters to avoid doubling when reconnecting
-        for (int i = 0; i < WeatherInterface::ParametersNP.nnp; i++)
-        {
-            free(WeatherInterface::ParametersN[i].aux0);
-            free(WeatherInterface::ParametersN[i].aux1);
-            free(WeatherInterface::ParametersRangeNP[i].np);
-        }
-
-        free(WeatherInterface::ParametersN);
-        WeatherInterface::ParametersN = nullptr;
-        WeatherInterface::ParametersNP.nnp = 0;
-        if (WeatherInterface::ParametersRangeNP != nullptr)
-        {
-            WeatherInterface::ParametersRangeNP->nnp = 0;
-            free(WeatherInterface::ParametersRangeNP);
-            WeatherInterface::ParametersRangeNP = nullptr;
-        }
-        WeatherInterface::nRanges = 0;
-
-        free(WeatherInterface::critialParametersL);
-        WeatherInterface::critialParametersL = nullptr;
-        WeatherInterface::critialParametersLP.nlp = 0;
 
         // clear firmware configuration so that #handleFirmwareVersion() recongnizes an initialisation
         FirmwareConfigTP.tp = nullptr;
@@ -994,6 +969,9 @@ bool WeatherRadio::ISNewBLOB(const char *dev, const char *name, int sizes[], int
 ***************************************************************************************/
 bool WeatherRadio::Handshake()
 {
+    // Load the configuration
+    loadConfig();
+
     // Sleep for 5 seconds so that the serial connection of the Arduino has settled
     // This seems to be necessary for some Arduinos, otherwise they run into a timeout
     struct timespec request_delay = {ARDUINO_SETTLING_TIME, 0L};
@@ -1136,9 +1114,10 @@ void WeatherRadio::updateWeatherParameter(WeatherRadio::sensor_name sensor, doub
         double elevation = LocationN[LOCATION_ELEVATION].value;
 
         double temp = 15.0; // default value
-        INumber *temperatureParameter = getWeatherParameter(WEATHER_TEMPERATURE);
-        if (temperatureParameter != nullptr)
-            temp = temperatureParameter->value;
+
+        auto temperatureParameter = ParametersNP.findWidgetByName(WEATHER_TEMPERATURE);
+        if (temperatureParameter)
+            temp = temperatureParameter->getValue();
 
         double pressure_normalized = weatherCalculator->sealevelPressure(value, elevation, temp);
         setParameterValue(WEATHER_PRESSURE, pressure_normalized);
@@ -1148,10 +1127,10 @@ void WeatherRadio::updateWeatherParameter(WeatherRadio::sensor_name sensor, doub
         double humidity = weatherCalculator->calibrate(weatherCalculator->humidityCalibration, value);
 
         setParameterValue(WEATHER_HUMIDITY, humidity);
-        INumber *temperatureParameter = getWeatherParameter(WEATHER_TEMPERATURE);
-        if (temperatureParameter != nullptr)
+        auto temperatureParameter = ParametersNP.findWidgetByName(WEATHER_TEMPERATURE);
+        if (temperatureParameter)
         {
-            double dp =  weatherCalculator->dewPoint(humidity, temperatureParameter->value);
+            double dp =  weatherCalculator->dewPoint(humidity, temperatureParameter->getValue());
             setParameterValue(WEATHER_DEWPOINT, dp);
         }
     }
@@ -1274,10 +1253,7 @@ bool WeatherRadio::saveConfigItems(FILE *fp)
     IUSaveConfigSwitch(fp, &rainDropsSensorSP);
     IUSaveConfigSwitch(fp, &rainVolumeSensorSP);
     IUSaveConfigSwitch(fp, &wetnessSensorSP);
-    if (ParametersRangeNP != nullptr)
-        IUSaveConfigNumber(fp, ParametersRangeNP);
     IUSaveConfigNumber(fp, &ttyTimeoutNP);
-
 
     return INDI::Weather::saveConfigItems(fp);
 }
@@ -1307,18 +1283,6 @@ INumber *WeatherRadio::findRawSensorProperty(WeatherRadio::sensor_name sensor)
 
     return sensorProp;
 }
-
-INumber *WeatherRadio::getWeatherParameter(std::string name)
-{
-    for (int i = 0; i < ParametersNP.nnp; i++)
-    {
-        if (!strcmp(ParametersN[i].name, name.c_str()))
-            return &ParametersN[i];
-    }
-    // not found
-    return nullptr;
-}
-
 
 /**************************************************************************************
 **

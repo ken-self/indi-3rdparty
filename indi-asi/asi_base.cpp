@@ -22,6 +22,7 @@
 
 #include "asi_base.h"
 #include "asi_helpers.h"
+#include "usb_utils.h"
 
 #include "config.h"
 
@@ -33,8 +34,10 @@
 #include <vector>
 #include <map>
 #include <unistd.h>
+#include <cstring>
+#include <errno.h>
 
-#define MAX_EXP_RETRIES         3
+#define MAX_EXP_RETRIES         2
 #define VERBOSE_EXPOSURE        3
 #define TEMP_TIMER_MS           1000 /* Temperature polling time (ms) */
 #define TEMP_THRESHOLD          .25  /* Differential temperature threshold (C)*/
@@ -222,9 +225,24 @@ void ASIBase::workerExposure(const std::atomic_bool &isAboutToQuit, float durati
             PrimaryCCD.setExposureLeft(timeLeft);
         }
 
-        usleep(delay * 1000 * 1000);
-
-        ASI_ERROR_CODE ret = ASIGetExpStatus(mCameraInfo.CameraID, &status);
+        ASI_ERROR_CODE ret;
+        if (timeLeft < 0.2)
+        {
+            int i = 0;
+            // exposure can fail in some cases if we don't call this fast enough
+            do
+            {
+                ret = ASIGetExpStatus(mCameraInfo.CameraID, &status);
+                usleep(1000);
+                i++;
+            }
+            while(i < 300 && status == ASI_EXP_WORKING);
+        }
+        else
+        {
+            usleep(delay * 1000 * 1000);
+            ret = ASIGetExpStatus(mCameraInfo.CameraID, &status);
+        }
         // 2021-09-11 <sterne-jaeger@openfuture.de>: Fix for
         // https://www.indilib.org/forum/development/10346-asi-driver-sends-image-after-abort.html
         // Aborting an exposure also returns ASI_SUCCESS here, therefore
@@ -248,15 +266,6 @@ void ASIBase::workerExposure(const std::atomic_bool &isAboutToQuit, float durati
 
         if (status == ASI_EXP_FAILED)
         {
-            // JM 2020-02-17 Special hack for older ASI120 and ASI130 cameras (USB 2.0)
-            // that fail on 16bit images.
-            if (getImageType() == ASI_IMG_RAW16 &&
-                    (strstr(getDeviceName(), "ASI120") || (strstr(getDeviceName(), "ASI130"))))
-            {
-                LOG_INFO("Switching to 8-bit video.");
-                setVideoFormat(ASI_IMG_RAW8);
-            }
-
             if (++mExposureRetry < MAX_EXP_RETRIES)
             {
                 LOG_DEBUG("ASIGetExpStatus failed. Restarting exposure...");
@@ -265,9 +274,58 @@ void ASIBase::workerExposure(const std::atomic_bool &isAboutToQuit, float durati
                 return;
             }
 
-            LOGF_ERROR("Exposure failed after %d attempts.", mExposureRetry);
+            LOGF_WARN("Exposure failed after %d attempts. Attempting USB reset...", mExposureRetry);
             ASIStopExposure(mCameraInfo.CameraID);
-            PrimaryCCD.setExposureFailed();
+            ASICloseCamera(mCameraInfo.CameraID);
+
+            LOGF_INFO("Attempting USB reset for device %s...", mCameraInfo.Name);
+            resetUSBDevice();
+
+            LOG_INFO("Reopening camera after reset...");
+            ASI_ERROR_CODE ret = ASIOpenCamera(mCameraInfo.CameraID);
+            if (ret != ASI_SUCCESS)
+            {
+                LOGF_ERROR("Failed to reopen camera after USB reset (%s)", Helpers::toString(ret));
+                PrimaryCCD.setExposureFailed();
+                return;
+            }
+
+            LOG_INFO("Reinitializing camera...");
+            ret = ASIInitCamera(mCameraInfo.CameraID);
+            if (ret != ASI_SUCCESS)
+            {
+                LOGF_ERROR("Failed to reinitialize camera after USB reset (%s)", Helpers::toString(ret));
+                PrimaryCCD.setExposureFailed();
+                return;
+            }
+
+            // Restore previous settings
+            ASI_IMG_TYPE currentType = getImageType();
+            ret = ASISetROIFormat(mCameraInfo.CameraID,
+                                  PrimaryCCD.getSubW() / PrimaryCCD.getBinX(),
+                                  PrimaryCCD.getSubH() / PrimaryCCD.getBinY(),
+                                  PrimaryCCD.getBinX(), currentType);
+            if (ret != ASI_SUCCESS)
+            {
+                LOGF_ERROR("Failed to restore ROI format after USB reset (%s)", Helpers::toString(ret));
+                PrimaryCCD.setExposureFailed();
+                return;
+            }
+
+            ret = ASISetStartPos(mCameraInfo.CameraID,
+                                 PrimaryCCD.getSubX() / PrimaryCCD.getBinX(),
+                                 PrimaryCCD.getSubY() / PrimaryCCD.getBinY());
+            if (ret != ASI_SUCCESS)
+            {
+                LOGF_ERROR("Failed to restore start position after USB reset (%s)", Helpers::toString(ret));
+                PrimaryCCD.setExposureFailed();
+                return;
+            }
+
+            // Try one more time after reset
+            LOG_INFO("Attempting exposure again after USB reset...");
+            ASIStopExposure(mCameraInfo.CameraID);
+            workerExposure(isAboutToQuit, duration);
             return;
         }
     }
@@ -327,19 +385,31 @@ bool ASIBase::initProperties()
     ControlNP.fill(getDeviceName(), "CCD_CONTROLS",      "Controls", CONTROL_TAB, IP_RW, 60, IPS_IDLE);
     ControlSP.fill(getDeviceName(), "CCD_CONTROLS_MODE", "Set Auto", CONTROL_TAB, IP_RW, ISR_NOFMANY, 60, IPS_IDLE);
 
+    FlipSP[FLIP_HORIZONTAL].fill("FLIP_HORIZONTAL", "Horizontal", ISS_OFF);
+    FlipSP[FLIP_VERTICAL].fill("FLIP_VERTICAL", "Vertical", ISS_OFF);
+    FlipSP.fill(getDeviceName(), "FLIP", "Flip", CONTROL_TAB, IP_RW, ISR_NOFMANY, 60, IPS_IDLE);
+    FlipSP.load();
+
     VideoFormatSP.fill(getDeviceName(), "CCD_VIDEO_FORMAT", "Format", CONTROL_TAB, IP_RW, ISR_1OFMANY, 60, IPS_IDLE);
 
     BlinkNP[BLINK_COUNT   ].fill("BLINK_COUNT",    "Blinks before exposure", "%2.0f", 0, 100, 1.000, 0);
     BlinkNP[BLINK_DURATION].fill("BLINK_DURATION", "Blink duration",         "%2.3f", 0,  60, 0.001, 0);
     BlinkNP.fill(getDeviceName(), "BLINK", "Blink", CONTROL_TAB, IP_RW, 60, IPS_IDLE);
+    BlinkNP.load();
 
-    IUSaveText(&BayerT[2], getBayerString());
+    BayerTP[2].setText(getBayerString());
 
     ADCDepthNP[0].fill("BITS", "Bits", "%2.0f", 0, 32, 1, mCameraInfo.BitDepth);
     ADCDepthNP.fill(getDeviceName(), "ADC_DEPTH", "ADC Depth", IMAGE_INFO_TAB, IP_RO, 60, IPS_IDLE);
 
     SDKVersionSP[0].fill("VERSION", "Version", ASIGetSDKVersion());
     SDKVersionSP.fill(getDeviceName(), "SDK", "SDK", INFO_TAB, IP_RO, 60, IPS_IDLE);
+
+    SerialNumberTP[0].fill("SN", "SN", mSerialNumber);
+    SerialNumberTP.fill(getDeviceName(), "Serial Number", "Serial Number", INFO_TAB, IP_RO, 60, IPS_IDLE);
+
+    NicknameTP[0].fill("nickname", "nickname", mNickname);
+    NicknameTP.fill(getDeviceName(), "NICKNAME", "Nickname", INFO_TAB, IP_RW, 60, IPS_IDLE);
 
     int maxBin = 1;
 
@@ -354,6 +424,20 @@ bool ASIBase::initProperties()
     PrimaryCCD.setMinMaxStep("CCD_EXPOSURE", "CCD_EXPOSURE_VALUE", 0, 3600, 1, false);
     PrimaryCCD.setMinMaxStep("CCD_BINNING", "HOR_BIN", 1, maxBin, 1, false);
     PrimaryCCD.setMinMaxStep("CCD_BINNING", "VER_BIN", 1, maxBin, 1, false);
+
+    // Log camera capabilities.
+    LOGF_DEBUG("Camera: %s", mCameraInfo.Name);
+    LOGF_DEBUG("ID: %d", mCameraInfo.CameraID);
+    LOGF_DEBUG("MaxWidth: %d MaxHeight: %d", mCameraInfo.MaxWidth, mCameraInfo.MaxHeight);
+    LOGF_DEBUG("PixelSize: %.2f", mCameraInfo.PixelSize);
+    LOGF_DEBUG("IsColorCamera: %s", mCameraInfo.IsCoolerCam ? "True" : "False");
+    LOGF_DEBUG("MechanicalShutter: %s", mCameraInfo.MechanicalShutter ? "True" : "False");
+    LOGF_DEBUG("ST4Port: %s", mCameraInfo.ST4Port ? "True" : "False");
+    LOGF_DEBUG("IsCoolerCam: %s", mCameraInfo.IsCoolerCam ? "True" : "False");
+    LOGF_DEBUG("IsUSB3Camera: %s", mCameraInfo.IsUSB3Camera ? "True" : "False");
+    LOGF_DEBUG("ElecPerADU: %.2f", mCameraInfo.ElecPerADU);
+    LOGF_DEBUG("BitDepth: %d", mCameraInfo.BitDepth);
+    LOGF_DEBUG("IsTriggerCam: %s", mCameraInfo.IsTriggerCam ? "True" : "False");
 
     uint32_t cap = 0;
 
@@ -375,10 +459,6 @@ bool ASIBase::initProperties()
     cap |= CCD_CAN_ABORT;
     cap |= CCD_CAN_SUBFRAME;
     cap |= CCD_HAS_STREAMING;
-
-#ifdef HAVE_WEBSOCKET
-    cap |= CCD_HAS_WEB_SOCKET;
-#endif
 
     SetCCDCapability(cap);
 
@@ -406,20 +486,23 @@ bool ASIBase::updateProperties()
         // Even if there is no cooler, we define temperature property as READ ONLY
         else
         {
-            TemperatureNP.p = IP_RO;
-            defineProperty(&TemperatureNP);
+            TemperatureNP.setPermission(IP_RO);
+            defineProperty(TemperatureNP);
         }
 
         if (!ControlNP.isEmpty())
         {
             defineProperty(ControlNP);
-            loadConfig(true, ControlNP.getName());
         }
 
         if (!ControlSP.isEmpty())
         {
             defineProperty(ControlSP);
-            loadConfig(true, ControlSP.getName());
+        }
+
+        if (hasFlipControl())
+        {
+            defineProperty(FlipSP);
         }
 
         if (!VideoFormatSP.isEmpty())
@@ -433,18 +516,26 @@ bool ASIBase::updateProperties()
             {
                 for (size_t i = 0; i < VideoFormatSP.size(); i++)
                 {
+                    CaptureFormatSP[i].setState(ISS_OFF);
                     if (mCameraInfo.SupportedVideoFormat[i] == ASI_IMG_RAW16)
                     {
                         setVideoFormat(i);
+                        CaptureFormatSP[i].setState(ISS_ON);
                         break;
                     }
                 }
+                CaptureFormatSP.apply();
             }
         }
 
         defineProperty(BlinkNP);
         defineProperty(ADCDepthNP);
         defineProperty(SDKVersionSP);
+        if (!mSerialNumber.empty())
+        {
+            defineProperty(SerialNumberTP);
+            defineProperty(NicknameTP);
+        }
     }
     else
     {
@@ -454,7 +545,7 @@ bool ASIBase::updateProperties()
             deleteProperty(CoolerSP.getName());
         }
         else
-            deleteProperty(TemperatureNP.name);
+            deleteProperty(TemperatureNP);
 
         if (!ControlNP.isEmpty())
             deleteProperty(ControlNP.getName());
@@ -462,11 +553,21 @@ bool ASIBase::updateProperties()
         if (!ControlSP.isEmpty())
             deleteProperty(ControlSP.getName());
 
+        if (hasFlipControl())
+        {
+            deleteProperty(FlipSP.getName());
+        }
+
         if (!VideoFormatSP.isEmpty())
             deleteProperty(VideoFormatSP.getName());
 
         deleteProperty(BlinkNP.getName());
         deleteProperty(SDKVersionSP.getName());
+        if (!mSerialNumber.empty())
+        {
+            deleteProperty(SerialNumberTP.getName());
+            deleteProperty(NicknameTP.getName());
+        }
         deleteProperty(ADCDepthNP.getName());
     }
 
@@ -513,11 +614,6 @@ bool ASIBase::Connect()
 
 bool ASIBase::Disconnect()
 {
-    // Save all config before shutdown
-    saveConfig(true);
-
-    LOGF_DEBUG("Closing %s...", mCameraName.c_str());
-
     stopGuidePulse(mTimerNS);
     stopGuidePulse(mTimerWE);
     mTimerTemperature.stop();
@@ -618,6 +714,12 @@ void ASIBase::setupParams()
 
         node.setAux(const_cast<ASI_IMG_TYPE*>(&videoFormat));
         VideoFormatSP.push(std::move(node));
+        CaptureFormat format = {Helpers::toString(videoFormat),
+                                Helpers::toPrettyString(videoFormat),
+                                static_cast<uint8_t>((videoFormat == ASI_IMG_RAW16) ? 16 : 8),
+                                videoFormat == imgType
+                               };
+        addCaptureFormat(format);
     }
 
     float x_pixel_size = mCameraInfo.PixelSize;
@@ -658,9 +760,9 @@ void ASIBase::setupParams()
     if (ret != ASI_SUCCESS)
         LOGF_DEBUG("Failed to get temperature (%s).", Helpers::toString(ret));
 
-    TemperatureN[0].value = value / 10.0;
-    IDSetNumber(&TemperatureNP, nullptr);
-    LOGF_INFO("The CCD Temperature is %.3f.", TemperatureN[0].value);
+    TemperatureNP[0].setValue(value / 10.0);
+    TemperatureNP.apply();
+    LOGF_INFO("The CCD Temperature is %.3f.", TemperatureNP[0].getValue());
 
     ret = ASIStopVideoCapture(mCameraInfo.CameraID);
     if (ret != ASI_SUCCESS)
@@ -729,6 +831,7 @@ bool ASIBase::ISNewNumber(const char *dev, const char *name, double values[], ch
 
             ControlNP.setState(IPS_OK);
             ControlNP.apply();
+            saveConfig(ControlNP);
             return true;
         }
 
@@ -736,6 +839,7 @@ bool ASIBase::ISNewNumber(const char *dev, const char *name, double values[], ch
         {
             BlinkNP.setState(BlinkNP.update(values, names, n) ? IPS_OK : IPS_ALERT);
             BlinkNP.apply();
+            saveConfig(BlinkNP);
             return true;
         }
     }
@@ -787,6 +891,37 @@ bool ASIBase::ISNewSwitch(const char *dev, const char *name, ISState *states, ch
 
             ControlSP.setState(IPS_OK);
             ControlSP.apply();
+            saveConfig(ControlSP);
+            return true;
+        }
+
+        if (FlipSP.isNameMatch(name))
+        {
+            if (FlipSP.update(states, names, n) == false)
+            {
+                FlipSP.setState(IPS_ALERT);
+                FlipSP.apply();
+                return true;
+            }
+
+            int flip = 0;
+            if (FlipSP[FLIP_HORIZONTAL].getState() == ISS_ON)
+                flip |= ASI_FLIP_HORIZ;
+            if (FlipSP[FLIP_VERTICAL].getState() == ISS_ON)
+                flip |= ASI_FLIP_VERT;
+
+            ASI_ERROR_CODE ret = ASISetControlValue(mCameraInfo.CameraID, ASI_FLIP, flip, ASI_FALSE);
+            if (ret != ASI_SUCCESS)
+            {
+                LOGF_ERROR("Failed to set ASI_FLIP=%d (%s).", flip, Helpers::toString(ret));
+                FlipSP.setState(IPS_ALERT);
+                FlipSP.apply();
+                return false;
+            }
+
+            FlipSP.setState(IPS_OK);
+            FlipSP.apply();
+            saveConfig(FlipSP);
             return true;
         }
 
@@ -826,7 +961,17 @@ bool ASIBase::ISNewSwitch(const char *dev, const char *name, ISState *states, ch
                 return true;
             }
 
-            return setVideoFormat(targetIndex);
+            auto result = setVideoFormat(targetIndex);
+            if (result)
+            {
+                VideoFormatSP.reset();
+                VideoFormatSP[targetIndex].setState(ISS_ON);
+                VideoFormatSP.setState(IPS_OK);
+                VideoFormatSP.apply();
+            }
+
+            saveConfig(VideoFormatSP);
+            return true;
         }
     }
 
@@ -835,11 +980,28 @@ bool ASIBase::ISNewSwitch(const char *dev, const char *name, ISState *states, ch
 
 bool ASIBase::setVideoFormat(uint8_t index)
 {
+    auto currentFormat = getImageType();
+    // If requested type is 16bit but we are already on 8bit and camera is 120, then ignore request
+    if (currentFormat != ASI_IMG_RAW16 && index == ASI_IMG_RAW16 && (strstr(getDeviceName(), "ASI120")
+            || (strstr(getDeviceName(), "ASI130"))))
+    {
+        VideoFormatSP.reset();
+        VideoFormatSP[currentFormat].setState(ISS_ON);
+        VideoFormatSP.setState(IPS_OK);
+        VideoFormatSP.apply();
+        return false;
+    }
+
     if (index == VideoFormatSP.findOnSwitchIndex())
         return true;
 
     VideoFormatSP.reset();
-    VideoFormatSP[index].setState(ISS_ON);
+
+    // JM 2022-11-30 Always set ASI120 to 8bit if target was 16bit since 16bit is not supported.
+    if (index == ASI_IMG_RAW16 && (strstr(getDeviceName(), "ASI120") || (strstr(getDeviceName(), "ASI130"))))
+        VideoFormatSP[ASI_IMG_RAW8].setState(ISS_ON);
+    else
+        VideoFormatSP[index].setState(ISS_ON);
 
     switch (getImageType())
     {
@@ -959,6 +1121,15 @@ bool ASIBase::StartStreaming()
 
 bool ASIBase::StopStreaming()
 {
+    // First stop video capture
+    ASI_ERROR_CODE ret = ASIStopVideoCapture(mCameraInfo.CameraID);
+    if (ret != ASI_SUCCESS)
+    {
+        LOGF_ERROR("Failed to stop video capture (%s).", Helpers::toString(ret));
+        return false;
+    }
+
+    // Then stop the worker thread
     mWorker.quit();
     return true;
 }
@@ -1149,13 +1320,24 @@ bool ASIBase::isMonoBinActive()
     return (imgType == ASI_IMG_RAW8 || imgType == ASI_IMG_RAW16) && bin > 1;
 }
 
+bool ASIBase::hasFlipControl()
+{
+    if (find_if(begin(mControlCaps), end(mControlCaps), [](ASI_CONTROL_CAPS cap)
+{
+    return cap.ControlType == ASI_FLIP;
+}) == end(mControlCaps))
+    return false;
+    else
+        return true;
+}
+
 /* The timer call back is used for temperature monitoring */
 void ASIBase::temperatureTimerTimeout()
 {
     ASI_ERROR_CODE ret;
     ASI_BOOL isAuto = ASI_FALSE;
     long value = 0;
-    IPState newState = TemperatureNP.s;
+    IPState newState = TemperatureNP.getState();
 
     ret = ASIGetControlValue(mCameraInfo.CameraID, ASI_TEMPERATURE, &value, &isAuto);
 
@@ -1178,13 +1360,13 @@ void ASIBase::temperatureTimerTimeout()
 
     // Update if there is a change
     if (
-        std::abs(mCurrentTemperature - TemperatureN[0].value) > 0.05 ||
-        TemperatureNP.s != newState
+        std::abs(mCurrentTemperature - TemperatureNP[0].getValue()) > 0.05 ||
+        TemperatureNP.getState() != newState
     )
     {
-        TemperatureNP.s = newState;
-        TemperatureN[0].value = mCurrentTemperature;
-        IDSetNumber(&TemperatureNP, nullptr);
+        TemperatureNP.setState(newState);
+        TemperatureNP[0].setValue(mCurrentTemperature);
+        TemperatureNP.apply();
     }
 
     if (HasCooler())
@@ -1296,7 +1478,8 @@ void ASIBase::createControls(int piNumberOfControls)
                    cap.DefaultValue, cap.IsAutoSupported ? "True" : "False",
                    cap.IsWritable ? "True" : "False");
 
-        if (cap.IsWritable == ASI_FALSE || cap.ControlType == ASI_TARGET_TEMP || cap.ControlType == ASI_COOLER_ON)
+        if (cap.IsWritable == ASI_FALSE || cap.ControlType == ASI_TARGET_TEMP || cap.ControlType == ASI_COOLER_ON
+                || cap.ControlType == ASI_FLIP)
             continue;
 
         // Update Min/Max exposure as supported by the camera
@@ -1324,6 +1507,13 @@ void ASIBase::createControls(int piNumberOfControls)
         long value     = 0;
         ASI_BOOL isAuto = ASI_FALSE;
         ASIGetControlValue(mCameraInfo.CameraID, cap.ControlType, &value, &isAuto);
+
+        // Workaround for apparent ASI SDK 1.31 and 1.32 bug that gives bogus default values for GPS
+        // controls on cameras that don't have GPS and fails to complete exposures if the value is written back.
+        if (cap.ControlType == ASI_GPS_START_LINE || cap.ControlType == ASI_GPS_END_LINE)
+        {
+            value = 0;
+        }
 
         if (cap.IsWritable)
         {
@@ -1406,23 +1596,52 @@ void ASIBase::updateRecorderFormat()
     );
 }
 
-void ASIBase::addFITSKeywords(fitsfile *fptr, INDI::CCDChip *targetChip)
+void ASIBase::addFITSKeywords(INDI::CCDChip *targetChip, std::vector<INDI::FITSRecord> &fitsKeywords)
 {
-    INDI::CCD::addFITSKeywords(fptr, targetChip);
+    INDI::CCD::addFITSKeywords(targetChip, fitsKeywords);
 
     // e-/ADU
     auto np = ControlNP.findWidgetByName("Gain");
     if (np)
     {
-        int status = 0;
-        fits_update_key_s(fptr, TDOUBLE, "Gain", &(np->value), "Gain", &status);
+        fitsKeywords.push_back({"GAIN", np->value, 3, "Gain"});
     }
 
     np = ControlNP.findWidgetByName("Offset");
     if (np)
     {
-        int status = 0;
-        fits_update_key_s(fptr, TDOUBLE, "OFFSET", &(np->value), "Offset", &status);
+        fitsKeywords.push_back({"OFFSET", np->value, 3, "Offset"});
+    }
+
+    if (mCameraInfo.IsColorCam)
+    {
+        np = ControlNP.findWidgetByName("WB_R");
+        if (np)
+        {
+            fitsKeywords.push_back({"WB_R", np->value, 3, "White Balance - Red"});
+        }
+
+        np = ControlNP.findWidgetByName("WB_B");
+        if (np)
+        {
+            fitsKeywords.push_back({"WB_B", np->value, 3, "White Balance - Blue"});
+        }
+    }
+}
+
+void ASIBase::resetUSBDevice()
+{
+    LOGF_INFO("Finding USB port for device %s...", mCameraInfo.Name);
+
+    // Use shorter delays for camera reset to minimize downtime
+    // 500ms unbind wait, 1s suspend, 2s rediscover
+    if (USBUtils::resetDevice(0x03c3, mCameraInfo.Name, getDeviceName(), 500000, 1000000, 2000000))
+    {
+        LOG_INFO("USB port power cycle complete");
+    }
+    else
+    {
+        LOG_ERROR("Failed to reset USB device");
     }
 }
 
@@ -1439,10 +1658,18 @@ bool ASIBase::saveConfigItems(FILE *fp)
     if (!ControlSP.isEmpty())
         ControlSP.save(fp);
 
+    if (hasFlipControl())
+        FlipSP.save(fp);
+
     if (!VideoFormatSP.isEmpty())
         VideoFormatSP.save(fp);
 
     BlinkNP.save(fp);
 
     return true;
+}
+
+bool ASIBase::SetCaptureFormat(uint8_t index)
+{
+    return setVideoFormat(index);
 }
