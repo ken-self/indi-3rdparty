@@ -124,7 +124,7 @@ protected:
 //    INumber GuidingSpeedN[2];
 
     // ST4 status
-    INDI::PropertySwitch ST4StatusSP { 1 };
+    INDI::PropertySwitch ST4StatusSP { 2 };
 //    ISwitchVectorProperty ST4StatusSP;
 //    ISwitch ST4StatusS[2];
 
