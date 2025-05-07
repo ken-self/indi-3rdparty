@@ -129,7 +129,7 @@ protected:
 //    ISwitch ST4StatusS[2];
 
     // Keypad
-    INDI::PropertySwitch KeypadStatusSP { 1 };
+    INDI::PropertySwitch KeypadStatusSP { 2 };
 //    ISwitchVectorProperty KeypadStatusSP;
 //    ISwitch KeypadStatusS[2];
 
@@ -154,7 +154,7 @@ protected:
 //    INumber TrackingAdjustmentN[1];
 
     // Auto RA Tracking Adjustment
-    INDI::PropertySwitch RaAutoAdjustSP { 1 };
+    INDI::PropertySwitch RaAutoAdjustSP { 2 };
 //    ISwitchVectorProperty RaAutoAdjustSP;
 //    ISwitch RaAutoAdjustS[2];
 
